@@ -1,8 +1,10 @@
-"""Tests for the V4-C offline docent QA eval harness.
+"""Tests for the V4-C/P6A offline docent QA eval harness.
 
-Covers: fixture schema validity, harness pass/fail on the committed fixture, category coverage,
-the honest-empty path (empty/unavailable, no fabricated content), single-language rendering,
-and the boundary-mock guarantee that a live OpenAI client is never constructed.
+Covers: fixture schema validity (exactly 40 places / 80 KO+EN language cases /
+10-per-category balance), harness pass/fail on the committed fixture, the
+honest-empty path (empty/unavailable, no fabricated content), single-language
+rendering, the boundary-mock guarantee that a live OpenAI client is never
+constructed, and honest pass/flagged/not-applicable dimension accounting.
 """
 
 from __future__ import annotations
@@ -34,13 +36,29 @@ def fixture_places() -> list[dict]:
 # --- Fixture schema -----------------------------------------------------------
 
 
-def test_fixture_count_within_representative_range(fixture_places: list[dict]) -> None:
-    assert 30 <= len(fixture_places) <= 50, len(fixture_places)
+def test_fixture_is_exactly_forty_places(fixture_places: list[dict]) -> None:
+    assert len(fixture_places) == 40, len(fixture_places)
+
+
+def test_fixture_yields_exactly_eighty_language_cases(fixture_places: list[dict]) -> None:
+    assert sum(len(p["language_samples"]) for p in fixture_places) == 80
+
+
+def test_every_place_pairs_exactly_korean_and_english(fixture_places: list[dict]) -> None:
+    for place in fixture_places:
+        assert place["language_samples"] == ["ko", "en"], place["place_id"]
 
 
 def test_fixture_place_ids_all_use_eval_prefix(fixture_places: list[dict]) -> None:
     assert fixture_places, "fixture must not be empty"
     assert all(p["place_id"].startswith("eval_") for p in fixture_places)
+
+
+def test_fixture_categories_are_balanced_ten_each(fixture_places: list[dict]) -> None:
+    counts = {category: 0 for category in docent_eval.CATEGORIES}
+    for place in fixture_places:
+        counts[place["category"]] += 1
+    assert counts == {category: 10 for category in docent_eval.CATEGORIES}
 
 
 def test_fixture_covers_all_four_categories(fixture_places: list[dict]) -> None:
@@ -79,13 +97,78 @@ def test_eval_category_counts_cover_every_category(fixture_places: list[dict]) -
     with docent_eval.offline_openai_guard():
         report = docent_eval.evaluate_docent(fixture_places)
     for category in docent_eval.CATEGORIES:
-        assert report.category_counts[category] > 0, category
+        assert report.category_counts[category] == 10, category
 
 
-def test_eval_report_total_matches_fixture(fixture_places: list[dict]) -> None:
+def test_eval_report_totals_are_40_places_and_80_language_cases(
+    fixture_places: list[dict],
+) -> None:
     with docent_eval.offline_openai_guard():
         report = docent_eval.evaluate_docent(fixture_places)
-    assert report.total_places == len(fixture_places)
+    assert report.total_places == 40
+    assert report.total_language_cases == 80
+    assert report.language_case_counts == {"ko": 40, "en": 40}
+
+
+def test_eval_flags_fixture_that_breaks_ko_en_pairing(fixture_places: list[dict]) -> None:
+    broken = [dict(place) for place in fixture_places]
+    broken[0]["language_samples"] = ["ko"]
+    with docent_eval.offline_openai_guard():
+        report = docent_eval.evaluate_docent(broken)
+    assert report.passed is False
+    assert any("language_samples must be exactly" in failure for failure in report.failures)
+
+
+def test_eval_dimension_summary_counts_honest_empty_as_not_applicable(
+    fixture_places: list[dict],
+) -> None:
+    with docent_eval.offline_openai_guard():
+        report = docent_eval.evaluate_docent(fixture_places)
+    summary = report.dimension_summary
+    honest_language_cases = 2 * len(report.honest_empty_place_ids)
+    for dimension, counts in summary.items():
+        assert counts["pass"] + counts["flagged"] + counts["not_applicable"] == 80, dimension
+        assert counts["not_applicable"] == honest_language_cases, dimension
+        assert counts["flagged"] == 0, (dimension, counts)
+
+
+def test_eval_grounding_passes_are_backed_by_positive_anchor_evidence(
+    fixture_places: list[dict],
+) -> None:
+    """Every offline grounding PASS must trace to a committed positive anchor count."""
+    with docent_eval.offline_openai_guard():
+        report = docent_eval.evaluate_docent(fixture_places)
+    assert report.dimension_summary["grounding"] == {
+        "pass": 78,
+        "flagged": 0,
+        "not_applicable": 2,
+    }
+    nonempty = [p for p in fixture_places if p["expect_nonempty"]]
+    assert len(nonempty) == 39
+    for place in nonempty:
+        assert len(place["grounding_anchors"]) >= 1, place["place_id"]
+    for result in report.place_results:
+        for lang in result.languages:
+            if result.expect_nonempty:
+                assert lang.nonempty is True
+                # The generated case's grounding pass is backed by its fixture's anchors.
+                assert lang.grounding_anchor_count >= 1, (result.place_id, lang.language)
+
+
+def test_eval_grounding_flags_nonempty_case_with_zero_anchor_evidence(
+    fixture_places: list[dict],
+) -> None:
+    stripped = [dict(place) for place in fixture_places]
+    stripped[0]["grounding_anchors"] = []
+    with docent_eval.offline_openai_guard():
+        report = docent_eval.evaluate_docent(stripped)
+    # The zero-anchor place still generates scripts (explicit zero evidence -> flagged),
+    # the honest-empty cases stay N/A, and every other pass keeps its anchor backing.
+    assert report.dimension_summary["grounding"] == {
+        "pass": 76,
+        "flagged": 2,
+        "not_applicable": 2,
+    }
 
 
 # --- Honest-empty path --------------------------------------------------------
@@ -179,3 +262,5 @@ def test_run_docent_eval_cli_exits_zero_on_pass(fixture_places: list[dict], tmp_
 
     written = _json.loads(output_path.read_text(encoding="utf-8"))
     assert written["passed"] is True
+    assert written["total_places"] == 40
+    assert written["total_language_cases"] == 80

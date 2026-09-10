@@ -111,6 +111,84 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets('every non-food category keeps the gate truthful', (
+    tester,
+  ) async {
+    // The canonical place taxonomy has exactly one food category
+    // ('restaurant'); attraction/event/culture_venue must never surface the
+    // restaurant-specific action, even with food preferences saved.
+    final store = TravelPreferencesStore();
+    await store.ensureLoaded();
+    await store.save(
+      const TravelPreferences(
+        spiceLevel: SpicePreference.mild,
+        orderRequests: {RestaurantOrderRequest.quietTable},
+        allergens: {Allergen.nuts},
+      ),
+    );
+
+    for (final category in ['attraction', 'event', 'culture_venue']) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: _panel(category: category, store: store),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('restaurant-detail-show-staff')),
+        findsNothing,
+        reason: 'category=$category must not show the restaurant card',
+      );
+    }
+  });
+
+  testWidgets('saved spice and order requests reach the Korean staff card', (
+    tester,
+  ) async {
+    final store = TravelPreferencesStore();
+    await store.ensureLoaded();
+    await store.save(
+      const TravelPreferences(
+        spiceLevel: SpicePreference.mild,
+        orderRequests: {RestaurantOrderRequest.quietTable},
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: _panel(category: 'restaurant', store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The entry summary reflects soft content without calling it an allergy.
+    expect(find.textContaining('맵기·주문 요청'), findsOneWidget);
+    expect(find.textContaining('알레르기'), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey('restaurant-detail-show-staff')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('맵기: 안 매운 음식으로 부탁드립니다.'), findsOneWidget);
+    expect(
+      find.textContaining('요청 사항: 가능하다면 조용한 자리를 부탁드립니다'),
+      findsOneWidget,
+    );
+    // No safety content was saved, so the card invents none.
+    expect(find.textContaining('알레르기·민감 식품:'), findsNothing);
+    expect(find.textContaining('위 재료가'), findsNothing);
+  });
 }
 
 FeaturedPlacePanel _panel({

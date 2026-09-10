@@ -60,16 +60,16 @@ String unavailableDocentBody({
           )
         : lalaCopyMulti(
             language,
-            ko: '도슨트 스크립트를 불러오는 중입니다. 잠시 뒤 다시 확인해 주세요.',
-            en: 'Loading the docent script. Please check again shortly.',
-            ja: 'ドセントスクリプトを読み込み中です。しばらくしてからもう一度ご確認ください。',
-            zhHans: '正在加载导览解说，请稍后再查看。',
-            zhHant: '正在載入導覽解說，請稍後再查看。',
+            ko: '이 장소의 도슨트 스크립트는 아직 준비되지 않았습니다.',
+            en: 'A docent script is not available for this place yet.',
+            ja: 'このスポットのドセントスクリプトはまだ準備されていません。',
+            zhHans: '此地点的导览解说尚未准备好。',
+            zhHant: '此地點的導覽解說尚未準備好。',
           );
   }
   return place == null
       ? '추천 장소가 선택되면 도슨트 스크립트를 불러옵니다.'
-      : '도슨트 스크립트를 불러오는 중입니다. 잠시 뒤 다시 확인해 주세요.';
+      : '이 장소의 도슨트 스크립트는 아직 준비되지 않았습니다.';
 }
 
 /// 도슨트 한 줄 요약(C3 추출 — main.dart 의 _docentSummary).
@@ -79,13 +79,9 @@ String docentSummary({
   required String? script,
   required String? action,
 }) {
-  final body = docentBody(
-    place: place,
-    script: script,
-    language: language,
-  ).trim();
-  if (body.isNotEmpty) {
-    return compactDocentSummary(body);
+  final localizedScript = usableDocentScript(script, language);
+  if (localizedScript != null) {
+    return compactDocentSummary(localizedScript);
   }
 
   final trimmedAction = action?.trim();
@@ -96,6 +92,17 @@ String docentSummary({
           language: language,
         ) ??
         trimmedAction;
+  }
+
+  if (place != null) {
+    return lalaCopyMulti(
+      language,
+      ko: '도슨트 스크립트 미제공',
+      en: 'Docent script unavailable',
+      ja: 'ドセントスクリプト未提供',
+      zhHans: '暂无导览解说',
+      zhHant: '暫無導覽解說',
+    );
   }
 
   final placeName = place == null ? null : placeDisplayName(place, language);

@@ -22,8 +22,7 @@ class WeatherMapPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final data = publicWeatherOrNull(weather);
-    final pending =
-        lalaCopyMulti(
+    final pending = lalaCopyMulti(
       language,
       ko: '날씨 데이터 준비 중',
       en: 'Weather pending',
@@ -36,8 +35,8 @@ class WeatherMapPill extends StatelessWidget {
       label = pending;
     } else {
       final temp = temperatureLabelOrNull(data.temp);
-      final hasPm = data.dust.pm10.trim().isNotEmpty ||
-          data.dust.pm25.trim().isNotEmpty;
+      final hasPm =
+          data.dust.pm10.trim().isNotEmpty || data.dust.pm25.trim().isNotEmpty;
       final airQuality = hasPm ? dustLabel(data.dust, language).trim() : '';
       final airLabel = airQuality.isEmpty
           ? ''

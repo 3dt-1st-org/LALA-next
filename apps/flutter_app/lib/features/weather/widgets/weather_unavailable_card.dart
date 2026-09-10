@@ -33,13 +33,13 @@ class WeatherUnavailableCard extends StatelessWidget {
               children: [
                 Text(
                   lalaCopyMulti(
-                      language,
-                      ko: '날씨 데이터 준비 중',
-                      en: 'Weather pending',
-                      ja: '気象データ準備中',
-                      zhHans: '天气数据准备中',
-                      zhHant: '天氣資料準備中',
-                    ),
+                    language,
+                    ko: '날씨 데이터 준비 중',
+                    en: 'Weather pending',
+                    ja: '気象データ準備中',
+                    zhHans: '天气数据准备中',
+                    zhHant: '天氣資料準備中',
+                  ),
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     color: const Color(0xFF111827),
                     fontWeight: FontWeight.w900,

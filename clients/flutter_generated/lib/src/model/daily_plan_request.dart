@@ -3,6 +3,7 @@
 //
 
 // ignore_for_file: unused_element
+import 'package:lala_next_flutter_client_generated/src/model/plan_preference_context.dart';
 import 'package:built_value/built_value.dart';
 import 'package:built_value/serializer.dart';
 
@@ -11,10 +12,12 @@ part 'daily_plan_request.g.dart';
 /// DailyPlanRequest
 ///
 /// Properties:
-/// * [language] 
-/// * [lat] 
-/// * [lng] 
-/// * [radiusM] 
+/// * [language]
+/// * [lat]
+/// * [lng]
+/// * [preferenceContext]
+/// * [radiusM]
+/// * [selectedPlaceId]
 @BuiltValue()
 abstract class DailyPlanRequest implements Built<DailyPlanRequest, DailyPlanRequestBuilder> {
   @BuiltValueField(wireName: r'language')
@@ -26,8 +29,14 @@ abstract class DailyPlanRequest implements Built<DailyPlanRequest, DailyPlanRequ
   @BuiltValueField(wireName: r'lng')
   num get lng;
 
+  @BuiltValueField(wireName: r'preference_context')
+  PlanPreferenceContext? get preferenceContext;
+
   @BuiltValueField(wireName: r'radius_m')
   int? get radiusM;
+
+  @BuiltValueField(wireName: r'selected_place_id')
+  String? get selectedPlaceId;
 
   DailyPlanRequest._();
 
@@ -71,11 +80,25 @@ class _$DailyPlanRequestSerializer implements PrimitiveSerializer<DailyPlanReque
       object.lng,
       specifiedType: const FullType(num),
     );
+    if (object.preferenceContext != null) {
+      yield r'preference_context';
+      yield serializers.serialize(
+        object.preferenceContext,
+        specifiedType: const FullType.nullable(PlanPreferenceContext),
+      );
+    }
     if (object.radiusM != null) {
       yield r'radius_m';
       yield serializers.serialize(
         object.radiusM,
         specifiedType: const FullType(int),
+      );
+    }
+    if (object.selectedPlaceId != null) {
+      yield r'selected_place_id';
+      yield serializers.serialize(
+        object.selectedPlaceId,
+        specifiedType: const FullType.nullable(String),
       );
     }
   }
@@ -122,12 +145,28 @@ class _$DailyPlanRequestSerializer implements PrimitiveSerializer<DailyPlanReque
           ) as num;
           result.lng = valueDes;
           break;
+        case r'preference_context':
+          final valueDes = serializers.deserialize(
+            value,
+            specifiedType: const FullType.nullable(PlanPreferenceContext),
+          ) as PlanPreferenceContext?;
+          if (valueDes == null) continue;
+          result.preferenceContext = valueDes.toBuilder();
+          break;
         case r'radius_m':
           final valueDes = serializers.deserialize(
             value,
             specifiedType: const FullType(int),
           ) as int;
           result.radiusM = valueDes;
+          break;
+        case r'selected_place_id':
+          final valueDes = serializers.deserialize(
+            value,
+            specifiedType: const FullType.nullable(String),
+          ) as String?;
+          if (valueDes == null) continue;
+          result.selectedPlaceId = valueDes;
           break;
         default:
           unhandled.add(key);

@@ -175,6 +175,85 @@ def test_put_preferences_rejects_duplicates_extra_fields_and_oversized_text(
     assert "raw onion" not in response.text
 
 
+def test_put_preferences_accepts_bounded_spice_and_order_requests(client, api_key) -> None:
+    service = _PreferencesService()
+    client.app.dependency_overrides[require_logto_identity] = _oauth_identity
+    client.app.dependency_overrides[get_identity_service] = _IdentityService
+    client.app.dependency_overrides[get_travel_preferences_service] = lambda: service
+
+    payload = _payload()
+    payload["soft"]["spice_level"] = "mild"
+    payload["soft"]["order_requests"] = ["quietTable", "smallPortion"]
+
+    response = client.put(
+        "/api/v1/me/preferences",
+        headers={"X-API-Key": api_key},
+        json={"expected_revision": 0, "preferences": payload},
+    )
+
+    assert response.status_code == 200
+    stored = service.put_calls[0]["preferences"]
+    assert stored["soft"]["spice_level"] == "mild"
+    assert stored["soft"]["order_requests"] == ["quietTable", "smallPortion"]
+    assert response.json()["data"]["preferences"]["soft"]["spice_level"] == "mild"
+
+
+def test_put_preferences_rejects_unknown_or_out_of_bound_restaurant_values(client, api_key) -> None:
+    service = _PreferencesService()
+    client.app.dependency_overrides[require_logto_identity] = _oauth_identity
+    client.app.dependency_overrides[get_identity_service] = _IdentityService
+    client.app.dependency_overrides[get_travel_preferences_service] = lambda: service
+
+    for invalid in (
+        {"spice_level": "inferno"},
+        {"spice_level": 3},
+        {"order_requests": ["extraNapkins"]},
+        {"order_requests": ["quietTable", "quietTable"]},
+        {
+            "order_requests": [
+                "staffRecommendation",
+                "smallPortion",
+                "quietTable",
+                "takeout",
+                "takeout",
+            ]
+        },
+    ):
+        payload = _payload()
+        payload["soft"].update(invalid)
+
+        response = client.put(
+            "/api/v1/me/preferences",
+            headers={"X-API-Key": api_key},
+            json={"expected_revision": 0, "preferences": payload},
+        )
+
+        assert response.status_code == 422, invalid
+        assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+    assert service.put_calls == []
+
+
+def test_put_preferences_defaults_old_payloads_without_restaurant_fields(client, api_key) -> None:
+    # CP2 호환: CP1 시대 저장 문서(맵기/주문 요청 키 없음)는 honest 기본값으로
+    # 파싱된다 — spice_level=None(저장 안 함), order_requests=[](요청 없음).
+    service = _PreferencesService()
+    client.app.dependency_overrides[require_logto_identity] = _oauth_identity
+    client.app.dependency_overrides[get_identity_service] = _IdentityService
+    client.app.dependency_overrides[get_travel_preferences_service] = lambda: service
+
+    response = client.put(
+        "/api/v1/me/preferences",
+        headers={"X-API-Key": api_key},
+        json={"expected_revision": 0, "preferences": _payload()},
+    )
+
+    assert response.status_code == 200
+    stored = service.put_calls[0]["preferences"]
+    assert stored["soft"]["spice_level"] is None
+    assert stored["soft"]["order_requests"] == []
+
+
 def test_put_preferences_surfaces_revision_conflict_without_payload_leak(client, api_key) -> None:
     class _ConflictingService(_PreferencesService):
         def put(self, **_: object) -> TravelPreferencesRecord:

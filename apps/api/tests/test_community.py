@@ -20,6 +20,7 @@ from apps.api.app.services.community_service import (
 POST_ID = UUID("00000000-0000-0000-0000-000000000001")
 AUTHOR_ID = UUID("00000000-0000-0000-0000-000000000002")
 FOLLOWEE_ID = UUID("00000000-0000-0000-0000-000000000003")
+AUTHOR_USER_ID = UUID("00000000-0000-0000-0000-000000000002")
 REPORT_ID = UUID("00000000-0000-0000-0000-000000000004")
 NOW = datetime(2026, 7, 23, tzinfo=UTC)
 ISSUER = "https://issuer.example"
@@ -137,7 +138,7 @@ def test_list_posts_passes_null_viewer_when_anonymous() -> None:
 
 
 def test_create_post_inserts_author_identity_tags_and_returns_row() -> None:
-    repository, executed = _repo([_post_row()])
+    repository, executed = _repo([_post_row(), {"id": AUTHOR_USER_ID}])
 
     row = repository.create_post(
         issuer=ISSUER, subject=SUBJECT, title="title", body="body", tags=["travel"]
@@ -148,6 +149,9 @@ def test_create_post_inserts_author_identity_tags_and_returns_row() -> None:
     assert "INSERT INTO community.user_posts" in sql
     assert "author_issuer, author_subject, title, body, tags" in sql
     assert params == (ISSUER, SUBJECT, "title", "body", ["travel"])
+    # The author's internal uuid is resolved on the same connection so the
+    # response payload never exposes issuer/subject identity.
+    assert "FROM identity.users" in executed[1][0]
 
 
 def test_toggle_like_likes_when_no_existing_row() -> None:

@@ -18,10 +18,15 @@ replaces that gap with a **synthetic, committed** fixture and a **repeatable off
 
 | File | Role |
 |---|---|
-| `apps/api/tests/fixtures/docent_eval_places.json` | Synthetic 30–50-place fixture (`eval_` prefix, all 4 categories, ≥1 honest-empty). |
-| `apps/api/app/services/docent_eval.py` | Eval logic: load fixture, build `DocentScriptRequest`, run `docent_service.generate_script`, return structured results. Imports `docent_service` read-only. |
+| `apps/api/tests/fixtures/docent_eval_places.json` | Synthetic fixture — P6A: exactly 40 places (10 per category, `eval_` prefix, ≥1 honest-empty), every place exercising exactly `["ko","en"]` → 80 language cases. |
+| `apps/api/app/services/docent_eval.py` | Eval logic: load fixture, build `DocentScriptRequest`, run `docent_service.generate_script`, return structured results incl. `total_places` / `total_language_cases` / per-dimension audit summary. Imports `docent_service` read-only. |
+| `apps/api/app/services/docent_qa_dimensions.py` | P6A: deterministic per-dimension audits (source attribution, local context, language purity, usefulness, safety, repetition, grounding, advertising leakage, hallucination) over evidence already present in QA records; pass / flagged / not-applicable only — never a silent pass without evidence. Each audit certifies only its named narrow proxy (e.g. safety = no secret-like text, hallucination = no raw-score leakage, source attribution = clean label presence); broad factual truth, content safety, and source rights are external model/human gates. |
 | `apps/api/app/tools/run_docent_eval.py` | CLI harness: load → eval → assert → write `output/local/docent-eval/report.json` → pass/fail exit. |
-| `apps/api/tests/test_docent_eval_harness.py` | Fixture schema, harness pass/fail, category coverage, honest-empty, single-language, boundary mock. |
+| `apps/api/app/tools/sanitize_docent_qa_report.py` | Lane C sanitizer; P6A: aggregates the deterministic dimension audits and preserves pass/flagged/not-applicable counts in the report schema and markdown. |
+| `apps/api/tests/test_docent_eval_harness.py` | Fixture schema (40/80, exact KO+EN pairing, 10-per-category balance), harness pass/fail, honest-empty, single-language, boundary mock, honest dimension accounting. |
+| `apps/api/tests/test_docent_qa_dimensions.py` | P6A: dimension evidence gating, pass/flag/N-A accounting, sanitizer schema, adversarial repetition cases. |
+| `apps/api/app/services/docent_judge.py` | P6B: strict fail-closed model-judge contract (one `PASS`/`REWRITE` decision + 11 bounded dimension results, both contradiction directions fail closed), the double live gate (existing live-AI gate + separate `docent_qa_judge` opt-in, resolving the `docent_qa` role separately from docent generation), the provider boundary (injected fake offline, gated live client with `max_retries=0`), sanitized/bounded prompt input (no raw place id, whitelisted metadata, P6A redaction), the bounded batch policy/runner (hard 80-record cap, sequential canary, finite concurrency, per-record wait timeout, no retries, malformed/failure/usage stop-loss with clamped usage, pre-submission honest-empty skip, fail-closed `INCOMPLETE` aggregate, `SIMULATED` labeling for fake runs), and the public-identity projection at the serialization choke point (bounded `eval_` ids kept, everything else `internal_redacted`; language whitelisted `ko`/`en` else `unknown`). |
+| `apps/api/tests/test_docent_judge.py` | P6B: strict parsing, every fail-closed class (both contradiction directions), gate-off behavior, injected fake-provider batches, canary sequencing, 80-record cap fail-closed, stop-loss, timeout/no-retry accounting, honest-empty pre-submission skip with invocation counts, KO+EN examples, prompt/persistence sanitizer safety, public-identity projection (eval/UUID-like/overlong/unsafe ids, oversized language) in outcomes and summaries, stable aggregates, simulated report labeling, and the report's separate judge gate (`NOT_RUN` default). |
 | `docs/planning/v4-docent-qa-framework.md` | This document. |
 
 **Not edited (hard boundary):** `docent_service.py`, `docent_quality_qa.py`,
@@ -55,8 +60,11 @@ A JSON array of 30–50 synthetic place objects. Each object:
   `scores`/`weather` — this exercises the honest-empty path (the docent service surfaces its
   `DOCENT_CONTEXT_REQUIRED` unavailable state rather than fabricating a script).
 
-Current committed fixture: **35 places** — attraction 10, restaurant 9, event 7,
-culture_venue 9, including 1 honest-empty (`eval_minimal_context_00`).
+Current committed fixture (P6A): **exactly 40 places** — 10 in each of `attraction`,
+`restaurant`, `event`, `culture_venue`, including 1 honest-empty
+(`eval_minimal_context_00`). Every place exercises exactly `["ko", "en"]`, yielding
+**exactly 80 language cases**; `evaluate_docent` fails any place whose
+`language_samples` is not exactly KO+EN.
 
 ## 4. Harness behavior
 
@@ -72,10 +80,18 @@ culture_venue 9, including 1 honest-empty (`eval_minimal_context_00`).
 3. For each place × `language_samples`, builds a `DocentScriptRequest` and calls
    `docent_service.generate_script`. `ServiceError` is caught and recorded as the
    empty/unavailable state (no crash).
-4. Asserts: 30–50 places; all 4 categories covered; each `expect_nonempty` place yields
-   non-empty single-language text in BOTH KO and EN with `source == rule_based_curation`; the
-   honest-empty fixture yields empty/unavailable with no fabricated content; no internal
-   `eval_` ID leaks into any script; no placeholder/mock terms.
+4. Asserts: exactly 40 places / 80 language cases with exact KO+EN pairing per place; all 4
+   categories at 10 each; each `expect_nonempty` place yields non-empty single-language text
+   in BOTH KO and EN with `source == rule_based_curation`; the honest-empty fixture yields
+   empty/unavailable with no fabricated content; no internal `eval_` ID leaks into any
+    script; no placeholder/mock terms. The report also carries
+    `dimension_summary` — deterministic per-dimension audits
+    (`docent_qa_dimensions`) over the generated scripts with honest
+    pass/flagged/not-applicable counts (honest-empty language cases are counted as
+    not-applicable, never as pass). Grounding passes are evidence-backed: each
+    language-case record carries its fixture's `grounding_anchors` count, so a
+    generated case passes grounding only on a proven positive anchor count
+    (absent evidence → not-applicable, explicit zero → flagged).
 5. Writes a deterministic JSON report to `output/local/docent-eval/report.json` (gitignored).
 6. Prints a pass/fail summary; exits 0 on all-pass, non-zero otherwise.
 
@@ -100,12 +116,12 @@ python -m app.tools.run_docent_eval
 
 | # | Criterion | Where |
 |---|---|---|
-| C1 | 30–50 synthetic fixture places; `eval_` prefix; all 4 categories; ≥1 honest-empty | fixture + `test_fixture_*` |
+| C1 | Exactly 40 synthetic fixture places (10 per category); `eval_` prefix; exactly KO+EN per place (80 language cases); ≥1 honest-empty | fixture + `test_fixture_*` |
 | C2 | Offline with OpenAI mocked at boundary; zero live calls; flag stays False | `offline_openai_guard` + `live_client_constructions` counter |
 | C3 | Each `expect_nonempty` place yields non-empty KO and EN single-language scripts | `test_nonempty_places_render_single_language_scripts` |
 | C4 | Honest-empty fixture yields empty/unavailable, no crash, no fabricated content | `test_honest_empty_yields_unavailable_no_fabrication` |
 | C5 | Deterministic JSON report; exit code reflects pass/fail | `run_docent_eval.main` + `test_run_docent_eval_cli_exits_zero_on_pass` |
-| C6 | `test_docent_eval_harness.py` green | 14 tests |
+| C6 | `test_docent_eval_harness.py` + `test_docent_qa_dimensions.py` green | 21 + 40 tests (P6A + correction) |
 | C7 | No edit to `docent_service.py`/`docent_quality_qa.py`/`run_docent_quality_qa.py`/`ai_service.py`/schemas/openapi; no Flutter edit | diff is new-files-only |
 | C8 | `ruff check`+`ruff format --check` clean; pytest green (focused + no regression) | verification section below |
 | C9 | This doc present with V7 manual-QA checklist | §6 |
@@ -155,3 +171,166 @@ QA operator (or the supervisor) performs the steps below on a real device with t
 ### 6.5 V7 exit criteria
 - [ ] Every fixture place passes §6.2 for both languages, OR a documented honesty exception is
       filed; the live judge score distribution is recorded for the fixture set.
+
+---
+
+## 7. P6A checkpoint status (2026-09-05)
+
+**Offline 40/80 is reproducible after this change.** Exactly:
+
+- `apps/api/tests/fixtures/docent_eval_places.json` holds exactly 40 synthetic `eval_`
+  places (10 per category, ≥1 honest-empty, no real account data / coordinates / raw
+  reviews / secret or cloud identifiers / unsupported factual claims), each exercising
+  exactly `["ko","en"]` → exactly 80 language cases.
+- `docent_eval.evaluate_docent` exposes and enforces `total_places == 40`,
+  `total_language_cases == 80` (per-language counts included), fails non-KO+EN pairing,
+  and keeps the honest-empty path plus the live-client prohibition
+  (`live_client_constructions == 0` under `offline_openai_guard`).
+- Deterministic QA dimensions (source attribution, local context, language purity,
+  usefulness, safety, repetition — plus grounding, advertising leakage, hallucination)
+  are machine-checkable via `docent_qa_dimensions`: pass / flagged / not-applicable only.
+  A dimension without enough evidence is reported `not_applicable`, never silently
+  counted as pass. Grounding is evidence-gated: absent `grounding_count` evidence is
+  `not_applicable`, an explicit zero/invalid count is `flagged`, and every offline
+  grounding pass traces to a positive committed `grounding_anchors` count carried
+  deterministically into each language-case record (honest-empty stays N/A). Repetition
+  checks are deterministic, linear-bounded, and immune to short/common particles
+  (compact-length floors; 20,000-char scan bound), with adversarial tests in
+  `test_docent_qa_dimensions.py`.
+- **Scope honesty:** each offline audit certifies only its named narrow proxy —
+  `safety` proves absence of secret-like text, `hallucination` absence of raw-score
+  leakage, `source_attribution` presence of a clean source label. A regex non-hit
+  never proves broad content safety, factual truth, or source-rights usability;
+  those judgments remain model/human external gates (below).
+- The Lane C sanitizer report schema preserves pass / flagged / not-applicable counts
+  for every dimension; sanitized artifacts carry verdict/reason codes and bounded,
+  visibly elided, redacted excerpts — at most the first 240 redacted characters of a
+  script, never a byte-complete script, with secret-like text, coordinate pairs,
+  emails, and phone numbers redacted from excerpts and manual notes. They are not
+  raw-text-free by construction: bounded redacted excerpts remain, and raw run
+  reports stay gitignored under `output/local/`.
+
+**Remaining separate external gates (out of scope for P6A):**
+
+- Paid live generation against the deployed API (Lane C runner, capped).
+- Model-judge scoring (`docent_qa` LLM judge — explicitly not implemented here),
+  including broad factual-hallucination review beyond the raw-score proxy.
+- Broad content-safety review beyond the secret-leakage proxy (manual/model gate).
+- Source-rights usability verification beyond label presence (manual gate).
+- Voice playback / on-device speech QA (V4-B/V7).
+- Manual human QA rubric review (`docent-quality-manual-qa-strategy.md`).
+
+---
+
+## 8. P6B checkpoint status (2026-09-05): offline-tested model-judge contract
+
+P6B adds the smallest coherent **offline-testable, fail-closed model-judge
+boundary** for the established `docent_qa` role. It changes no P6A behavior:
+40 synthetic places / 10 per category / exact KO+EN pairing / 80 language
+cases / honest-empty / no-live-client guard / evidence-gated deterministic
+audits / sanitized artifacts are preserved exactly.
+
+**Implemented scope (exactly):**
+
+- **Strict judge result** (`apps/api/app/services/docent_judge.py`): one
+  overall decision `PASS` or `REWRITE`, plus exactly one bounded result per
+  dimension — language purity, factual grounding, local context, persona fit,
+  useful visitor guidance, unsafe or unsupported claims, source-rights
+  caution, Markdown/TTS suitability, weather contradiction, repetition, and
+  internal-score leakage — each with a machine-readable status
+  (`pass`/`flagged`) and a concise reason code. Parsing is strict: missing,
+  malformed, duplicate, unknown, non-finite, out-of-range, or contradictory
+  fields fail closed to `REWRITE` with a machine-readable failure reason
+  code, in **both** contradiction directions — `PASS` with any flagged
+  dimension and `REWRITE` with every dimension `pass` (correction);
+  dimension results from an untrusted payload are discarded.
+- **Separate role resolution:** the judge resolves the established
+  `docent_qa` model role via the existing `model_client.resolve`
+  (standard-OpenAI firewall included). No new provider, Azure path, raw-key
+  path, or direct-token path was added.
+- **Live judging OFF by default:** a production call requires the existing
+  explicit live-AI gate (`LALA_ENABLE_LIVE_AI` + API key + base-URL
+  firewall) **and** the separate `docent_qa_judge` feature flag
+  (`LALA_DOCENT_QA_JUDGE`, default False — the existing registry entry, no
+  flag edits). The live client is constructed only inside
+  `build_live_provider` behind the double gate, with `max_retries=0`.
+  Tests and the offline evaluator inject a fake provider at the boundary and
+  make zero network or paid calls.
+- **Sanitized, bounded provider input (correction):** the judge prompt never
+  carries a raw internal place identifier (identity stays in the record for
+  accounting only); language/category are whitelist labels (anything else
+  becomes the bounded literal `unknown`); and the script is P6A-redacted
+  (secret-like text, coordinate pairs, email/phone) before the 4000-character
+  bound. Every public serialization path — including
+  `JudgeResult.to_public_dict` — sanitizes or omits model-authored reasons
+  and raw identifiers.
+- **Bounded batch policy** (`JudgeBatchPolicy`, pure data, provider-free and
+  independently unit-testable): hard maximum 80 language records (the
+  existing 40-place × KO+EN roster; no policy may exceed it), a small
+  sequential canary before the remainder, finite concurrency (≤16, executor
+  bounded), a per-record timeout, exactly one provider call per judgeable
+  record (no automatic retries that could multiply spend), and a stop-loss
+  halting the batch on malformed responses, repeated provider failures
+  (timeouts included), or a configured cumulative token/usage ceiling
+  (reported usage clamped to ≥ 0 so it can never reduce stop-loss accounting
+  — correction). **Honest-empty records are classified and recorded before
+  any executor submission in both canary and remainder phases (correction),
+  so provider invocations equal the judgeable records.** The batch wait
+  timeout abandons only the wait — it never terminates an already-running
+  call; the live client's own timeout is authoritative. Halted batches mark
+  every unjudged record explicitly skipped — never silently passed.
+- **Sanitized persistence only (final correction: public identity projection):**
+  persisted outcomes carry the decision, failure/error codes, dimension
+  statuses with redacted bounded reason codes, a bounded redacted script
+  excerpt reused from the P6A sanitizer (same 240-char visibly elided route;
+  secrets/coordinates/email/phone redacted), aggregate counters, and a
+  projected public identity — bounded synthetic `eval_` place ids (lowercase
+  ASCII letters/digits/underscore/hyphen, ≤64 chars) are retained for offline
+  traceability, while every other identity (internal, UUID-like,
+  unsafe-charset, or oversized) is replaced by the constant honest redacted
+  marker `internal_redacted` (not reversible, not a raw hash); language is
+  whitelisted to `ko`/`en` and reported as `unknown` otherwise. The
+  projection is applied at the single serialization choke point
+  (`JudgeRecordOutcome.to_public_dict`), so `JudgeBatchRun.summarize()` can
+  never emit a raw internal identifier or an unrestricted language value;
+  raw identity stays in-memory for batch accounting only. Raw provider
+  payloads, raw review text, secrets, personal data, precise coordinates, and
+  cloud identifiers are never logged or persisted.
+- **Separate optional report gate with fail-closed aggregate (correction):**
+  the offline QA report carries a `judge_gate` section. Default (no judge
+  run): exactly `{"status": "NOT_RUN"}`, provider-free — never `PASS`. The
+  aggregate real-judge gate returns `PASS` only when every judgeable in-cap
+  record has a valid `PASS` and there are no provider failures, timeouts,
+  incomplete outcomes, halted skips, or cap drops; mixed PASS+error and any
+  `dropped_by_cap > 0` report the explicit non-PASS status `INCOMPLETE`.
+  Honest-empty skips stay explicit and neutral. Precedence:
+  `REWRITE` > `HALTED` > `INCOMPLETE` > `PASS` > `NO_VERDICTS`.
+  `run_docent_eval --judge-fake` is simulation-only and is labeled
+  unmistakably: top status `SIMULATED` with `provider: OFFLINE_FAKE`,
+  `simulated: true`, and the run aggregate nested under
+  `simulated_result` — visible in both the report JSON and the CLI summary
+  (`judge_gate=SIMULATED`), so a fake run can never satisfy or be mistaken
+  for the real model-judge acceptance gate (78 judged, 2 honest-empty skips
+  on the committed fixture, nested). The judge gate never modifies the
+  deterministic P6A results or the CLI exit code.
+
+**Scope honesty:** the model-judge gate evaluates only what the (live or
+fake) provider returns under the strict schema. A simulated offline run is
+labeled `SIMULATED` precisely because it says nothing about model quality;
+even a live `PASS` is a narrow structured verdict, not proof of broad factual
+truth, content safety, source rights, or production readiness. Those remain
+external gates below.
+
+**Remaining separate external gates (explicitly NOT executed in P6B):**
+
+1. **Paid canary** — a real paid live-judge canary run against the deployed
+   API with the double gate on, under the batch stop-loss.
+2. **Real 40-place/80-script regeneration** — regenerating real production
+   docent scripts (Lane C) and judging those, not the synthetic roster.
+3. **Human manual QA** — the manual rubric review
+   (`docent-quality-manual-qa-strategy.md`).
+4. **Source-rights review** — usability verification beyond label presence.
+5. **On-device audio QA** — voice playback / speech QA (V4-B/V7).
+6. **Production runtime wiring** — wiring the judge gate into any production
+   runtime/routing surface (none exists; the offline report gate is the only
+   consumer).

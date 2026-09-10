@@ -31,6 +31,7 @@ import 'package:lala_next_app/features/location/widgets/permanently_denied_recov
 import 'package:lala_next_app/features/map/domain/active_map_sheet.dart';
 import 'package:lala_next_app/features/map/map_helpers.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
+import 'package:lala_next_app/features/planning/domain/plan_preference_context.dart';
 import 'package:lala_next_app/features/settings/widgets/user_settings_sheet.dart';
 import 'package:lala_next_app/features/settings/data/privacy_settings_store.dart';
 import 'package:lala_next_app/features/tour/tour_helpers.dart';
@@ -57,6 +58,7 @@ class LalaHomePage extends StatefulWidget {
     this.localSignalActionController,
     this.docentExperienceController,
     this.privacySettingsStore,
+    this.preferenceContextProvider,
     super.key,
   }) : assert(authController != null || authControllerFactory != null);
 
@@ -72,6 +74,10 @@ class LalaHomePage extends StatefulWidget {
   /// null 이면 레일 카드에 재생 버튼을 만들지 않는다.
   final DocentExperienceController? docentExperienceController;
   final PrivacySettingsStore? privacySettingsStore;
+
+  /// CP1: 플랜 생성에 실을 유효 선호 컨텍스트 공급자(선택 — 테스트 주입).
+  /// null 이면 기본 공급자(기기 선호 기본값 + 여행 날짜 override 합성)를 쓴다.
+  final LalaPlanPreferenceContextProvider? preferenceContextProvider;
 
   @override
   State<LalaHomePage> createState() => _LalaHomePageState();
@@ -114,6 +120,18 @@ class LalaHomePage extends StatefulWidget {
       loading: state?._loading ?? false,
     );
   }
+
+  /// Test-only diagnostic (D-1 race): the daily-plan envelope currently held in
+  /// state, so a pinned plan's survival against a late stale unpinned refresh
+  /// can be verified against HomePage state directly (not only via the shared
+  /// store or UI text).
+  @visibleForTesting
+  static LalaEnvelope<LalaDailyPlan>? dailyPlanStateForTesting(
+    BuildContext context,
+  ) {
+    final state = context.findAncestorStateOfType<_LalaHomePageState>();
+    return state?._dailyPlan;
+  }
 }
 
 class _LalaHomePageState extends State<LalaHomePage> {
@@ -145,6 +163,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
   LalaEnvelope<LalaWeather>? _weather;
   LalaEnvelope<LalaIntervention>? _intervention;
   LalaEnvelope<LalaDailyPlan>? _dailyPlan;
+  // D-1: addToPlan 고정 플랜 생성 중복 발사 방지(더블탭/액션 재시도).
+  bool _pinnedPlanGenerationInFlight = false;
   LalaEnvelope<LalaDocentScript>? _docentScript;
   LalaAudioResponse? _docentAudio;
   LalaAudioResponse? _tourAudio;
@@ -668,8 +688,12 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _scheduleRecommendationRecovery(reason: 'places-load-failed');
       }
 
+      // CP1: 이 refresh dispatch 가 실을 유효 선호 컨텍스트를 한 번만 합성한다.
+      // 모든 플랜 생성 진입점이 같은 공급자를 쓰므로 동일한 유효 컨텍스트가
+      // 요청된다(숨은 전역 변경 없음 — 읽기 전용 합성).
+      final preferenceContext = await _currentPreferenceContext();
       final dailyPlanFuture = loadOptional(
-        _backend.createDailyPlan,
+        () => _backend.createDailyPlan(preferenceContext: preferenceContext),
         reportError: false,
       );
 
@@ -766,6 +790,13 @@ class _LalaHomePageState extends State<LalaHomePage> {
       }
       _tryResolveLocalSignalAction();
     }
+  }
+
+  /// CP1: 이 페이지의 플랜 생성에 실을 유효 선호 컨텍스트. 주입된 공급자가
+  /// 우선; 없으면 기본 공급자(기기 선호 + 여행 override 합성)를 쓴다.
+  Future<LalaPlanPreferenceContext> _currentPreferenceContext() {
+    return widget.preferenceContextProvider?.call() ??
+        composePlanPreferenceContext();
   }
 
   String _safeErrorMessage(
@@ -999,10 +1030,83 @@ class _LalaHomePageState extends State<LalaHomePage> {
     if (request.action == LocalSignalPlaceAction.addToPlan) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && SelectedPlaceStore.current == place.placeId) {
-          _openSheet(ActiveMapSheet.planner);
+          unawaited(_generatePinnedPlanForPlace(place));
         }
       });
     }
+  }
+
+  /// D-1: addToPlan 액션의 단일 플랜 생성 지점. 요청받은 카노니컬 장소를
+  /// selectedPlaceId 로 고정 배정 요청하고, 응답의 '정확한 플랜'을 공유 스토어에
+  /// 게시한다(스토어 게시 = 크로스탭 persistence 기록). 포함이 확인되지 않으면
+  /// 플래너 시트를 열지 않고 정직한 실패 안내만 낸다 — 장소가 추가된 척하지 않는다.
+  Future<void> _generatePinnedPlanForPlace(LalaPlace place) async {
+    if (_pinnedPlanGenerationInFlight) return;
+    _pinnedPlanGenerationInFlight = true;
+    // D-1 race(P1): a pinned generation supersedes every earlier _refresh
+    // dispatch. Bump the epoch so their stale guards discard any late unpinned
+    // result BEFORE it can touch _dailyPlan/PlanContextStore — without this,
+    // a refresh that captured the current epoch can still finish after the
+    // pinned plan is published and overwrite it. The bump also orphans the
+    // loading flag those invalidated dispatches can no longer clear themselves
+    // (their finally only resets it while epoch == _refreshEpoch), so clear it
+    // here. A refresh started AFTER this point captures the newer epoch and
+    // keeps its normal stale-response/explicit-refresh behavior.
+    ++_refreshEpoch;
+    if (_loading) {
+      setState(() {
+        _loading = false;
+      });
+    }
+    try {
+      // CP1: 고정 생성도 지도 리프레시와 동일한 유효 선호 컨텍스트를 실어
+      // 보낸다(같은 공급자 — 진입점 간 유효 컨텍스트 불일치 방지).
+      final preferenceContext = await _currentPreferenceContext();
+      final envelope = await _backend.createDailyPlan(
+        selectedPlaceId: place.placeId,
+        preferenceContext: preferenceContext,
+      );
+      final plan = envelope.data;
+      if (!mounted) return;
+      // 서버 계약(고정 배정 또는 422)에 대한 방어: 성공 응답인데 장소가 없으면
+      // 추가된 것으로 주장할 수 없다.
+      final included =
+          envelope.ok &&
+          plan != null &&
+          plan.slots.any((slot) => slot.place?.placeId == place.placeId);
+      if (!included) {
+        _showAddToPlanFailure();
+        return;
+      }
+      setState(() {
+        _dailyPlan = envelope;
+      });
+      PlanContextStore.set(plan);
+      _openSheet(ActiveMapSheet.planner);
+    } on Object {
+      if (mounted) {
+        _showAddToPlanFailure();
+      }
+    } finally {
+      _pinnedPlanGenerationInFlight = false;
+    }
+  }
+
+  void _showAddToPlanFailure() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          lalaCopyMulti(
+            _uiLanguage,
+            ko: '이 장소를 일정에 추가하지 못했어요. 잠시 후 다시 시도해 주세요.',
+            en: 'Could not add this place to the plan. Please try again shortly.',
+            ja: 'このスポットをプランに追加できませんでした。しばらくしてからもう一度お試しください。',
+            zhHans: '未能将此地点添加到行程，请稍后重试。',
+            zhHant: '未能將此地點加入行程，請稍後重試。',
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _resolveLocalSignalPlaceAcrossCategories(
@@ -1038,7 +1142,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       if (request.action == LocalSignalPlaceAction.addToPlan) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && SelectedPlaceStore.current == place.placeId) {
-            _openSheet(ActiveMapSheet.planner);
+            unawaited(_generatePinnedPlanForPlace(place));
           }
         });
       }

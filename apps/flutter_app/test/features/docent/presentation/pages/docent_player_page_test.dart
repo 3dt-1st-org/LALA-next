@@ -141,7 +141,7 @@ class _ScriptedBackend implements LalaBackend {
   }
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async {
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async {
     throw UnimplementedError();
   }
 }
@@ -359,7 +359,7 @@ class _StepBackend implements LalaBackend {
   }
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() {
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) {
     throw UnimplementedError();
   }
 }

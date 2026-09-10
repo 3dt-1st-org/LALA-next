@@ -18,6 +18,23 @@ _GRADE_KO = {
 }
 
 
+_BAD_GRADES = frozenset({"bad", "very_bad"})
+_OK_GRADES = frozenset({"good", "normal"})
+
+
+def air_quality_outdoor_status(dust: dict[str, Any] | None) -> str:
+    """P4: derive air-quality adversity only from the normalized dust grades.
+
+    An unknown/missing grade stays "unknown" — never classified as good/bad.
+    """
+    grade = str(((dust or {}).get("grade")) or "").strip()
+    if grade in _BAD_GRADES:
+        return "bad"
+    if grade in _OK_GRADES:
+        return "good"
+    return "unknown"
+
+
 def unknown_dust_payload() -> dict[str, str]:
     return {
         "pm10": "",

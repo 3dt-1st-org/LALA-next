@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
+import 'package:lala_next_app/lala_map_provider.dart';
 import 'package:lala_next_app/lala_map_view.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
@@ -29,8 +30,14 @@ class LocationMapPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 비한국어 로케일은 오픈 벡터 지도가 렌더되므로 접근성 이름도 실제
+    // provider를 따른다(한국어는 기존 네이버 라벨 유지).
+    final usesOpenVectorMap =
+        selectLalaMapProvider(language) == LalaMapProviderKind.openVector;
     return Semantics(
-      label: naverMapLabel(language, preview: true),
+      label: usesOpenVectorMap
+          ? openVectorMapLabel(language, preview: true)
+          : naverMapLabel(language, preview: true),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
         child: SizedBox(

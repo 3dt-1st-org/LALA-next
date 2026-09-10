@@ -3,13 +3,14 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Header, Query, Request
 
 from apps.api.app.core.auth import (
     RequestIdentity,
     require_client_auth,
     require_oauth_identity,
 )
+from apps.api.app.core.rate_limit import enforce_community_write_rate_limit
 from apps.api.app.core.responses import success_envelope
 from apps.api.app.schemas.community import (
     CommunityCommentCreate,
@@ -17,6 +18,7 @@ from apps.api.app.schemas.community import (
     CommunityPostCreate,
     CommunityReportCreate,
 )
+from apps.api.app.services.community_idempotency import validate_idempotency_key
 from apps.api.app.services.community_service import CommunityService, get_community_service
 
 router = APIRouter(
@@ -28,6 +30,22 @@ router = APIRouter(
     # on top to enforce an authenticated author.
     dependencies=[Depends(require_client_auth)],
 )
+
+# Documented per-actor/per-client write limits (requests per minute). Reads are
+# not throttled at this seam. Enforcement runs inside each handler — i.e. only
+# after OAuth identity validation, so unauthenticated 401s never consume an
+# actor's window and a rejected request never reaches the service/repository.
+POST_CREATE_LIMIT_PER_MINUTE = 10
+COMMENT_CREATE_LIMIT_PER_MINUTE = 20
+LIKE_TOGGLE_LIMIT_PER_MINUTE = 60
+FOLLOW_TOGGLE_LIMIT_PER_MINUTE = 30
+REPORT_CREATE_LIMIT_PER_MINUTE = 5
+
+
+def _actor_key(identity: RequestIdentity) -> str:
+    if identity.mode == "oauth" and identity.issuer and identity.subject:
+        return f"{identity.issuer}:{identity.subject}"
+    return "public"
 
 
 def _viewer_identity(identity: RequestIdentity) -> tuple[str | None, str | None]:
@@ -69,13 +87,29 @@ def create_post(
     body: CommunityPostCreate,
     identity: Annotated[RequestIdentity, Depends(require_oauth_identity)],
     service: Annotated[CommunityService, Depends(get_community_service)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> dict:
+    """Create a post; durable-idempotent when ``Idempotency-Key`` is present.
+
+    The key is scoped to the verified actor and this endpoint; the same key
+    with the same canonical payload replays the stored response (across
+    restarts), a different payload with the same key is a deterministic 409.
+    """
+
+    key = validate_idempotency_key(idempotency_key)
+    enforce_community_write_rate_limit(
+        request,
+        route_key="community-post-create",
+        actor_key=_actor_key(identity),
+        limit_per_minute=POST_CREATE_LIMIT_PER_MINUTE,
+    )
     payload = service.create_post(
         issuer=identity.issuer or "",
         subject=identity.subject or "",
         title=body.title,
         body=body.body,
         tags=body.tags or [],
+        idempotency_key=key,
     )
     return success_envelope(request=request, data=payload, meta={"source": "db"})
 
@@ -125,6 +159,12 @@ def create_comment(
     identity: Annotated[RequestIdentity, Depends(require_oauth_identity)],
     service: Annotated[CommunityService, Depends(get_community_service)],
 ) -> dict:
+    enforce_community_write_rate_limit(
+        request,
+        route_key="community-comment-create",
+        actor_key=_actor_key(identity),
+        limit_per_minute=COMMENT_CREATE_LIMIT_PER_MINUTE,
+    )
     payload = service.create_comment(
         post_id=post_id,
         issuer=identity.issuer or "",
@@ -141,6 +181,12 @@ def toggle_like(
     identity: Annotated[RequestIdentity, Depends(require_oauth_identity)],
     service: Annotated[CommunityService, Depends(get_community_service)],
 ) -> dict:
+    enforce_community_write_rate_limit(
+        request,
+        route_key="community-like-toggle",
+        actor_key=_actor_key(identity),
+        limit_per_minute=LIKE_TOGGLE_LIMIT_PER_MINUTE,
+    )
     payload = service.toggle_like(
         post_id=post_id,
         issuer=identity.issuer or "",
@@ -182,6 +228,12 @@ def toggle_follow(
     identity: Annotated[RequestIdentity, Depends(require_oauth_identity)],
     service: Annotated[CommunityService, Depends(get_community_service)],
 ) -> dict:
+    enforce_community_write_rate_limit(
+        request,
+        route_key="community-follow-toggle",
+        actor_key=_actor_key(identity),
+        limit_per_minute=FOLLOW_TOGGLE_LIMIT_PER_MINUTE,
+    )
     payload = service.toggle_follow(
         follower_issuer=identity.issuer or "",
         follower_subject=identity.subject or "",
@@ -198,6 +250,12 @@ def report_post(
     identity: Annotated[RequestIdentity, Depends(require_oauth_identity)],
     service: Annotated[CommunityService, Depends(get_community_service)],
 ) -> dict:
+    enforce_community_write_rate_limit(
+        request,
+        route_key="community-report-create",
+        actor_key=_actor_key(identity),
+        limit_per_minute=REPORT_CREATE_LIMIT_PER_MINUTE,
+    )
     payload = service.report_post(
         post_id=post_id,
         issuer=identity.issuer or "",

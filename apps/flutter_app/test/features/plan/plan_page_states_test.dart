@@ -12,12 +12,16 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
+import 'package:lala_next_app/core/state/plan_context_store.dart';
 import 'package:lala_next_app/features/plan/presentation/pages/plan_page.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 
 void main() {
   setUp(() {
     RegionContextStore.clear();
+    // D-1: 플랜 탭 첫 진입은 공유 플랜을 채택할 수 있으므로 상태별 백엔드 동작을
+    // 검증하려면 스토어가 깨끗해야 한다(프로세스 로컬 싱글턴 격리).
+    PlanContextStore.clear();
     OnboardingState.selectLanguage('ko');
   });
 
@@ -273,6 +277,7 @@ void main() {
 
   tearDown(() {
     RegionContextStore.clear();
+    PlanContextStore.clear();
     OnboardingState.reset();
   });
 }
@@ -320,7 +325,7 @@ class _FoundLocationProvider implements LalaLocationProvider {
 /// 일정 응답을 영원히 대기(hanging) — loading 상태 고정용. mock 데이터 없음.
 class _HangingPlanBackend implements LalaBackend {
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() =>
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) =>
       Completer<LalaEnvelope<LalaDailyPlan>>().future;
 
   @override
@@ -337,7 +342,7 @@ class _HangingPlanBackend implements LalaBackend {
 
 class _LoadedPlanBackend implements LalaBackend {
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async => _envelope(
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async => _envelope(
         LalaDailyPlan(
           language: 'ko',
           center: const LalaCoordinate(lat: 37.2636, lng: 127.0286),
@@ -364,7 +369,7 @@ class _LoadedPlanBackend implements LalaBackend {
 /// period/이동시간/추정시간/실내 를 모두 가진 슬롯(시맨틱 집계 검증용).
 class _RichSlotBackend implements LalaBackend {
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async => _envelope(
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async => _envelope(
         LalaDailyPlan(
           language: 'ko',
           center: const LalaCoordinate(lat: 37.2636, lng: 127.0286),
@@ -405,7 +410,7 @@ class _RichSlotBackend implements LalaBackend {
 
 class _EmptySlotsBackend implements LalaBackend {
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async => _envelope(
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async => _envelope(
         LalaDailyPlan(
           language: 'ko',
           center: const LalaCoordinate(lat: 37.2636, lng: 127.0286),
@@ -433,7 +438,7 @@ class _ThrowingPlanBackend implements LalaBackend {
   final Object failure;
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async {
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async {
     throw failure;
   }
 

@@ -54,7 +54,10 @@ class AcquisitionOutcome:
     A network/auth/quota failure is reported with its real category, never as an
     honest zero-result ok/empty. ``attempted_count`` is the number of candidate
     items returned before filtering; it is 0 for every non-ok category because no
-    items are trusted from a failed call.
+    items are trusted from a failed call. ``wire_attempted`` (P5A) is True iff an
+    actual HTTP request was launched at the provider boundary: every outcome of
+    a real fetch attempt (ok/empty/HTTP error/network/parse) is True; it is False
+    only when acquisition stopped before any request (missing credentials).
     """
 
     provider: str
@@ -62,6 +65,7 @@ class AcquisitionOutcome:
     retryable: bool
     http_status: int | None
     attempted_count: int
+    wire_attempted: bool = True
 
 
 @dataclass(frozen=True)
@@ -260,6 +264,9 @@ def acquire_provider(
                 retryable=False,
                 http_status=None,
                 attempted_count=0,
+                # No HTTP request was launched: local credentials were absent,
+                # so this outcome must NOT count as an observed wire attempt.
+                wire_attempted=False,
             ),
             [],
         )
@@ -346,6 +353,13 @@ def acquire_provider(
     )
 
 
+# P5A: acquisition of a place stops after the FIRST fatal endpoint outcome —
+# a denied (auth_missing) or throttled (quota_exceeded) first endpoint never
+# launches the second endpoint. No outcomes are fabricated for the unattempted
+# endpoint; the outcomes tuple simply carries fewer entries.
+_FATAL_PLACE_STOP_CATEGORIES = frozenset({"auth_missing", "quota_exceeded"})
+
+
 def collect_mentions_for_place(
     *,
     place_id: str,
@@ -360,6 +374,11 @@ def collect_mentions_for_place(
     Every emitted post carries place_id/region/category provenance. Raw text
     lives in TransientNaverPost (in-memory only); the orchestrator builds the
     no-raw-text governed record from content_sha256 + external_key.
+
+    P5A bounded-path contract: the endpoint sequence stops at the first fatal
+    auth_missing/quota_exceeded outcome (the second endpoint is not launched,
+    and no outcome is invented for it). Each emitted outcome's wire_attempted
+    flag states whether a real HTTP request was made.
     """
     outcomes: list[AcquisitionOutcome] = []
     all_posts: list[TransientNaverPost] = []
@@ -376,6 +395,8 @@ def collect_mentions_for_place(
         )
         outcomes.append(outcome)
         all_posts.extend(posts)
+        if outcome.category in _FATAL_PLACE_STOP_CATEGORIES:
+            break
     return PlaceCollectionResult(
         place_id=place_id,
         place_name=place_name,

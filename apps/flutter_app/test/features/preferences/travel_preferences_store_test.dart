@@ -1,11 +1,18 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
 import 'package:lala_next_app/features/preferences/data/travel_preferences_remote.dart';
 import 'package:lala_next_app/features/preferences/domain/travel_preferences.dart';
+
+/// Keys as they arrive at the real platform store seam: `SharedPreferences`
+/// prefixes every key with `flutter.` before calling the store platform.
+const String _platformDocKey = 'flutter.$kTravelPreferencesStorageKey';
+const String _platformTimestampKey = 'flutter.$kTravelPreferencesUpdatedAtKey';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +32,11 @@ void main() {
       weatherSensitivity: WeatherSensitivity.high,
       cuisines: const {FoodCuisine.korean, FoodCuisine.marketFood},
       foodAdventure: FoodAdventure.adventurous,
+      spiceLevel: SpicePreference.mild,
+      orderRequests: const {
+        RestaurantOrderRequest.quietTable,
+        RestaurantOrderRequest.takeout,
+      },
       dietaryModes: const {DietaryMode.halal},
       allergens: const {Allergen.shellfish},
       avoidIngredients: '고수',
@@ -64,6 +76,10 @@ void main() {
         TransportMode.walk,
         TransportMode.transit,
       },
+      orderRequests: <RestaurantOrderRequest>{
+        RestaurantOrderRequest.takeout,
+        RestaurantOrderRequest.smallPortion,
+      },
     );
     final second = TravelPreferences(
       interests: <TravelInterest>{
@@ -74,10 +90,82 @@ void main() {
         TransportMode.transit,
         TransportMode.walk,
       },
+      orderRequests: <RestaurantOrderRequest>{
+        RestaurantOrderRequest.smallPortion,
+        RestaurantOrderRequest.takeout,
+      },
     );
 
     expect(first, second);
     expect(first.hashCode, second.hashCode);
+  });
+
+  test('spice and order requests round-trip and clear through copyWith', () {
+    const base = TravelPreferences(
+      spiceLevel: SpicePreference.spicy,
+      orderRequests: {RestaurantOrderRequest.staffRecommendation},
+    );
+
+    final encoded = jsonEncode(base.toJson());
+    expect(encoded, contains('"spice_level":"spicy"'));
+    expect(encoded, contains('"order_requests":["staffRecommendation"]'));
+    // Explicitly saved values survive the round trip.
+    expect(TravelPreferences.fromJson(jsonDecode(encoded)), base);
+
+    // The sentinel lets callers clear the saved value back to "not saved".
+    final cleared = base.copyWith(spiceLevel: null);
+    expect(cleared.spiceLevel, isNull);
+    expect(cleared.orderRequests, base.orderRequests);
+    expect(cleared, isNot(base));
+  });
+
+  test('old payloads default to not-saved spice and empty order requests', () {
+    // CP1-era stored document: no CP2 keys at all.
+    final decoded = TravelPreferences.fromJson(<String, Object>{
+      'version': TravelPreferences.schemaVersion,
+      'soft': <String, Object>{
+        'food_cuisines': <String>['korean'],
+      },
+      'hard': <String, Object>{},
+      'locale': <String, Object>{},
+    });
+
+    expect(decoded.spiceLevel, isNull);
+    expect(decoded.orderRequests, isEmpty);
+    expect(decoded.cuisines, {FoodCuisine.korean});
+    expect(decoded, isNot(const TravelPreferences(spiceLevel: null)));
+  });
+
+  test('malformed restaurant values are bounded honestly', () {
+    final decoded = TravelPreferences.fromJson(<String, Object>{
+      'version': TravelPreferences.schemaVersion,
+      'soft': <String, Object>{
+        // Unknown spice value falls back to "not saved" — never a guess.
+        'spice_level': 'volcanic',
+        // Unknown entries are dropped; the bounded cap keeps at most 4.
+        'order_requests': <String>[
+          'staffRecommendation',
+          'smallPortion',
+          'quietTable',
+          'takeout',
+          'extraNapkins',
+        ],
+      },
+      'hard': <String, Object>{},
+      'locale': <String, Object>{},
+    });
+
+    expect(decoded.spiceLevel, isNull);
+    expect(decoded.orderRequests, {
+      RestaurantOrderRequest.staffRecommendation,
+      RestaurantOrderRequest.smallPortion,
+      RestaurantOrderRequest.quietTable,
+      RestaurantOrderRequest.takeout,
+    });
+    expect(
+      decoded.orderRequests,
+      hasLength(TravelPreferences.maxOrderRequests),
+    );
   });
 
   test('rejects unknown schema and safely bounds malformed values', () {
@@ -203,14 +291,754 @@ void main() {
     expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
     expect(store.serverRevision, 6);
   });
+
+  test('account sync round-trips spice and order requests honestly', () async {
+    // A device with saved CP2 values vs an account without them is a real
+    // conflict (nothing silently overwritten), and the explicit device
+    // upload carries the values verbatim.
+    final store = TravelPreferencesStore();
+    await store.ensureLoaded();
+    const device = TravelPreferences(
+      spiceLevel: SpicePreference.medium,
+      orderRequests: {RestaurantOrderRequest.quietTable},
+    );
+    await store.save(device);
+    final remote = _MemoryRemote(
+      account: const TravelPreferences(),
+      revision: 2,
+    );
+
+    await store.connectAccount(remote);
+
+    expect(store.syncStatus, TravelPreferencesSyncStatus.conflict);
+    expect(store.value.spiceLevel, SpicePreference.medium);
+    expect(store.value.orderRequests, {RestaurantOrderRequest.quietTable});
+
+    await store.saveDevicePreferencesToAccount();
+
+    expect(remote.account?.spiceLevel, SpicePreference.medium);
+    expect(remote.account?.orderRequests, {RestaurantOrderRequest.quietTable});
+    expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+  });
+
+  test('serializes competing account adoptions at the storage seam', () async {
+    final preferences = _GatedSharedPreferencesStore();
+    SharedPreferencesStorePlatform.instance = preferences;
+    const accountA = TravelPreferences(interests: {TravelInterest.history});
+    const accountB = TravelPreferences(
+      interests: {TravelInterest.localFood},
+      pace: TravelPace.relaxed,
+    );
+    final store = TravelPreferencesStore();
+    final remoteA = _MemoryRemote(account: accountA, revision: 1);
+    final remoteB = _MemoryRemote(
+      account: accountB,
+      revision: 7,
+      updatedAt: '2026-09-03T00:00:00Z',
+    );
+
+    // Park the first account's adoption write mid-flight at the platform
+    // seam, then start a second account connect while it is parked.
+    preferences.blockKey(_platformDocKey);
+    final firstConnect = store.connectAccount(remoteA);
+    await preferences.nextStartOf(_platformDocKey);
+    final secondConnect = store.connectAccount(remoteB);
+    await pumpEventQueue();
+
+    // Nothing has committed yet, so the device copy is still pristine and
+    // the newest account document is the one the store is adopting toward.
+    expect(store.value, const TravelPreferences());
+    expect(store.hasLocalDocument, isFalse);
+    expect(store.syncStatus, TravelPreferencesSyncStatus.checking);
+    expect(store.accountPreferences, accountB);
+
+    preferences.releaseKey(_platformDocKey);
+    await firstConnect;
+    await secondConnect;
+
+    // The stale adoption still commits its (now-superseded) document first,
+    // but the newer account's adoption commits last and wins — no torn pair,
+    // no interleaved half-writes from the two connects.
+    expect(store.value, accountB);
+    expect(store.accountPreferences, accountB);
+    expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+    expect(store.serverRevision, 7);
+    expect(store.deviceUpdatedAt, '2026-09-03T00:00:00Z');
+    final disk = await preferences.diskSnapshot();
+    expect(disk[_platformDocKey], jsonEncode(accountB.toJson()));
+    expect(disk[_platformTimestampKey], '2026-09-03T00:00:00Z');
+    expect(preferences.operations, <String>[
+      'set:$_platformDocKey',
+      'set:$_platformTimestampKey',
+      'set:$_platformDocKey',
+      'set:$_platformTimestampKey',
+    ]);
+  });
+
+  test(
+    'a clear after a parked save removes the persisted document last',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final store = TravelPreferencesStore();
+      await store.ensureLoaded();
+      const next = TravelPreferences(interests: {TravelInterest.localFood});
+
+      // Park an explicit save mid-flight, then call clear() while it is parked.
+      preferences.blockKey(_platformDocKey);
+      final saveFuture = store.save(next);
+      await preferences.nextStartOf(_platformDocKey);
+      final clearFuture = store.clear();
+      await pumpEventQueue();
+
+      // The parked edit has not landed in memory yet ...
+      expect(store.value, const TravelPreferences());
+      expect(store.hasLocalDocument, isFalse);
+
+      preferences.releaseKey(_platformDocKey);
+      await saveFuture;
+      await clearFuture;
+
+      // The parked save commits its pair and the clear removes both keys
+      // afterwards — the cleared state is never resurrected by the parked pair.
+      expect(store.value, const TravelPreferences());
+      expect(store.hasLocalDocument, isFalse);
+      expect(store.deviceUpdatedAt, isNull);
+      expect(store.syncStatus, TravelPreferencesSyncStatus.localOnly);
+      final disk = await preferences.diskSnapshot();
+      expect(disk, isEmpty);
+      expect(preferences.operations, <String>[
+        'set:$_platformDocKey',
+        'set:$_platformTimestampKey',
+        'remove:$_platformDocKey',
+        'remove:$_platformTimestampKey',
+      ]);
+    },
+  );
+
+  test(
+    'back-to-back saves commit whole documents without torn pairs',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final store = TravelPreferencesStore();
+      const first = TravelPreferences(interests: {TravelInterest.history});
+      const second = TravelPreferences(interests: {TravelInterest.localFood});
+      const third = TravelPreferences(pace: TravelPace.relaxed);
+
+      await store.save(first);
+
+      // Park the second save at the seam, then queue a third save behind it.
+      preferences.blockKey(_platformDocKey);
+      final secondSave = store.save(second);
+      await preferences.nextStartOf(_platformDocKey);
+      final thirdSave = store.save(third);
+      await pumpEventQueue();
+
+      // Only the first save has committed; the queued ones have not applied.
+      expect(store.value, first);
+      final midDisk = await preferences.diskSnapshot();
+      expect(midDisk[_platformDocKey], jsonEncode(first.toJson()));
+
+      preferences.releaseKey(_platformDocKey);
+      await secondSave;
+      await thirdSave;
+
+      // Commits are whole documents: doc + timestamp pairs in call order, the
+      // last save wins, and the device timestamp always matches the stored one.
+      final disk = await preferences.diskSnapshot();
+      expect(disk[_platformDocKey], jsonEncode(third.toJson()));
+      expect(store.value, third);
+      expect(store.deviceUpdatedAt, disk[_platformTimestampKey] as String?);
+      expect(preferences.operations, <String>[
+        'set:$_platformDocKey',
+        'set:$_platformTimestampKey',
+        'set:$_platformDocKey',
+        'set:$_platformTimestampKey',
+        'set:$_platformDocKey',
+        'set:$_platformTimestampKey',
+      ]);
+    },
+  );
+
+  test(
+    'a failed persisted save throws without uploading and keeps saving',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final store = TravelPreferencesStore();
+      final remote = _MemoryRemote(
+        account: const TravelPreferences(),
+        revision: 2,
+      );
+
+      // Adoption lands the account defaults locally (no local document yet).
+      await store.connectAccount(remote);
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      expect(preferences.operations, <String>[
+        'set:$_platformDocKey',
+        'set:$_platformTimestampKey',
+      ]);
+
+      // The very next document write fails at the platform seam.
+      preferences.failNextKey(_platformDocKey);
+      const rejected = TravelPreferences(interests: {TravelInterest.localFood});
+      await expectLater(store.save(rejected), throwsA(isA<StateError>()));
+
+      // The failed save never reached the server and never applied its value.
+      expect(remote.putCalls, isEmpty);
+      expect(store.value, const TravelPreferences());
+      expect(preferences.operations, <String>[
+        'set:$_platformDocKey',
+        'set:$_platformTimestampKey',
+      ]);
+
+      // The storage chain is intact: the next save commits and uploads.
+      const accepted = TravelPreferences(interests: {TravelInterest.history});
+      await store.save(accepted);
+
+      expect(store.value, accepted);
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      expect(remote.putCalls, <TravelPreferences>[accepted]);
+      expect(remote.account, accepted);
+      expect(remote.lastExpectedRevision, 2);
+    },
+  );
+
+  test('a save superseded by clear at the seam head discards itself', () async {
+    final preferences = _GatedSharedPreferencesStore();
+    SharedPreferencesStorePlatform.instance = preferences;
+    final store = TravelPreferencesStore();
+    const next = TravelPreferences(interests: {TravelInterest.localFood});
+
+    // No await between the two calls: the save's critical section has not
+    // started when clear() bumps the clear generation synchronously.
+    final saveFuture = store.save(next);
+    final clearFuture = store.clear();
+    await saveFuture;
+    await clearFuture;
+
+    // The save discarded itself at the section head — only the clear's two
+    // removes ever reach the platform, and nothing is written or uploaded.
+    expect(preferences.operations, <String>[
+      'remove:$_platformDocKey',
+      'remove:$_platformTimestampKey',
+    ]);
+    expect(store.value, const TravelPreferences());
+    expect(store.hasLocalDocument, isFalse);
+    expect(store.deviceUpdatedAt, isNull);
+    expect(store.syncStatus, TravelPreferencesSyncStatus.localOnly);
+    final disk = await preferences.diskSnapshot();
+    expect(disk, isEmpty);
+  });
+
+  test(
+    'an adoption queued behind a parked explicit save cannot overwrite the user document',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final store = TravelPreferencesStore();
+      await store.ensureLoaded();
+      const guest = TravelPreferences(interests: {TravelInterest.localFood});
+      const server = TravelPreferences(
+        interests: {TravelInterest.history},
+        pace: TravelPace.relaxed,
+      );
+      final remote = _MemoryRemote(account: server, revision: 5);
+
+      // Park the guest's explicit save mid-flight at the real platform seam;
+      // its section has not applied, so the store reports no local document.
+      preferences.blockKey(_platformDocKey);
+      final saveFuture = store.save(guest);
+      await preferences.nextStartOf(_platformDocKey);
+      expect(store.hasLocalDocument, isFalse);
+
+      // Connect an account whose GET answers immediately: the adoption
+      // decision sees no local document and queues behind the parked save.
+      final connect = store.connectAccount(remote);
+      await pumpEventQueue();
+
+      preferences.releaseKey(_platformDocKey);
+      await saveFuture;
+      await connect;
+
+      // The committed user document survives; the derived adoption discarded
+      // itself and the pairing against the server copy is an honest conflict.
+      expect(store.value, guest);
+      expect(store.hasLocalDocument, isTrue);
+      expect(store.accountPreferences, server);
+      expect(store.syncStatus, TravelPreferencesSyncStatus.conflict);
+      expect(store.deviceUpdatedAt, isNot('2026-09-02T00:00:00Z'));
+      expect(remote.putCalls, isEmpty);
+      final disk = await preferences.diskSnapshot();
+      expect(disk[_platformDocKey], jsonEncode(guest.toJson()));
+    },
+  );
+
+  test(
+    'an adoption parked at the injected factory discards itself after a newer explicit save commits',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final factory = _GatedFactory();
+      final store = TravelPreferencesStore(preferencesFactory: factory.call);
+      await store.ensureLoaded(); // Factory call #1.
+      const guest = TravelPreferences(interests: {TravelInterest.localFood});
+      const server = TravelPreferences(interests: {TravelInterest.history});
+      final remote = _MemoryRemote(account: server, revision: 3);
+
+      // The adoption's factory acquisition (call #2) parks after the GET.
+      factory.gate(2);
+      final connect = store.connectAccount(remote);
+      await factory.startOf(2);
+      expect(store.hasLocalDocument, isFalse);
+
+      // An explicit guest edit commits fully while the adoption is parked.
+      await store.save(guest);
+      expect(store.value, guest);
+
+      factory.release(2);
+      await connect;
+
+      // The adoption discards itself at the section head: the newer committed
+      // user document stays both in memory and on disk.
+      expect(store.value, guest);
+      expect(store.syncStatus, TravelPreferencesSyncStatus.conflict);
+      expect(remote.putCalls, isEmpty);
+      final disk = await preferences.diskSnapshot();
+      expect(disk[_platformDocKey], jsonEncode(guest.toJson()));
+    },
+  );
+
+  test(
+    'a false-acknowledged document write claims nothing and never uploads; a retry lands',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final store = TravelPreferencesStore();
+      final remote = _MemoryRemote(
+        account: const TravelPreferences(),
+        revision: 2,
+      );
+
+      await store.connectAccount(remote);
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+
+      preferences.ackFalseNextKey(_platformDocKey);
+      const chosen = TravelPreferences(interests: {TravelInterest.localFood});
+      await expectLater(
+        store.save(chosen),
+        throwsA(isA<TravelPreferencesPersistenceException>()),
+      );
+
+      // The plugin acknowledged failure (false, no throw): the public save
+      // surfaced it, no value applied, no upload, and the timestamp half of
+      // the pair never moves ahead.
+      expect(store.value, const TravelPreferences());
+      expect(store.hasLocalDocument, isTrue);
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      expect(remote.putCalls, isEmpty);
+      final failed = await preferences.diskSnapshot();
+      expect(
+        failed[_platformDocKey],
+        jsonEncode(const TravelPreferences().toJson()),
+      );
+      expect(failed[_platformTimestampKey], '2026-09-02T00:00:00Z');
+
+      const retried = TravelPreferences(interests: {TravelInterest.history});
+      await store.save(retried);
+      expect(store.value, retried);
+      expect(remote.putCalls, <TravelPreferences>[retried]);
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      final disk = await preferences.diskSnapshot();
+      expect(disk[_platformDocKey], jsonEncode(retried.toJson()));
+    },
+  );
+
+  test(
+    'a false-acknowledged timestamp write fails the pair honestly; a retry converges',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final store = TravelPreferencesStore();
+      final remote = _MemoryRemote(
+        account: const TravelPreferences(),
+        revision: 2,
+      );
+
+      await store.connectAccount(remote);
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+
+      preferences.ackFalseNextKey(_platformTimestampKey);
+      const chosen = TravelPreferences(interests: {TravelInterest.localFood});
+      await expectLater(
+        store.save(chosen),
+        throwsA(isA<TravelPreferencesPersistenceException>()),
+      );
+
+      // Nothing is claimed or uploaded and the failure surfaced. The plugin
+      // offers no transactional pair, so the document half may sit on disk as
+      // a degraded partial — but the store never publishes success for an
+      // unacknowledged pair.
+      expect(store.value, const TravelPreferences());
+      expect(store.deviceUpdatedAt, '2026-09-02T00:00:00Z');
+      expect(remote.putCalls, isEmpty);
+      final degraded = await preferences.diskSnapshot();
+      expect(degraded[_platformDocKey], jsonEncode(chosen.toJson()));
+      expect(degraded[_platformTimestampKey], '2026-09-02T00:00:00Z');
+
+      const retried = TravelPreferences(interests: {TravelInterest.history});
+      await store.save(retried);
+      expect(store.value, retried);
+      expect(remote.putCalls, <TravelPreferences>[retried]);
+      final disk = await preferences.diskSnapshot();
+      expect(disk[_platformDocKey], jsonEncode(retried.toJson()));
+      expect(store.deviceUpdatedAt, disk[_platformTimestampKey] as String?);
+    },
+  );
+
+  test(
+    'a false-acknowledged clear remove claims no deletion; a retry clears',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final store = TravelPreferencesStore();
+      await store.ensureLoaded();
+      const saved = TravelPreferences(interests: {TravelInterest.localFood});
+      await store.save(saved);
+
+      preferences.ackFalseNextRemove(_platformDocKey);
+      await expectLater(
+        store.clear(),
+        throwsA(isA<TravelPreferencesPersistenceException>()),
+      );
+
+      // Deletion was not acknowledged: the public clear surfaced it while the
+      // device copy and its persisted document stay intact.
+      expect(store.value, saved);
+      expect(store.hasLocalDocument, isTrue);
+      expect(store.syncStatus, TravelPreferencesSyncStatus.localOnly);
+      final kept = await preferences.diskSnapshot();
+      expect(kept[_platformDocKey], jsonEncode(saved.toJson()));
+
+      await store.clear();
+      expect(store.value, const TravelPreferences());
+      expect(store.hasLocalDocument, isFalse);
+      final disk = await preferences.diskSnapshot();
+      expect(disk, isEmpty);
+    },
+  );
+
+  test(
+    'a failed clear after a parked save commits the newest document and surfaces the failure',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final store = TravelPreferencesStore();
+      const old = TravelPreferences(interests: {TravelInterest.history});
+      const fresh = TravelPreferences(interests: {TravelInterest.localFood});
+      await store.ensureLoaded();
+      await store.save(old);
+
+      // Park a pre-clear save mid-flight at the platform seam.
+      preferences.blockKey(_platformDocKey);
+      final saveFuture = store.save(fresh);
+      await pumpEventQueue();
+      final clearFuture = store.clear();
+      preferences.ackFalseNextRemove(_platformDocKey);
+
+      preferences.releaseKey(_platformDocKey);
+      await saveFuture;
+      await expectLater(
+        clearFuture,
+        throwsA(isA<TravelPreferencesPersistenceException>()),
+      );
+
+      // The parked save had already passed its fence checks, so the newest
+      // document committed; the clear's remove false-acked and the failure
+      // surfaced instead of silently leaving a false cleared state.
+      final disk = await preferences.diskSnapshot();
+      expect(disk[_platformDocKey], jsonEncode(fresh.toJson()));
+      expect(disk.containsKey(_platformTimestampKey), isTrue);
+      expect(preferences.operations.last, 'false-remove:$_platformDocKey');
+      expect(store.value, fresh);
+      expect(store.hasLocalDocument, isTrue);
+      expect(store.syncStatus, TravelPreferencesSyncStatus.localOnly);
+    },
+  );
+
+  test(
+    'a failed adoption surfaces an error instead of claiming synced from nothing',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final store = TravelPreferencesStore();
+      final remote = _MemoryRemote(
+        account: const TravelPreferences(),
+        revision: 3,
+      );
+
+      preferences.ackFalseNextKey(_platformDocKey);
+      await store.connectAccount(remote);
+
+      // The adoption write false-acked: nothing persisted and no local
+      // document exists, so an honest error is reported — never a synced
+      // pairing derived from matching pristine defaults.
+      expect(store.syncStatus, TravelPreferencesSyncStatus.error);
+      expect(store.hasLocalDocument, isFalse);
+      expect(
+        (await preferences.diskSnapshot()).containsKey(_platformDocKey),
+        isFalse,
+      );
+      expect(store.value, const TravelPreferences());
+
+      // The storage queue is intact: a retry adopts and reaches synced.
+      await store.retryAccountSync();
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      expect(store.hasLocalDocument, isTrue);
+      final disk = await preferences.diskSnapshot();
+      expect(
+        disk[_platformDocKey],
+        jsonEncode(const TravelPreferences().toJson()),
+      );
+    },
+  );
+
+  test(
+    'a failed clear during an in-flight upload repairs the stranded checking status',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final store = TravelPreferencesStore();
+      final remote = _PutGatedRemote(const TravelPreferences(), 2);
+      await store.connectAccount(remote);
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+
+      remote.gatePut();
+      final upload = store.saveDevicePreferencesToAccount();
+      await remote.putStarted;
+      expect(store.syncStatus, TravelPreferencesSyncStatus.checking);
+
+      preferences.ackFalseNextRemove(_platformDocKey);
+      final clearFuture = store.clear();
+      await expectLater(
+        clearFuture,
+        throwsA(isA<TravelPreferencesPersistenceException>()),
+      );
+
+      remote.releasePut();
+      await upload;
+
+      // The fenced upload resolved inertly; the failed clear repaired the
+      // checking status it stranded instead of leaving it stuck, so retry
+      // paths are eligible again and the retained data stays claimed.
+      expect(store.syncStatus, isNot(TravelPreferencesSyncStatus.checking));
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      await store.retryAccountSync();
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      expect(store.hasLocalDocument, isTrue);
+      expect(
+        (await preferences.diskSnapshot()).containsKey(_platformDocKey),
+        isTrue,
+      );
+      expect(remote.putCalls.length, 1);
+    },
+  );
+
+  test(
+    'a thrown document remove during a parked upload strands nothing',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final store = TravelPreferencesStore();
+      final remote = _PutGatedRemote(const TravelPreferences(), 2);
+      await store.connectAccount(remote);
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+
+      remote.gatePut();
+      final upload = store.saveDevicePreferencesToAccount();
+      await remote.putStarted;
+      expect(store.syncStatus, TravelPreferencesSyncStatus.checking);
+
+      // The document remove THROWS at the platform seam (not a false ack).
+      preferences.failNextRemove(_platformDocKey);
+      await expectLater(store.clear(), throwsA(isA<StateError>()));
+
+      remote.releasePut();
+      await upload;
+
+      // The fenced upload resolved inertly, the thrown path still repaired
+      // the stranded checking, and retry works without a manual reconnect.
+      expect(store.syncStatus, isNot(TravelPreferencesSyncStatus.checking));
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      await store.retryAccountSync();
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      expect(remote.putCalls.length, 1);
+      expect(store.hasLocalDocument, isTrue);
+      expect(
+        (await preferences.diskSnapshot()).containsKey(_platformDocKey),
+        isTrue,
+      );
+
+      // A later clear retry on a healthy platform completes.
+      await store.clear();
+      expect(await preferences.diskSnapshot(), isEmpty);
+      expect(store.hasLocalDocument, isFalse);
+    },
+  );
+
+  test(
+    'a thrown timestamp remove during a parked upload recovers the same way',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final store = TravelPreferencesStore();
+      final remote = _PutGatedRemote(const TravelPreferences(), 2);
+      await store.connectAccount(remote);
+
+      remote.gatePut();
+      final upload = store.saveDevicePreferencesToAccount();
+      await remote.putStarted;
+      expect(store.syncStatus, TravelPreferencesSyncStatus.checking);
+
+      // The document remove succeeds; the timestamp remove THROWS, leaving a
+      // documented degraded partial (document gone, timestamp retained).
+      preferences.failNextRemove(_platformTimestampKey);
+      await expectLater(store.clear(), throwsA(isA<StateError>()));
+
+      remote.releasePut();
+      await upload;
+
+      expect(store.syncStatus, isNot(TravelPreferencesSyncStatus.checking));
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      await store.retryAccountSync();
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      expect(remote.putCalls.length, 1);
+      expect(store.hasLocalDocument, isTrue);
+      final degraded = await preferences.diskSnapshot();
+      expect(degraded.containsKey(_platformDocKey), isFalse);
+      expect(degraded.containsKey(_platformTimestampKey), isTrue);
+
+      // A later clear retry completes the deletion.
+      await store.clear();
+      expect(await preferences.diskSnapshot(), isEmpty);
+    },
+  );
+
+  test(
+    'a rejecting preferences factory during a parked upload recovers the same way',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final factory = _GatedFactory();
+      final store = TravelPreferencesStore(preferencesFactory: factory.call);
+      final remote = _PutGatedRemote(const TravelPreferences(), 2);
+      await store.ensureLoaded(); // Factory call #1.
+      await store.connectAccount(remote); // Factory call #2: adoption.
+
+      remote.gatePut();
+      final upload = store.saveDevicePreferencesToAccount();
+      await remote.putStarted;
+      expect(store.syncStatus, TravelPreferencesSyncStatus.checking);
+
+      // The clear parks at its factory acquisition (call #3), which then
+      // rejects: the serialized section and the naive repair never ran.
+      factory.gate(3);
+      final clearFuture = store.clear();
+      final clearCheck = expectLater(clearFuture, throwsA(isA<StateError>()));
+      await factory.startOf(3);
+      factory.releaseError(3);
+      await clearCheck;
+
+      remote.releasePut();
+      await upload;
+
+      expect(store.syncStatus, isNot(TravelPreferencesSyncStatus.checking));
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      await store.retryAccountSync();
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      expect(remote.putCalls.length, 1);
+
+      // The queue itself stays usable for local writes after the failure.
+      const userEdit = TravelPreferences(interests: {TravelInterest.localFood});
+      await store.save(userEdit);
+      expect(store.value, userEdit);
+      expect(
+        (await preferences.diskSnapshot())[_platformDocKey],
+        jsonEncode(userEdit.toJson()),
+      );
+    },
+  );
+
+  test(
+    'an older failed clear does not stomp a newer account sync in flight',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final store = TravelPreferencesStore();
+      const accountA = TravelPreferences(interests: {TravelInterest.history});
+      const accountB = TravelPreferences(interests: {TravelInterest.localFood});
+      final remoteA = _PutGatedRemote(accountA, 2);
+      final remoteB = _PutGatedRemote(accountB, 9);
+      await store.connectAccount(remoteA);
+
+      remoteA.gatePut();
+      final upload = store.saveDevicePreferencesToAccount();
+      await remoteA.putStarted;
+      expect(store.syncStatus, TravelPreferencesSyncStatus.checking);
+
+      // The old clear parks at its document remove.
+      preferences.blockKey(_platformDocKey);
+      final clearFuture = store.clear();
+      await pumpEventQueue();
+
+      // A newer account connects with its own sync parked at the GET.
+      remoteB.gateGet();
+      final connectB = store.connectAccount(remoteB);
+      await pumpEventQueue();
+      expect(store.syncStatus, TravelPreferencesSyncStatus.checking);
+
+      // The old clear's remove false-acks and completes NOW: its recovery
+      // must leave the newer scope's live checking untouched.
+      preferences.ackFalseNextRemove(_platformDocKey);
+      preferences.releaseKey(_platformDocKey);
+      await expectLater(
+        clearFuture,
+        throwsA(isA<TravelPreferencesPersistenceException>()),
+      );
+      expect(store.syncStatus, TravelPreferencesSyncStatus.checking);
+
+      remoteB.releaseGet();
+      await connectB;
+      remoteA.releasePut();
+      await upload;
+
+      // B resolved normally against its own document; the old upload stayed
+      // inert and added no PUT for the newer scope.
+      expect(store.syncStatus, TravelPreferencesSyncStatus.conflict);
+      expect(store.accountPreferences, accountB);
+      expect(remoteA.putCalls.length, 1);
+      expect(remoteB.putCalls, isEmpty);
+      expect(
+        (await preferences.diskSnapshot()).containsKey(_platformDocKey),
+        isTrue,
+      );
+    },
+  );
 }
 
 class _MemoryRemote implements TravelPreferencesRemote {
-  _MemoryRemote({this.account, this.revision = 0});
+  _MemoryRemote({
+    this.account,
+    this.revision = 0,
+    this.updatedAt = '2026-09-02T00:00:00Z',
+  });
 
   TravelPreferences? account;
   int revision;
   int? lastExpectedRevision;
+  final List<TravelPreferences> putCalls = <TravelPreferences>[];
+  final String updatedAt;
 
   @override
   Future<TravelPreferencesRemoteDocument?> get() async {
@@ -219,7 +1047,7 @@ class _MemoryRemote implements TravelPreferencesRemote {
     return TravelPreferencesRemoteDocument(
       preferences: value,
       revision: revision,
-      updatedAt: '2026-09-02T00:00:00Z',
+      updatedAt: updatedAt,
     );
   }
 
@@ -228,6 +1056,7 @@ class _MemoryRemote implements TravelPreferencesRemote {
     required TravelPreferences preferences,
     required int expectedRevision,
   }) async {
+    putCalls.add(preferences);
     lastExpectedRevision = expectedRevision;
     if (expectedRevision != revision) throw StateError('revision conflict');
     account = preferences;
@@ -237,5 +1066,213 @@ class _MemoryRemote implements TravelPreferencesRemote {
       revision: revision,
       updatedAt: '2026-09-02T00:01:00Z',
     );
+  }
+}
+
+/// In-memory store platform that gates the real `setValue`/`remove` seam the
+/// `SharedPreferences` legacy path actually calls, so tests can park a write
+/// mid-flight exactly where the platform mutation happens.
+class _GatedSharedPreferencesStore extends InMemorySharedPreferencesStore {
+  _GatedSharedPreferencesStore() : super.empty();
+
+  final List<String> operations = <String>[];
+  final Map<String, Completer<void>> _gates = <String, Completer<void>>{};
+  final Map<String, Completer<void>> _started = <String, Completer<void>>{};
+  String? _failKey;
+  String? _failRemoveKey;
+  String? _ackFalseSetKey;
+  String? _ackFalseRemoveKey;
+
+  void blockKey(String key) => _gates.putIfAbsent(key, Completer<void>.new);
+
+  void releaseKey(String key) {
+    final gate = _gates.remove(key);
+    if (gate != null && !gate.isCompleted) {
+      gate.complete();
+    }
+  }
+
+  void failNextKey(String key) => _failKey = key;
+
+  /// One-shot throwing failure on the next removal of [key].
+  void failNextRemove(String key) => _failRemoveKey = key;
+
+  /// One-shot plugin-style failure acknowledgement on a write: reports
+  /// `false` without throwing and without touching the persisted data.
+  void ackFalseNextKey(String key) => _ackFalseSetKey = key;
+
+  /// One-shot plugin-style failure acknowledgement on a removal: reports
+  /// `false` without throwing and without removing the persisted data.
+  void ackFalseNextRemove(String key) => _ackFalseRemoveKey = key;
+
+  /// Resolves once the first mutation of [key] has reached the seam (and is
+  /// parked there if a gate is installed).
+  Future<void> nextStartOf(String key) =>
+      _started.putIfAbsent(key, Completer<void>.new).future;
+
+  void _markStarted(String key) {
+    final started = _started.putIfAbsent(key, Completer<void>.new);
+    if (!started.isCompleted) {
+      started.complete();
+    }
+  }
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    _markStarted(key);
+    final gate = _gates[key];
+    if (gate != null) {
+      await gate.future;
+    }
+    if (_failKey == key) {
+      _failKey = null;
+      throw StateError('storage failed for $key');
+    }
+    if (_ackFalseSetKey == key) {
+      _ackFalseSetKey = null;
+      operations.add('false-set:$key');
+      return false;
+    }
+    final result = await super.setValue(valueType, key, value);
+    operations.add('set:$key');
+    return result;
+  }
+
+  @override
+  Future<bool> remove(String key) async {
+    _markStarted(key);
+    final gate = _gates[key];
+    if (gate != null) {
+      await gate.future;
+    }
+    if (_failRemoveKey == key) {
+      _failRemoveKey = null;
+      throw StateError('storage remove failed for $key');
+    }
+    if (_ackFalseRemoveKey == key) {
+      _ackFalseRemoveKey = null;
+      operations.add('false-remove:$key');
+      return false;
+    }
+    final result = await super.remove(key);
+    operations.add('remove:$key');
+    return result;
+  }
+
+  /// Reads the persisted (prefixed) key/value pairs straight from the store.
+  Future<Map<String, Object>> diskSnapshot() => getAll();
+}
+
+/// Remote with an optionally gated GET and PUT; both answer immediately
+/// unless gated.
+class _PutGatedRemote implements TravelPreferencesRemote {
+  _PutGatedRemote(this._account, this._revision);
+
+  TravelPreferences _account;
+  int _revision;
+  final List<TravelPreferences> putCalls = <TravelPreferences>[];
+  Completer<void>? _getGate;
+  Completer<void>? _putGate;
+  Completer<void>? _putStarted;
+
+  void gateGet() => _getGate = Completer<void>();
+
+  void releaseGet() {
+    final gate = _getGate;
+    if (gate != null && !gate.isCompleted) {
+      gate.complete();
+    }
+  }
+
+  void gatePut() {
+    _putGate = Completer<void>();
+    _putStarted = Completer<void>();
+  }
+
+  Future<void> get putStarted => _putStarted!.future;
+
+  void releasePut() {
+    final gate = _putGate;
+    if (gate != null && !gate.isCompleted) {
+      gate.complete();
+    }
+  }
+
+  @override
+  Future<TravelPreferencesRemoteDocument?> get() async {
+    final gate = _getGate;
+    if (gate != null) {
+      await gate.future;
+    }
+    return TravelPreferencesRemoteDocument(
+      preferences: _account,
+      revision: _revision,
+      updatedAt: '2026-09-02T00:00:00Z',
+    );
+  }
+
+  @override
+  Future<TravelPreferencesRemoteDocument> put({
+    required TravelPreferences preferences,
+    required int expectedRevision,
+  }) async {
+    putCalls.add(preferences);
+    final started = _putStarted;
+    if (started != null && !started.isCompleted) {
+      started.complete();
+    }
+    final gate = _putGate;
+    if (gate != null) {
+      await gate.future;
+    }
+    _account = preferences;
+    _revision += 1;
+    return TravelPreferencesRemoteDocument(
+      preferences: preferences,
+      revision: _revision,
+      updatedAt: '2026-09-02T00:01:00Z',
+    );
+  }
+}
+
+/// Preferences factory that can park individual acquisition calls, mirroring
+/// the public `preferencesFactory` injection seam of the store constructor.
+class _GatedFactory {
+  int calls = 0;
+  final Map<int, Completer<void>> _gates = <int, Completer<void>>{};
+  final Map<int, Completer<void>> _started = <int, Completer<void>>{};
+
+  void gate(int n) => _gates.putIfAbsent(n, Completer<void>.new);
+
+  Future<void> startOf(int n) =>
+      _started.putIfAbsent(n, Completer<void>.new).future;
+
+  void release(int n) {
+    final gate = _gates.remove(n);
+    if (gate != null && !gate.isCompleted) {
+      gate.complete();
+    }
+  }
+
+  /// Completes the parked acquisition call [n] with an error, rejecting the
+  /// factory future the way a failing acquisition would.
+  void releaseError(int n) {
+    final gate = _gates.remove(n);
+    if (gate != null && !gate.isCompleted) {
+      gate.completeError(StateError('preferences acquisition failed'));
+    }
+  }
+
+  Future<SharedPreferences> call() async {
+    final n = ++calls;
+    final started = _started.putIfAbsent(n, Completer<void>.new);
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    final gate = _gates[n];
+    if (gate != null) {
+      await gate.future;
+    }
+    return SharedPreferences.getInstance();
   }
 }

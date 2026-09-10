@@ -416,6 +416,32 @@
     "expect_nonempty": true
   },
   {
+    "place_id": "eval_restaurant_10",
+    "category": "restaurant",
+    "region_ko": "대전",
+    "region_en": "Daejeon",
+    "place_name_ko": "참숯두부 마을식당",
+    "place_name_en": "Charcoal Tofu Village Table",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "참숯두부 마을식당은 두부 요리를 다루는 로컬 식당이라는 언급이 있다."
+    ],
+    "scores": {
+      "final_score": 0.76,
+      "local_spending_score": 0.66,
+      "small_merchant_fit_score": 0.64
+    },
+    "weather": {
+      "weather_temp": "23",
+      "weather_icon": "sunny",
+      "weather_outdoor_status": "good"
+    },
+    "expect_nonempty": true
+  },
+  {
     "place_id": "eval_event_01",
     "category": "event",
     "region_ko": "서울",
@@ -575,6 +601,79 @@
       "small_merchant_fit_score": 0.6
     },
     "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_event_08",
+    "category": "event",
+    "region_ko": "광주",
+    "region_en": "Gwangju",
+    "place_name_ko": "빛결 야외 공연제",
+    "place_name_en": "Light-Trail Open-Air Stage",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "빛결 야외 공연제는 저녁 야외 공연 행사라는 공식 일정이 있다."
+    ],
+    "scores": {
+      "final_score": 0.77,
+      "culture_relevance_score": 0.72,
+      "weather_fit_score": 0.62
+    },
+    "weather": {
+      "weather_temp": "20",
+      "weather_icon": "clear",
+      "weather_outdoor_status": "good"
+    },
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_event_09",
+    "category": "event",
+    "region_ko": "충북",
+    "region_en": "Chungbuk",
+    "place_name_ko": "숲길 책 나눔 축제",
+    "place_name_en": "Forest-Path Book Share Festival",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "숲길 책 나눔 축제는 숲길에서 열리는 독서 행사로 소개된다."
+    ],
+    "scores": {
+      "final_score": 0.7,
+      "culture_relevance_score": 0.68
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_event_10",
+    "category": "event",
+    "region_ko": "전북",
+    "region_en": "Jeonbuk",
+    "place_name_ko": "한지 공방 장터",
+    "place_name_en": "Paper-Craft Studio Market",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "한지 공방 장터는 수공예 판매와 체험이 함께하는 계절 장터 행사라는 언급이 있다."
+    ],
+    "scores": {
+      "final_score": 0.72,
+      "local_spending_score": 0.64,
+      "small_merchant_fit_score": 0.74
+    },
+    "weather": {
+      "weather_temp": "16",
+      "weather_icon": "cloudy",
+      "weather_outdoor_status": "fair"
+    },
     "expect_nonempty": true
   },
   {
@@ -775,6 +874,27 @@
       "weather_icon": "cloudy",
       "weather_outdoor_status": "fair"
     },
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_culture_venue_10",
+    "category": "culture_venue",
+    "region_ko": "울산",
+    "region_en": "Ulsan",
+    "place_name_ko": "고래 이야기 전시실",
+    "place_name_en": "Whale Story Exhibit Room",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "고래 이야기 전시실은 해양 생태 전시를 다루는 소규모 문화공간이라는 언급이 있다."
+    ],
+    "scores": {
+      "final_score": 0.73,
+      "culture_relevance_score": 0.69
+    },
+    "weather": null,
     "expect_nonempty": true
   }
 ]

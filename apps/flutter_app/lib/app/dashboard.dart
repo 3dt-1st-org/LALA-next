@@ -22,6 +22,7 @@ import 'package:lala_next_app/features/map/widgets/map_place_carousel_overlay.da
 import 'package:lala_next_app/features/map/widgets/map_toast.dart';
 import 'package:lala_next_app/features/map/widgets/map_utility_control_row.dart';
 import 'package:lala_next_app/features/map/widgets/top_map_chrome.dart';
+import 'package:lala_next_app/lala_map_provider.dart';
 import 'package:lala_next_app/features/tour/widgets/tour_map_pill.dart';
 import 'package:lala_next_app/features/weather/weather_helpers.dart';
 import 'package:lala_next_app/lala_map_view.dart';
@@ -285,9 +286,20 @@ class Dashboard extends StatelessWidget {
                   : 196.0
             : MapBottomDock.mobileCollapsedHeight;
         final floatingControlsBottom = bottomDockHeight + 16;
+        // OpenVector credits must stay visible above the bottom dock (the
+        // MapLibre attribution row lives at the container's bottom edge);
+        // the Naver path keeps its existing full-bleed layout.
+        final mapBottomInset = mapCreditsBottomInset(
+          selectLalaMapProvider(uiLanguage),
+          bottomDockHeight,
+        );
         return Stack(
           children: [
-            Positioned.fill(
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              bottom: mapBottomInset,
               child: LegacyMapCanvas(
                 places: topPlaces,
                 selectedPlace: topPlace,

@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
 import 'package:lala_next_app/features/preferences/data/travel_preferences_remote.dart';
 import 'package:lala_next_app/features/preferences/domain/travel_preferences.dart';
 import 'package:lala_next_app/features/preferences/presentation/travel_preferences_page.dart';
+
+const String _platformDocKey = 'flutter.$kTravelPreferencesStorageKey';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +17,55 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
+
+  testWidgets(
+    'a failed save surfaces the error snackbar, keeps the draft, and retries',
+    (tester) async {
+      final platform = _AckFalseStore();
+      SharedPreferencesStorePlatform.instance = platform;
+      final store = TravelPreferencesStore();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TravelPreferencesPage(language: 'ko', store: store),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.drag(
+        find.byKey(const ValueKey('travel-preferences-scroll')),
+        const Offset(0, -240),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('interest-localFood')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('interest-localFood')));
+      await tester.pump();
+
+      // The real platform acknowledges the document write as failed.
+      platform.ackFalseNextKey(_platformDocKey);
+      await tester.tap(find.byKey(const ValueKey('travel-preferences-save')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('저장하지 못했어요. 다시 시도해 주세요.'), findsOneWidget);
+      expect(find.text('이 기기에 여행 취향을 저장했어요.'), findsNothing);
+      expect(store.value.interests, isNot(contains(TravelInterest.localFood)));
+      // Disk truth: the failed write never persisted (the legacy plugin cache
+      // is optimistic, so read the platform store itself).
+      expect((await platform.getAll()).containsKey(_platformDocKey), isFalse);
+
+      // The unsaved draft is retained: retrying on a healthy platform saves.
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('travel-preferences-save')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('이 기기에 여행 취향을 저장했어요.'), findsOneWidget);
+      expect(store.value.interests, contains(TravelInterest.localFood));
+      expect((await platform.getAll()).containsKey(_platformDocKey), isTrue);
+    },
+  );
 
   testWidgets('edits an interest and saves it on this device', (tester) async {
     final store = TravelPreferencesStore();
@@ -70,16 +122,33 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('food-preferences-entry')));
     await tester.pumpAndSettle();
-    expect(find.text('안전·식이 조건'), findsOneWidget);
-
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('food-cuisine-korean')),
-    );
+    // Favorite food chips sit at the top of the page; the CP2 spice/order
+    // sections above the safety panel push the rest below the lazy fold, so
+    // scroll the remaining targets in. The hub page behind this route also
+    // owns a scrollable, so scope to the food page's list.
     await tester.tap(find.byKey(const ValueKey('food-cuisine-korean')));
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('enum-DietaryMode.halal')),
+    final foodScrollable = find
+        .descendant(
+          of: find.byType(FoodPreferencesPage),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.text('안전·식이 조건'),
+      200,
+      scrollable: foodScrollable,
     );
-    await tester.tap(find.byKey(const ValueKey('enum-DietaryMode.halal')));
+    expect(find.text('안전·식이 조건'), findsOneWidget);
+    final halalChip = find.byKey(const ValueKey('enum-DietaryMode.halal'));
+    await tester.scrollUntilVisible(halalChip, 200, scrollable: foodScrollable);
+    // Nudge it fully clear of the pinned apply bar before tapping.
+    var halalGuard = 0;
+    while (halalChip.hitTestable().evaluate().isEmpty && halalGuard < 8) {
+      await tester.drag(foodScrollable, const Offset(0, -120));
+      await tester.pumpAndSettle();
+      halalGuard += 1;
+    }
+    await tester.tap(halalChip);
     await tester.enterText(
       find.byKey(const ValueKey('avoid-ingredients-field')),
       '돼지고기',
@@ -195,6 +264,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // The CP2 sections push the safety panel below the fold; scroll first.
+    await tester.scrollUntilVisible(
+      find.text('알레르기·민감 식품'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('알레르기·민감 식품'), findsOneWidget);
     expect(find.text('피해야 하는 재료'), findsOneWidget);
     expect(find.text('알러지'), findsNothing);
@@ -296,5 +371,36 @@ class _PageRemote implements TravelPreferencesRemote {
       revision: revision,
       updatedAt: '2026-09-02T00:01:00Z',
     );
+  }
+}
+
+/// In-memory platform store whose next write or removal for an armed key can
+/// acknowledge failure (`false`, no throw), mirroring the documented plugin
+/// failure mode at the real persistence seam.
+class _AckFalseStore extends InMemorySharedPreferencesStore {
+  _AckFalseStore() : super.empty();
+  String? _ackFalseSetKey;
+  String? _ackFalseRemoveKey;
+
+  void ackFalseNextKey(String key) => _ackFalseSetKey = key;
+
+  void ackFalseNextRemove(String key) => _ackFalseRemoveKey = key;
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    if (_ackFalseSetKey == key) {
+      _ackFalseSetKey = null;
+      return false;
+    }
+    return super.setValue(valueType, key, value);
+  }
+
+  @override
+  Future<bool> remove(String key) async {
+    if (_ackFalseRemoveKey == key) {
+      _ackFalseRemoveKey = null;
+      return false;
+    }
+    return super.remove(key);
   }
 }

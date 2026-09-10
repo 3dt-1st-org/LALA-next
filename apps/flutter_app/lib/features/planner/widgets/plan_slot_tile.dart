@@ -73,6 +73,10 @@ class PlanSlotTile extends StatelessWidget {
     final forecastWindowText = planSlotForecastWindowLabel(slot, language);
     final airQualityBadText = planSlotAirQualityBadLabel(slot, language);
     final closureStateText = planSlotClosureStateLabel(slot, language);
+    // P4 closing-soon: 추정 마감 임박 라벨(true 일 때만, 그 외 honest-empty).
+    final closingSoonText = planSlotClosingSoonLabel(slot, language);
+    // 마감 임박 배지 색: 기존 토큰만 재사용(slate=중립·주의, red/closed 와 구분).
+    final closingSoonColor = const Color(0xFF64748B);
     // D4 배지 색/아이콘은 원천 state 기반(null → unknown).
     final closureStateKey = (slot.closureState ?? 'unknown')
         .trim()
@@ -123,6 +127,7 @@ class PlanSlotTile extends StatelessWidget {
       title,
       ?subtitle,
       closureStateText,
+      ?closingSoonText,
       ?indoorOutdoorLabel,
       ?weatherHint,
       ?forecastWindowText,
@@ -173,15 +178,19 @@ class PlanSlotTile extends StatelessWidget {
                       ),
                       if (weatherHint != null) ...[
                         const Spacer(),
-                        Text(
-                          weatherHint,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: const Color(0xFF94A3B8),
-                                fontWeight: FontWeight.w700,
-                              ),
+                        // P4 strict 320dp+200%: Flexible + ellipsis 로 헤더 Row 가
+                        // 좁은 화면/큰 텍스트에서도 오버플로 예외를 내지 않게 한다.
+                        Flexible(
+                          child: Text(
+                            weatherHint,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: const Color(0xFF94A3B8),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
                         ),
                       ],
                       if (forecastWindowText != null) ...[
@@ -211,13 +220,17 @@ class PlanSlotTile extends StatelessWidget {
                           color: indoorOutdoorColor,
                         ),
                         const SizedBox(width: 2),
-                        Text(
-                          indoorOutdoorLabel,
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: indoorOutdoorColor,
-                                fontWeight: FontWeight.w800,
-                              ),
+                        Flexible(
+                          child: Text(
+                            indoorOutdoorLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: indoorOutdoorColor,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
                         ),
                       ],
                     ],
@@ -236,39 +249,82 @@ class PlanSlotTile extends StatelessWidget {
                   // D4: 운영 상태 배지(open/closed/unknown). 색상 단독 신호를 피하려고
                   // 아이콘+텍스트+시맨틱 라벨 삼중 표시(실내·야외 패턴과 동일). null→unknown.
                   // 기존 칩 배경/보더 토큰에 상태색 보더+아이콘+텍스트만 입힌다(색 토큰 추가 없음).
+                  // P4 closing-soon: closing_soon=true 슬롯에 추정 마감 임박 배지를 함께
+                  // 노출한다(운영시간 내에서만 발동하므로 '예상 마감' 배지와는 공존하지 않고
+                  // '영업중' 배지와 나란히 표시된다). 추정 투영임을 라벨에 명시한다.
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: closureBadgeColor),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            closureBadgeIcon,
-                            size: 11,
-                            color: closureBadgeColor,
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 3,
                           ),
-                          const SizedBox(width: 3),
-                          Text(
-                            closureStateText,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: closureBadgeColor,
-                                  fontWeight: FontWeight.w800,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: closureBadgeColor),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                closureBadgeIcon,
+                                size: 11,
+                                color: closureBadgeColor,
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                closureStateText,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(
+                                      color: closureBadgeColor,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (closingSoonText != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: closingSoonColor),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.schedule_outlined,
+                                  size: 11,
+                                  color: closingSoonColor,
                                 ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  closingSoonText,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.labelSmall
+                                      ?.copyWith(
+                                        color: closingSoonColor,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
-                      ),
+                      ],
                     ),
                   ),
                   // V5-B VISIT + SPEND (§V5-B D2/D3) + F-030 saved marker: rendered

@@ -6,7 +6,6 @@ from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.services import (
     db_repository,
-    opening_hours_service,
     public_mvp_data,
 )
 from apps.api.app.services.normalization import normalize_language
@@ -129,12 +128,13 @@ def list_places(
         query_echo["ne_lng"] = ne_lng
 
     # Collect current signals for reason/freshness derivation
+    # current_time stays a UTC anchor: freshness is elapsed absolute time, so a
+    # UTC anchor keeps it correct regardless of venue timezone.
     current_time = datetime.now(UTC)
     # Local DB-cached weather only — place search must never trigger the live
     # KMA/AirKorea provider. When nothing is cached the indoor-fit reason is
     # honestly omitted (current_weather stays {}); never fabricated.
     current_weather = db_repository.fetch_latest_weather(lat=lat, lng=lng) or {}
-    slot_time = current_time.strftime("%H:%M")
 
     # Enrich places with reason and freshness
     enriched_places = []
@@ -143,7 +143,6 @@ def list_places(
         reason = _derive_place_reason(
             place=place,
             current_weather=current_weather,
-            slot_time=slot_time,
             language=language,
         )
         freshness = _format_freshness(place.get("updated_at"), current_time, language)
@@ -182,7 +181,6 @@ def list_places(
                 reason = _derive_place_reason(
                     place=place,
                     current_weather=current_weather,
-                    slot_time=slot_time,
                     language=language,
                 )
                 freshness = _format_freshness(
@@ -294,44 +292,43 @@ def _linked_event_reason_phrase(
     return "진행 중인 행사" if is_ongoing else "행사 연계"
 
 
-def _derive_place_reason(
-    *, place: dict, current_weather: dict, slot_time: str, language: str = "ko"
-) -> str:
+def _derive_place_reason(*, place: dict, current_weather: dict, language: str = "ko") -> str:
     """Compose the normal-path reason — ONE ' · '-joined string (contract §3).
 
     Single SSOT for the reason text; no client recomputes or rewords it. Language
     follows the /places `language` param; en-branch selector (docent_service style)
     so unnormalized values fall back to ko, matching normalize_language's contract.
     Canonical segment order (head = most decision-useful, tail = first to ellipsize):
-    [operating] · [weather(S3)] · [activity(S2)] · [event(D4)] · [proximity] · [source(S1)]
+    [weather(S3)] · [activity(S2)] · [event(D4)] · [proximity] · [source(S1)]
 
     Honesty invariants (playbook §4.1/§4.2): phrases only — never the score number,
     formula, component value, or raw transactions. Each segment is independently
     null-gated; an all-null place yields "" (rendered as nothing, never "이유 없음").
+
+    Operating status is deliberately ABSENT: the only hours source here is the
+    category-level Korean-convention estimate (opening_hours_service), which is not
+    a per-venue authority, so it must not produce any open-now claim — qualified or
+    not. Comparing a UTC wall-clock slot against those estimates also mistook KST
+    midnight for afternoon. Honest silence instead (removed legacy 영업중/Open now).
     """
     reasons: list[str] = []
     category = place.get("category", "")
 
-    # 1. Operating status (existing logic)
-    open_time, close_time = opening_hours_service.estimated_opening_hours(category)
-    is_open = opening_hours_service.is_within_hours(slot_time, open_time, close_time)
-    if is_open is True:
-        reasons.append("Open now" if language == "en" else "영업중")
-    # closed (False) / unparseable slot (None) → omit operating (honest)
-
-    # 2. Weather band (S3) — coarse phrase, never per-card numbers
+    # 1. Weather band (S3) — coarse phrase, never per-card numbers
     weather_phrase = _weather_band_phrase(current_weather, category=category, language=language)
     if weather_phrase:
         reasons.append(weather_phrase)
 
-    # 3. Activity (S2) — binary hint from the SQL band token; never a number
+    # 2. Activity (S2) — binary hint from the SQL band token; never a number
     activity_phrase = _local_activity_reason_phrase(
         place.get("_local_activity_band"), language=language
     )
     if activity_phrase:
         reasons.append(activity_phrase)
 
-    # 4. Linked/ongoing event (D4) — any category; internal key, stripped pre-serialize
+    # 3. Linked/ongoing event (D4) — any category; internal key, stripped pre-serialize.
+    #    is_ongoing comes only from trusted structured event dates (SQL starts/ends_at);
+    #    unknown (None) or expired (False) never claims an ongoing event.
     event_phrase = _linked_event_reason_phrase(
         place.get("_has_linked_event"),
         is_ongoing=place.get("is_ongoing"),
@@ -340,13 +337,13 @@ def _derive_place_reason(
     if event_phrase:
         reasons.append(event_phrase)
 
-    # 5. Proximity (≤500m) — existing logic
+    # 4. Proximity (≤500m) — existing logic
     distance_m = place.get("distance_m", 0)
     if isinstance(distance_m, (int, float)) and distance_m <= 500:
         reasons.append("Nearby" if language == "en" else "근접")
     # >500m → omit proximity (honest)
 
-    # 6. Source provenance (S1) — per-source phrase; canonical/empty/unknown → omit
+    # 5. Source provenance (S1) — per-source phrase; canonical/empty/unknown → omit
     source_phrase = _upstream_source_reason_phrase(
         place.get("upstream_source", ""), language=language
     )

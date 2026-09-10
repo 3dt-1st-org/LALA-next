@@ -10,6 +10,7 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
+import 'package:lala_next_app/core/geo/geo_helpers.dart' show distanceMeters;
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
@@ -20,14 +21,16 @@ import 'package:lala_next_app/features/docent/experience/docent_experience_contr
 import 'package:lala_next_app/features/docent/experience/docent_experience_copy.dart';
 import 'package:lala_next_app/features/docent/experience/docent_experience_state.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart'
-    show interventionToastLabel;
+    show interventionToastLabel, interventionTriggerBadgeLabel;
 import 'package:lala_next_app/features/intervention/presentation/pages/intervention_comparison_page.dart';
 import 'package:lala_next_app/features/intervention/widgets/intervention_toast.dart';
 import 'package:lala_next_app/features/location/widgets/default_region_indicator.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
+import 'package:lala_next_app/features/planning/domain/plan_preference_context.dart';
 import 'package:lala_next_app/features/planner/planner_helpers.dart';
 import 'package:lala_next_app/features/planner/spend_band_helpers.dart';
+import 'package:lala_next_app/features/planner/widgets/plan_preference_effects_summary.dart';
 import 'package:lala_next_app/features/planner/widgets/plan_slot_tile.dart';
 import 'package:lala_next_app/features/planner/widgets/plan_timeline_entry.dart';
 import 'package:lala_next_app/features/planner/widgets/planner_loading_card.dart';
@@ -44,6 +47,7 @@ class PlanPage extends StatefulWidget {
     this.backendFactory,
     this.initialConfig = const LalaAppConfig.fromEnvironment(),
     this.docentExperienceController,
+    this.preferenceContextProvider,
     super.key,
   });
 
@@ -60,6 +64,10 @@ class PlanPage extends StatefulWidget {
   /// 이슈 #120 §6: 앱 루트 단일 도슨트 경험 컨트롤러(선택 — 라우터가 주입).
   /// null 이면 '전체 듣기'/슬롯 재생 버튼을 만들지 않는다.
   final DocentExperienceController? docentExperienceController;
+
+  /// CP1: 플랜 생성에 실을 유효 선호 컨텍스트 공급자(선택 — 테스트 주입).
+  /// null 이면 기본 공급자(기기 선호 기본값 + 여행 날짜 override 합성)를 쓴다.
+  final LalaPlanPreferenceContextProvider? preferenceContextProvider;
 
   @override
   State<PlanPage> createState() => _PlanPageState();
@@ -147,12 +155,20 @@ class _PlanPageState extends State<PlanPage> {
     // Plan: adopt a non-null timeline published by another tab (e.g. the map tab's
     // createDailyPlan). No-op-skip our own publishes (same instance) and external
     // clears (null) so our view is never wiped by another tab's transient null.
+    // A plan from a DIFFERENT active context (language/radius/region) is ignored
+    // via the same _canAdoptSharedPlan contract as first-open adoption — checked
+    // against the CURRENT request context (_config), which region/language
+    // reloads update synchronously, so an old-context publish arriving mid-reload
+    // cannot adopt either.
     _onPlanChanged = () {
       if (!mounted) {
         return;
       }
       final next = PlanContextStore.current;
       if (next == null || next == _dailyPlan) {
+        return;
+      }
+      if (!_canAdoptSharedPlan(next, lat: _config.lat, lng: _config.lng)) {
         return;
       }
       setState(() {
@@ -182,7 +198,7 @@ class _PlanPageState extends State<PlanPage> {
     SavedPlaceStore.listenable.addListener(_onSavedPlacesChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _load();
+        _load(adoptIfCompatible: true);
       }
     });
   }
@@ -199,6 +215,13 @@ class _PlanPageState extends State<PlanPage> {
   }
 
   String get _language => _config.lang;
+
+  /// CP1: 이 탭의 플랜 생성에 실을 유효 선호 컨텍스트. 주입된 공급자가 우선;
+  /// 없으면 기본 공급자(기기 선호 + 여행 override 합성)를 쓴다.
+  Future<LalaPlanPreferenceContext> _currentPreferenceContext() {
+    return widget.preferenceContextProvider?.call() ??
+        composePlanPreferenceContext();
+  }
 
   // True when the plan is built from the disclosed default region (no real
   // current/manual context). The UI must badge this honestly.
@@ -218,39 +241,12 @@ class _PlanPageState extends State<PlanPage> {
       _intervention!.shouldIntervene &&
       !_interventionDismissed;
 
-  // V3-D: 트리터 종류를 한 줄 배지로 표시(KO/EN 배타). null/알 수 없음은 배지 없음.
+  // V3-D: 트리거 종류를 한 줄 배지로 표시. 라벨 SSOT 는 home_view_helpers 의
+  // interventionTriggerBadgeLabel(5개 로케일 단일 언어). null/알 수 없음은 배지 없음.
+  // P4: 미세먼지(AQ) 트리거는 날씨 배지와 구분되는 자기 라벨을 쓴다 — 나쁜
+  // 대기질이 '날씨 변화' 로만 표시되는 일이 없어야 한다.
   String? _interventionTriggerBadge(LalaIntervention intervention) {
-    switch (intervention.triggerType) {
-      case 'closure_detected':
-        return lalaCopyMulti(
-          _language,
-          ko: '폐업 의심',
-          en: 'Possible closure',
-          ja: '休業の可能性',
-          zhHans: '疑似停业',
-          zhHant: '疑似停業',
-        );
-      case 'bad_weather_and_closure':
-        return lalaCopyMulti(
-          _language,
-          ko: '날씨 + 폐업',
-          en: 'Weather + closure',
-          ja: '気象 + 休業',
-          zhHans: '天气 + 停业',
-          zhHant: '天氣 + 停業',
-        );
-      case 'bad_weather':
-        return lalaCopyMulti(
-          _language,
-          ko: '날씨 변화',
-          en: 'Weather change',
-          ja: '気象の変化',
-          zhHans: '天气变化',
-          zhHant: '天氣變化',
-        );
-      default:
-        return null;
-    }
+    return interventionTriggerBadgeLabel(intervention.triggerType, _language);
   }
 
   // 대체 장소(swap) 버튼 라벨. alternativeSlot 이 있을 때만. 위조 금지 — null 이면 null.
@@ -334,6 +330,8 @@ class _PlanPageState extends State<PlanPage> {
       source: previous.source,
       requestHash: previous.requestHash,
       cacheKey: previous.cacheKey,
+      // CP1: 로컬 슬롯 치환이어도 선호 효과 요약은 원본 플랜의 보고를 유지한다.
+      preferenceEffects: previous.preferenceEffects,
     );
     setState(() {
       _dailyPlan = updated;
@@ -380,7 +378,7 @@ class _PlanPageState extends State<PlanPage> {
     );
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool adoptIfCompatible = false}) async {
     final generation = ++_loadGeneration;
     setState(() {
       _status = _PlanLoadStatus.loading;
@@ -422,9 +420,48 @@ class _PlanPageState extends State<PlanPage> {
     }
 
     _config = _baseConfig.copyWith(lat: lat, lng: lng);
+    // D-1: 첫 진입(adoptIfCompatible)에서 현재 요청 컨텍스트와 같은 활성 플랜이
+    // 공유 스토어에 이미 있으면 그 인스턴스를 그대로 쓴다 — 재요청/재생성은 뷰
+    // 전환만으로 슬롯을 뒤섞는 결함의 근원이었다. 명시적 새로고침(재생성/달력/재시도)
+    // 와 지역·언어 변경은 기본 경로(항상 생성)를 탄다.
+    if (adoptIfCompatible) {
+      final shared = PlanContextStore.current;
+      if (shared != null && _canAdoptSharedPlan(shared, lat: lat, lng: lng)) {
+        if (generation != _loadGeneration || !mounted) {
+          return;
+        }
+        setState(() {
+          _dailyPlan = shared;
+          _failureMessage = '';
+          _interventionDismissed = false;
+          _status = _visibleSlotsFrom(shared).isEmpty
+              ? _PlanLoadStatus.empty
+              : _PlanLoadStatus.loaded;
+        });
+        return;
+      }
+    }
     _backend.close();
     _backend = _backendFactory(_config);
     await _fetchPlan(generation);
+  }
+
+  /// 공유 플랜 채택 조건: 같은 radius + 같은 API 언어 + 플랜 중심이 이 탭의 요청
+  /// 중심(지역/기본 좌표) 플랜 반경 이내. 지도 탭의 카메라 인접 플랜과 place-detail
+  /// 고정 플랜(지역 중심) 모두 자연스럽게 채택되고, 실제 지역/언어 변경은 걸린다.
+  bool _canAdoptSharedPlan(
+    LalaDailyPlan plan, {
+    required double lat,
+    required double lng,
+  }) {
+    if (plan.radiusM != _config.radiusM) {
+      return false;
+    }
+    if (plan.language != apiRequestLanguage(_config.lang)) {
+      return false;
+    }
+    return distanceMeters(plan.center.lat, plan.center.lng, lat, lng) <=
+        plan.radiusM;
   }
 
   /// 공유 store 의 컨텍스트로 백엔드를 재구성한다. 기기 위치를 다시 요청하지 않으므로,
@@ -466,9 +503,17 @@ class _PlanPageState extends State<PlanPage> {
     // 일정 라인은 실패 사유를 버리지 않고 캡처 — unavailable(도달 실패)과
     // error(오류 응답)을 구분해 서로 다른 안내문을 내기 위함. 개입은 부가이므로
     // 여전히 null 로 흡수한다.
+    // CP1: 지도 탭/고정 생성과 같은 공급자로 유효 선호 컨텍스트를 합성해
+    // 모든 진입점이 동일한 컨텍스트를 보내게 한다.
+    final preferenceContext = await _currentPreferenceContext();
     Future<({LalaDailyPlan? plan, Object? failure})> loadPlan() async {
       try {
-        return (plan: (await _backend.createDailyPlan()).data, failure: null);
+        return (
+          plan: (await _backend.createDailyPlan(
+            preferenceContext: preferenceContext,
+          )).data,
+          failure: null,
+        );
       } on Object catch (failure) {
         return (plan: null, failure: failure);
       }
@@ -620,6 +665,16 @@ class _PlanPageState extends State<PlanPage> {
               ),
             ),
             if (_regionIsDefault) DefaultRegionIndicator(language: _language),
+            // CP1: 요청에 선호 컨텍스트가 실렸던 플랜만 간단한 선호 반영 요약을
+            // 보여준다(legacy 플랜 = 빈 리스트 = 렌더링 안 함).
+            if (_dailyPlan?.preferenceEffects.isNotEmpty ?? false)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                child: PlanPreferenceEffectsSummary(
+                  effects: _dailyPlan!.preferenceEffects,
+                  language: _language,
+                ),
+              ),
             if (_shouldShowInterventionToast)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),

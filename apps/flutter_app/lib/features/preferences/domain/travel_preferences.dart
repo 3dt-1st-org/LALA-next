@@ -38,6 +38,15 @@ enum FoodCuisine { korean, streetFood, cafeDessert, marketFood, worldCuisine }
 
 enum FoodAdventure { familiar, balanced, adventurous }
 
+enum SpicePreference { mild, medium, spicy }
+
+enum RestaurantOrderRequest {
+  staffRecommendation,
+  smallPortion,
+  quietTable,
+  takeout,
+}
+
 enum DietaryMode { vegetarian, vegan, halal, kosher }
 
 enum Allergen { nuts, shellfish, dairy, eggs, gluten, soy }
@@ -73,6 +82,8 @@ class TravelPreferences {
     this.weatherSensitivity = WeatherSensitivity.medium,
     this.cuisines = const <FoodCuisine>{},
     this.foodAdventure = FoodAdventure.balanced,
+    this.spiceLevel,
+    this.orderRequests = const <RestaurantOrderRequest>{},
     this.dietaryModes = const <DietaryMode>{},
     this.allergens = const <Allergen>{},
     this.avoidIngredients = '',
@@ -104,6 +115,7 @@ class TravelPreferences {
   static const int maxInterests = 5;
   static const int maxTravelStyles = 3;
   static const int maxCuisines = 4;
+  static const int maxOrderRequests = 4;
   static const int maxAvoidIngredientsLength = 120;
 
   final TravelPace pace;
@@ -115,6 +127,11 @@ class TravelPreferences {
   final WeatherSensitivity weatherSensitivity;
   final Set<FoodCuisine> cuisines;
   final FoodAdventure foodAdventure;
+
+  /// CP2 restaurant-communication soft preference. Null means "not saved" —
+  /// the restaurant card only shows an explicitly saved value.
+  final SpicePreference? spiceLevel;
+  final Set<RestaurantOrderRequest> orderRequests;
   final Set<DietaryMode> dietaryModes;
   final Set<Allergen> allergens;
   final String avoidIngredients;
@@ -148,6 +165,8 @@ class TravelPreferences {
     WeatherSensitivity? weatherSensitivity,
     Set<FoodCuisine>? cuisines,
     FoodAdventure? foodAdventure,
+    Object? spiceLevel = _unchangedSpiceLevel,
+    Set<RestaurantOrderRequest>? orderRequests,
     Set<DietaryMode>? dietaryModes,
     Set<Allergen>? allergens,
     String? avoidIngredients,
@@ -184,6 +203,14 @@ class TravelPreferences {
       weatherSensitivity: weatherSensitivity ?? this.weatherSensitivity,
       cuisines: Set<FoodCuisine>.unmodifiable(cuisines ?? this.cuisines),
       foodAdventure: foodAdventure ?? this.foodAdventure,
+      // Why a sentinel: `SpicePreference?` cannot use `??` — callers must be
+      // able to clear the saved value back to null (not saved).
+      spiceLevel: identical(spiceLevel, _unchangedSpiceLevel)
+          ? this.spiceLevel
+          : spiceLevel as SpicePreference?,
+      orderRequests: Set<RestaurantOrderRequest>.unmodifiable(
+        orderRequests ?? this.orderRequests,
+      ),
       dietaryModes: Set<DietaryMode>.unmodifiable(
         dietaryModes ?? this.dietaryModes,
       ),
@@ -239,6 +266,11 @@ class TravelPreferences {
       'weather_sensitivity': weatherSensitivity.name,
       'food_cuisines': cuisines.map((value) => value.name).toList()..sort(),
       'food_adventure': foodAdventure.name,
+      // Why omit-on-null: only explicitly saved values belong in the stored
+      // document (and the map values stay non-nullable Object).
+      if (spiceLevel != null) 'spice_level': spiceLevel!.name,
+      'order_requests': orderRequests.map((value) => value.name).toList()
+        ..sort(),
       'companions': companions.map((value) => value.name).toList()..sort(),
       'transport_modes': transportModes.map((value) => value.name).toList()
         ..sort(),
@@ -327,6 +359,12 @@ class TravelPreferences {
         FoodAdventure.values,
         soft['food_adventure'],
         FoodAdventure.balanced,
+      ),
+      spiceLevel: _nullableEnumValue(SpicePreference.values, soft['spice_level']),
+      orderRequests: _enumSet(
+        RestaurantOrderRequest.values,
+        soft['order_requests'],
+        maxOrderRequests,
       ),
       dietaryModes: _enumSet(
         DietaryMode.values,
@@ -425,6 +463,8 @@ class TravelPreferences {
       other.weatherSensitivity == weatherSensitivity &&
       setEquals(other.cuisines, cuisines) &&
       other.foodAdventure == foodAdventure &&
+      other.spiceLevel == spiceLevel &&
+      setEquals(other.orderRequests, orderRequests) &&
       setEquals(other.dietaryModes, dietaryModes) &&
       setEquals(other.allergens, allergens) &&
       other.avoidIngredients == avoidIngredients &&
@@ -459,6 +499,8 @@ class TravelPreferences {
     weatherSensitivity,
     _stableEnumSetHash(cuisines),
     foodAdventure,
+    spiceLevel,
+    _stableEnumSetHash(orderRequests),
     _stableEnumSetHash(dietaryModes),
     _stableEnumSetHash(allergens),
     avoidIngredients,
@@ -489,6 +531,9 @@ const Set<int> _allowedOneWayMinutes = <int>{15, 30, 60, 90};
 const Set<int> _allowedTransfers = <int>{0, 1, 2, 3};
 final Set<double> _allowedNarrationSpeeds = <double>{0.8, 1.0, 1.2};
 
+// copyWith sentinel for the nullable spice level ("leave unchanged" vs null).
+const Object _unchangedSpiceLevel = Object();
+
 T _enumValue<T extends Enum>(List<T> values, Object? raw, T fallback) {
   for (final value in values) {
     if (value.name == raw) {
@@ -496,6 +541,19 @@ T _enumValue<T extends Enum>(List<T> values, Object? raw, T fallback) {
     }
   }
   return fallback;
+}
+
+/// Parses a nullable enum: only a known value returns non-null; unknown,
+/// missing, or malformed values fall back to null ("not saved"). This keeps
+/// old/malformed stored documents honest without crashing.
+T? _nullableEnumValue<T extends Enum>(List<T> values, Object? raw) {
+  if (raw == null) return null;
+  for (final value in values) {
+    if (value.name == raw) {
+      return value;
+    }
+  }
+  return null;
 }
 
 Set<T> _enumSet<T extends Enum>(

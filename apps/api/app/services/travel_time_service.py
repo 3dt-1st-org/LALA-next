@@ -51,6 +51,12 @@ def estimate_walking_minutes(lat1: float, lng1: float, lat2: float, lng2: float)
     return max(1, int(round(minutes)))
 
 
+def walking_distance_m(minutes: int) -> int:
+    """도보 이동 시간(분) → 추정 직선거리(m). 문서화된 추정치(4 km/h ≈ 67 m/min)의
+    역산. CP1 선호 반경 상한이 이 한 곳의 추정치를 사용하도록 하는 공개 표면."""
+    return int(minutes * _WALKING_SPEED_M_PER_MIN)
+
+
 def period_start_time(period: str) -> str | None:
     """관용적 일정 시작 시각(morning 09:00 / lunch 12:00 / afternoon 14:00 / dinner 18:00).
 

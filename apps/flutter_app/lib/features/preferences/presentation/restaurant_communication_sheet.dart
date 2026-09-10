@@ -3,11 +3,20 @@ import 'package:flutter/services.dart';
 
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/features/preferences/domain/travel_preferences.dart';
+import 'package:lala_next_app/shared/speech/flutter_tts_system_speech.dart';
+import 'package:lala_next_app/shared/speech/system_speech.dart';
 
 bool hasRestaurantSafetyRequests(TravelPreferences preferences) =>
     preferences.dietaryModes.isNotEmpty ||
     preferences.allergens.isNotEmpty ||
     preferences.avoidIngredients.trim().isNotEmpty;
+
+/// CP2: true when the Korean restaurant card has any explicitly saved
+/// user content — a safety request, a spice level, or an order request.
+bool hasRestaurantCommunicationContent(TravelPreferences preferences) =>
+    hasRestaurantSafetyRequests(preferences) ||
+    preferences.spiceLevel != null ||
+    preferences.orderRequests.isNotEmpty;
 
 /// Korean request text shared by the restaurant card and chat draft helper.
 ///
@@ -26,6 +35,7 @@ Future<void> showRestaurantCommunicationSheet({
   required BuildContext context,
   required String language,
   required TravelPreferences preferences,
+  SystemSpeech? speech,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -37,30 +47,211 @@ Future<void> showRestaurantCommunicationSheet({
       child: RestaurantCommunicationSheet(
         language: language,
         preferences: preferences,
+        speech: speech,
       ),
     ),
   );
 }
 
-class RestaurantCommunicationSheet extends StatelessWidget {
+class RestaurantCommunicationSheet extends StatefulWidget {
   const RestaurantCommunicationSheet({
     super.key,
     required this.language,
     required this.preferences,
+    this.speech,
   });
 
   final String language;
   final TravelPreferences preferences;
 
-  bool get _hasSafetyRequests => hasRestaurantSafetyRequests(preferences);
+  /// Injectable on-device speech adapter. Production callers may omit it (the
+  /// sheet then builds the flutter_tts system-speech adapter); widget tests
+  /// must inject a fake so no real audio is ever invoked.
+  final SystemSpeech? speech;
+
+  @override
+  State<RestaurantCommunicationSheet> createState() =>
+      _RestaurantCommunicationSheetState();
+}
+
+class _RestaurantCommunicationSheetState
+    extends State<RestaurantCommunicationSheet> {
+  static const _pronunciationSectionKey = ValueKey(
+    'restaurant-pronunciation-section',
+  );
+
+  SystemSpeech? _speech;
+  bool _speechAvailable = false;
+  bool _speechCheckDone = false;
+  bool _speaking = false;
+  _PronunciationProblem? _problem;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.preferences.pronunciationHelp) {
+      final injected = widget.speech;
+      _speech = injected ?? FlutterTtsSystemSpeech();
+      _speech!.setOnUtteranceFinished(() {
+        if (mounted) setState(() => _speaking = false);
+      });
+      _checkSpeechAvailability();
+    }
+  }
+
+  @override
+  void dispose() {
+    // Speech must stop when the sheet goes away; dispose also clears the
+    // completion handler so a stale callback cannot touch a dead element.
+    _speech?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkSpeechAvailability() async {
+    final speech = _speech;
+    if (speech == null) return;
+    final available = await speech.isKoreanAvailable();
+    if (!mounted) return;
+    setState(() {
+      _speechAvailable = available;
+      _speechCheckDone = true;
+    });
+  }
+
+  Future<void> _togglePronunciation(String koreanCard) async {
+    final speech = _speech;
+    if (speech == null) return;
+    if (_speaking) {
+      await speech.stop();
+      if (mounted) setState(() => _speaking = false);
+      return;
+    }
+    // Honest guard: only claim speech after the adapter reports it started.
+    setState(() => _problem = null);
+    final outcome = await speech.speakKorean(koreanCard);
+    if (!mounted) return;
+    switch (outcome) {
+      case SystemSpeechOutcome.started:
+        setState(() => _speaking = true);
+      case SystemSpeechOutcome.unavailable:
+        setState(() {
+          _speechAvailable = false;
+          _speechCheckDone = true;
+          _problem = _PronunciationProblem.unavailable;
+        });
+      case SystemSpeechOutcome.failed:
+        setState(() => _problem = _PronunciationProblem.failed);
+    }
+  }
+
+  /// CP2 pronunciation help. Rendered only when the saved
+  /// `pronunciationHelp` preference is on, and only through the injected (or
+  /// lazily built) system-speech adapter. While availability is still being
+  /// checked nothing is shown; when the device cannot speak Korean an honest
+  /// localized notice replaces the action — copy and large text stay usable.
+  Widget _buildPronunciationControl(String koreanCard) {
+    if (_speechCheckDone && !_speechAvailable) {
+      return Column(
+        key: _pronunciationSectionKey,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _Notice(
+            key: const ValueKey('restaurant-pronunciation-unavailable'),
+            icon: Icons.volume_off_outlined,
+            text: _copy(
+              widget.language,
+              ko: '이 기기에서는 한국어 발음 재생을 지원하지 않아요. 카드 복사와 큰 글씨는 그대로 사용할 수 있어요.',
+              en: 'This device cannot play Korean pronunciation. Copy and large text still work.',
+              ja: 'この端末では韓国語の発音再生に対応していません。コピーと大きな文字は引き続き使えます。',
+              zhHans: '此设备不支持播放韩语发音。复制和大字显示仍可使用。',
+              zhHant: '此裝置不支援播放韓語發音。複製和大字顯示仍可使用。',
+            ),
+          ),
+        ],
+      );
+    }
+    return Column(
+      key: _pronunciationSectionKey,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            key: ValueKey(
+              _speaking
+                  ? 'restaurant-pronunciation-stop'
+                  : 'restaurant-pronunciation-listen',
+            ),
+            onPressed: () => _togglePronunciation(koreanCard),
+            icon: Icon(
+              _speaking ? Icons.stop_rounded : Icons.volume_up_rounded,
+            ),
+            label: Text(
+              _speaking
+                  ? _copy(
+                      widget.language,
+                      ko: '발음 정지',
+                      en: 'Stop pronunciation',
+                      ja: '発音を停止',
+                      zhHans: '停止发音',
+                      zhHant: '停止發音',
+                    )
+                  : _copy(
+                      widget.language,
+                      ko: '한국어 발음 듣기',
+                      en: 'Listen in Korean',
+                      ja: '韓国語の発音を聞く',
+                      zhHans: '收听韩语发音',
+                      zhHant: '收聽韓語發音',
+                    ),
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 48),
+              foregroundColor: const Color(0xFF9A5A00),
+              side: const BorderSide(color: Color(0xFFF4C96A)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ),
+        if (_problem != null) ...[
+          const SizedBox(height: 8),
+          _Notice(
+            key: const ValueKey('restaurant-pronunciation-problem'),
+            icon: Icons.info_outline,
+            text: _problem == _PronunciationProblem.failed
+                ? _copy(
+                    widget.language,
+                    ko: '발음을 재생하지 못했어요. 다시 시도해 주세요.',
+                    en: 'Could not start pronunciation. Please try again.',
+                    ja: '発音を再生できませんでした。もう一度お試しください。',
+                    zhHans: '未能开始播放发音，请重试。',
+                    zhHant: '未能開始播放發音，請重試。',
+                  )
+                : _copy(
+                    widget.language,
+                    ko: '이 기기에서는 한국어 발음 재생을 지원하지 않아요. 카드 복사와 큰 글씨는 그대로 사용할 수 있어요.',
+                    en: 'This device cannot play Korean pronunciation. Copy and large text still work.',
+                    ja: 'この端末では韓国語の発音再生に対応していません。コピーと大きな文字は引き続き使えます。',
+                    zhHans: '此设备不支持播放韩语发音。复制和大字显示仍可使用。',
+                    zhHant: '此裝置不支援播放韓語發音。複製和大字顯示仍可使用。',
+                  ),
+          ),
+        ],
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final koreanCard = buildKoreanRestaurantRequestCard(preferences);
+    final koreanCard = buildKoreanRestaurantRequestCard(widget.preferences);
     final visitorCard = buildVisitorRestaurantRequestCard(
-      language,
-      preferences,
+      widget.language,
+      widget.preferences,
     );
+    final speech = _speech;
 
     return Column(
       children: [
@@ -85,7 +276,7 @@ class RestaurantCommunicationSheet extends StatelessWidget {
                       header: true,
                       child: Text(
                         _copy(
-                          language,
+                          widget.language,
                           ko: '식당에서 보여주기',
                           en: 'Show at the restaurant',
                           ja: 'お店で見せる',
@@ -102,7 +293,7 @@ class RestaurantCommunicationSheet extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       _copy(
-                        language,
+                        widget.language,
                         ko: '직원에게 한국어 요청 카드를 보여 주세요.',
                         en: 'Show the Korean request card to staff.',
                         ja: '韓国語のリクエストカードを店員に見せてください。',
@@ -136,7 +327,7 @@ class RestaurantCommunicationSheet extends StatelessWidget {
               _LanguageLabel(
                 icon: Icons.storefront_outlined,
                 text: _copy(
-                  language,
+                  widget.language,
                   ko: '직원에게 보여 줄 한국어',
                   en: 'Korean to show staff',
                   ja: '店員に見せる韓国語',
@@ -151,16 +342,20 @@ class RestaurantCommunicationSheet extends StatelessWidget {
                 accent: const Color(0xFFE24A3B),
               ),
               const SizedBox(height: 8),
+              if (speech != null) ...[
+                _buildPronunciationControl(koreanCard),
+                const SizedBox(height: 8),
+              ],
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   key: const ValueKey('restaurant-large-text-mode'),
                   onPressed: () =>
-                      _showLargeRestaurantCard(context, koreanCard, language),
+                      _showLargeRestaurantCard(context, koreanCard, widget.language),
                   icon: const Icon(Icons.text_fields_rounded),
                   label: Text(
                     _copy(
-                      language,
+                      widget.language,
                       ko: '큰 글씨로 보여주기',
                       en: 'Show in large text',
                       ja: '大きな文字で見せる',
@@ -179,12 +374,12 @@ class RestaurantCommunicationSheet extends StatelessWidget {
                   ),
                 ),
               ),
-              if (language != 'ko') ...[
+              if (widget.language != 'ko') ...[
                 const SizedBox(height: 18),
                 _LanguageLabel(
                   icon: Icons.translate,
                   text: _copy(
-                    language,
+                    widget.language,
                     ko: '내 언어로 확인',
                     en: 'Check in my language',
                     ja: '自分の言語で確認',
@@ -199,24 +394,24 @@ class RestaurantCommunicationSheet extends StatelessWidget {
                   accent: const Color(0xFF0B67D8),
                 ),
               ],
-              if (!_hasSafetyRequests) ...[
+              if (!hasRestaurantCommunicationContent(widget.preferences)) ...[
                 const SizedBox(height: 14),
                 _Notice(
                   icon: Icons.info_outline,
                   text: _copy(
-                    language,
-                    ko: '저장된 식이 요청이 없어요. 필요한 조건이 있다면 음식 설정에서 먼저 선택해 주세요.',
-                    en: 'No dietary requests are saved. Add any needs in Food settings first.',
-                    ja: '保存された食事条件はありません。必要な条件を食事設定で追加してください。',
-                    zhHans: '尚未保存饮食需求。如有需要，请先在饮食设置中添加。',
-                    zhHant: '尚未儲存飲食需求。如有需要，請先在飲食設定中新增。',
+                    widget.language,
+                    ko: '저장된 요청이 없어요. 식이·알레르기 조건이나 맵기·주문 요청을 음식 설정에서 먼저 선택해 주세요.',
+                    en: 'No requests are saved yet. Add dietary or allergy needs, spice level, or order requests in Food settings first.',
+                    ja: '保存されたリクエストはありません。食事・アレルギー条件や辛さ・注文リクエストを先に食事設定で追加してください。',
+                    zhHans: '尚未保存任何需求。请先在饮食设置中添加饮食或过敏需求、辣度或点餐请求。',
+                    zhHant: '尚未儲存任何需求。請先在飲食設定中新增飲食或過敏需求、辣度或點餐請求。',
                   ),
                 ),
               ],
               const SizedBox(height: 22),
               Text(
                 _copy(
-                  language,
+                  widget.language,
                   ko: '현지에서 물어보기',
                   en: 'Ask a local',
                   ja: '地元の人に聞く',
@@ -230,12 +425,12 @@ class RestaurantCommunicationSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              for (final phrase in _localPhrases(language))
+              for (final phrase in _localPhrases(widget.language))
                 _PhraseRow(
                   korean: phrase.korean,
                   translated: phrase.translated,
                   copyLabel: _copy(
-                    language,
+                    widget.language,
                     ko: '문구 복사',
                     en: 'Copy phrase',
                     ja: 'フレーズをコピー',
@@ -243,13 +438,13 @@ class RestaurantCommunicationSheet extends StatelessWidget {
                     zhHant: '複製短語',
                   ),
                   onCopy: () =>
-                      _copyToClipboard(context, phrase.korean, language),
+                      _copyToClipboard(context, phrase.korean, widget.language),
                 ),
               const SizedBox(height: 14),
               _Notice(
                 icon: Icons.health_and_safety_outlined,
                 text: _copy(
-                  language,
+                  widget.language,
                   ko: '이 카드는 의사소통을 돕는 도구이며 안전을 보장하지 않아요. 심한 알레르기가 있다면 주문 전에 직원에게 재료와 교차 접촉 가능성을 직접 확인해 주세요.',
                   en: 'This card supports communication; it does not guarantee safety. For severe allergies, confirm ingredients and possible cross-contact directly with staff before ordering.',
                   ja: 'このカードは意思疎通を助けるもので、安全を保証するものではありません。重いアレルギーがある場合は、注文前に原材料と交差接触の可能性を店員に直接確認してください。',
@@ -272,11 +467,11 @@ class RestaurantCommunicationSheet extends StatelessWidget {
             // scaling; minimumSize keeps the visual height but grows.
             child: FilledButton.icon(
               key: const ValueKey('copy-korean-restaurant-card'),
-              onPressed: () => _copyToClipboard(context, koreanCard, language),
+              onPressed: () => _copyToClipboard(context, koreanCard, widget.language),
               icon: const Icon(Icons.copy_outlined),
               label: Text(
                 _copy(
-                  language,
+                  widget.language,
                   ko: '한국어 요청 카드 복사',
                   en: 'Copy Korean request card',
                   ja: '韓国語カードをコピー',
@@ -299,6 +494,8 @@ class RestaurantCommunicationSheet extends StatelessWidget {
     );
   }
 }
+
+enum _PronunciationProblem { unavailable, failed }
 
 class _LanguageLabel extends StatelessWidget {
   const _LanguageLabel({required this.icon, required this.text});
@@ -430,7 +627,7 @@ class _PhraseRow extends StatelessWidget {
 }
 
 class _Notice extends StatelessWidget {
-  const _Notice({required this.icon, required this.text});
+  const _Notice({super.key, required this.icon, required this.text});
 
   final IconData icon;
   final String text;
@@ -622,6 +819,7 @@ List<_LocalPhrase> _localPhrases(String language) => [
 
 String _koreanCardText(TravelPreferences preferences) {
   final sections = <String>['안녕하세요. 주문 전에 확인을 부탁드립니다.'];
+  final hasSafetyRequests = hasRestaurantSafetyRequests(preferences);
 
   if (preferences.dietaryModes.isNotEmpty) {
     final labels = preferences.dietaryModes.map(_dietaryKoreanLabel).toList()
@@ -637,8 +835,22 @@ String _koreanCardText(TravelPreferences preferences) {
   if (avoidIngredients.isNotEmpty) {
     sections.add('추가로 피해야 하는 재료: $avoidIngredients');
   }
+  // CP2: explicitly saved soft preferences only (never inferred, never a
+  // safety claim). Placed after the safety sections so staff reads the
+  // cautious content first.
+  final spiceLevel = preferences.spiceLevel;
+  if (spiceLevel != null) {
+    sections.add(_spiceKoreanRequest(spiceLevel));
+  }
+  if (preferences.orderRequests.isNotEmpty) {
+    final labels = preferences.orderRequests
+        .map(_orderRequestKoreanPhrase)
+        .toList()
+          ..sort();
+    sections.add('요청 사항: ${labels.join(' · ')}');
+  }
 
-  if (sections.length > 1) {
+  if (hasSafetyRequests) {
     sections.addAll([
       '위 재료가 메뉴, 소스, 육수 또는 고명에 들어가는지 확인해 주세요.',
       '가능하다면 해당 재료를 빼고 조리해 주세요.',
@@ -649,6 +861,20 @@ String _koreanCardText(TravelPreferences preferences) {
 
   return sections.join('\n\n');
 }
+
+String _spiceKoreanRequest(SpicePreference value) => switch (value) {
+  SpicePreference.mild => '맵기: 안 매운 음식으로 부탁드립니다.',
+  SpicePreference.medium => '맵기: 보통 맵기로 부탁드립니다.',
+  SpicePreference.spicy => '맵기: 매운 음식을 잘 먹습니다.',
+};
+
+String _orderRequestKoreanPhrase(RestaurantOrderRequest value) =>
+    switch (value) {
+      RestaurantOrderRequest.staffRecommendation => '추천 메뉴를 부탁드립니다',
+      RestaurantOrderRequest.smallPortion => '양을 조금 적게 부탁드립니다',
+      RestaurantOrderRequest.quietTable => '가능하다면 조용한 자리를 부탁드립니다',
+      RestaurantOrderRequest.takeout => '남은 음식을 포장해 주시면 감사하겠습니다',
+};
 
 String _visitorCardText(String language, TravelPreferences preferences) {
   if (language == 'ko') {
@@ -665,6 +891,7 @@ String _visitorCardText(String language, TravelPreferences preferences) {
       zhHant: '您好。點餐前想請您幫忙確認。',
     ),
   ];
+  final hasSafetyRequests = hasRestaurantSafetyRequests(preferences);
 
   if (preferences.dietaryModes.isNotEmpty) {
     final labels =
@@ -692,8 +919,24 @@ String _visitorCardText(String language, TravelPreferences preferences) {
       '${_copy(language, ko: '추가로 피해야 하는 재료', en: 'Other ingredients to avoid', ja: 'その他避ける食材', zhHans: '其他需避免的食材', zhHant: '其他需避免的食材')}: $avoidIngredients',
     );
   }
+  final spiceLevel = preferences.spiceLevel;
+  if (spiceLevel != null) {
+    sections.add(_spiceVisitorRequest(language, spiceLevel));
+  }
+  if (preferences.orderRequests.isNotEmpty) {
+    final labels =
+        preferences.orderRequests
+            .map((value) => _orderRequestVisitorPhrase(language, value))
+            .toList()
+          ..sort();
+    sections.add(
+      '${_copy(language, ko: '요청 사항', en: 'Requests', ja: 'リクエスト', zhHans: '请求事项', zhHant: '請求事項')}: ${labels.join(' · ')}',
+    );
+  }
 
-  if (sections.length > 1) {
+  // Cross-contact lines reference the safety ingredients above; they are
+  // only honest when a safety section was actually saved.
+  if (hasSafetyRequests) {
     sections.addAll([
       _copy(
         language,
@@ -813,6 +1056,67 @@ String _dietaryKoreanLabel(DietaryMode value) => switch (value) {
   DietaryMode.halal => '할랄',
   DietaryMode.kosher => '코셔',
 };
+
+String _spiceVisitorRequest(String language, SpicePreference value) {
+  final labels = switch (value) {
+    SpicePreference.mild => [
+      '맵기: 안 매운 음식으로 부탁드립니다.',
+      'Spice level: please prepare it mild (not spicy).',
+      '辛さ：辛くないものをお願いします。',
+      '辣度：请不要做辣（不辣）。',
+      '辣度：請不要做辣（不辣）。',
+    ],
+    SpicePreference.medium => [
+      '맵기: 보통 맵기로 부탁드립니다.',
+      'Spice level: medium spice, please.',
+      '辛さ：普通の辛さでお願いします。',
+      '辣度：请做适中辣度。',
+      '辣度：請做適中辣度。',
+    ],
+    SpicePreference.spicy => [
+      '맵기: 매운 음식을 잘 먹습니다.',
+      'Spice level: I enjoy spicy food.',
+      '辛さ：辛いものが好きです。',
+      '辣度：我喜欢吃辣。',
+      '辣度：我喜歡吃辣。',
+    ],
+  };
+  return _localizedList(language, labels);
+}
+
+String _orderRequestVisitorPhrase(String language, RestaurantOrderRequest value) {
+  final labels = switch (value) {
+    RestaurantOrderRequest.staffRecommendation => [
+      '추천 메뉴를 부탁드립니다',
+      'Please recommend a dish',
+      'おすすめの料理をお願いします',
+      '请推荐菜品',
+      '請推薦菜品',
+    ],
+    RestaurantOrderRequest.smallPortion => [
+      '양을 조금 적게 부탁드립니다',
+      'A smaller portion, please',
+      '少なめでお願いします',
+      '请给小份一些',
+      '請給小份一些',
+    ],
+    RestaurantOrderRequest.quietTable => [
+      '가능하다면 조용한 자리를 부탁드립니다',
+      'A quiet table, if possible',
+      'できるだけ静かな席をお願いします',
+      '如果可以，请安排安静的位置',
+      '如果可以，請安排安靜的位置',
+    ],
+    RestaurantOrderRequest.takeout => [
+      '남은 음식을 포장해 주시면 감사하겠습니다',
+      'Please pack the leftovers',
+      '残りは持ち帰りにしてください',
+      '请帮忙打包剩余的食物',
+      '請幫忙打包剩餘的食物',
+    ],
+  };
+  return _localizedList(language, labels);
+}
 
 String _allergenKoreanLabel(Allergen value) => switch (value) {
   Allergen.nuts => '견과류',

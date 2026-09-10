@@ -165,7 +165,7 @@ class FeaturedPlaceHeader extends StatelessWidget {
           ],
         ),
         // V1-RC2: per-place reason(없으면 PlaceReasonLine 이 렌더 생략).
-        PlaceReasonLine(place: place, topSpacing: 8),
+        PlaceReasonLine(place: place, topSpacing: 8, language: language),
       ],
     );
   }

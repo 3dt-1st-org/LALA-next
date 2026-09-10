@@ -57,11 +57,7 @@ void main() {
   testWidgets('날씨 없음(null)은 대기 문구', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: WeatherMapPill(
-          weather: null,
-          language: 'ko',
-          onPressed: () {},
-        ),
+        home: WeatherMapPill(weather: null, language: 'ko', onPressed: () {}),
       ),
     );
     expect(_pillLabel(tester), '날씨 데이터 준비 중');

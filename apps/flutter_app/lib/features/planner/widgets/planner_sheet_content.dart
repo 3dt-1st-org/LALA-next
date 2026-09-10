@@ -3,6 +3,7 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../../shared/l10n/lala_copy.dart';
 import '../planner_helpers.dart';
+import 'plan_preference_effects_summary.dart';
 import 'planner_loading_card.dart';
 import 'planner_overview_card.dart';
 import 'plan_slot_tile.dart';
@@ -46,6 +47,15 @@ class PlannerSheetContent extends StatelessWidget {
           loading: loading,
           onRegenerate: () => _confirmRegenerate(context),
         ),
+        // CP1: 선호 컨텍스트가 실렸던 플랜만 간단한 반영 요약(legacy 플랜은 빈
+        // 리스트 → 렌더링 안 함). 지도 시트와 플랜 탭이 같은 위젯을 공유한다.
+        if (dailyPlan?.preferenceEffects.isNotEmpty ?? false) ...[
+          const SizedBox(height: 8),
+          PlanPreferenceEffectsSummary(
+            effects: dailyPlan!.preferenceEffects,
+            language: language,
+          ),
+        ],
         const SizedBox(height: 12),
         if (visibleSlots.isEmpty)
           PlannerLoadingCard(language: language)

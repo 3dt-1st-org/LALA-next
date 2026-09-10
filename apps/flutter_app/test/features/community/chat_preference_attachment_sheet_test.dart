@@ -126,4 +126,61 @@ void main() {
       expect(draft, isNot(contains('life-threatening')));
     },
   );
+
+  test(
+    'dietary draft reuses the exact current restaurant card content',
+    () {
+      // CP2: the chat attachment and the sheet share the same builders, so
+      // spice/order requests land in the draft in both languages.
+      const preferences = TravelPreferences(
+        spiceLevel: SpicePreference.spicy,
+        orderRequests: <RestaurantOrderRequest>{
+          RestaurantOrderRequest.takeout,
+        },
+      );
+
+      final draft = buildDietaryChatDraft('en', preferences);
+
+      expect(draft, contains('Spice level: I enjoy spicy food.'));
+      expect(draft, contains('Please pack the leftovers'));
+      expect(draft, contains('맵기: 매운 음식을 잘 먹습니다.'));
+      expect(draft, contains('남은 음식을 포장해 주시면 감사하겠습니다'));
+      expect(draft, contains('Korean for restaurant staff'));
+      expect(draft, isNot(contains('Allergens or sensitivities')));
+      expect(draft, isNot(contains('알레르기')));
+    },
+  );
+
+  testWidgets('soft-only saved content enables the dietary attachment', (
+    tester,
+  ) async {
+    final store = TravelPreferencesStore();
+    await store.ensureLoaded();
+    await store.save(
+      const TravelPreferences(
+        spiceLevel: SpicePreference.medium,
+        orderRequests: <RestaurantOrderRequest>{
+          RestaurantOrderRequest.smallPortion,
+        },
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatPreferenceAttachmentSheet(language: 'ko', store: store),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final dietary = tester.widget<InkWell>(
+      find.descendant(
+        of: find.byKey(const ValueKey('chat-attach-dietary-request')),
+        matching: find.byType(InkWell),
+      ),
+    );
+    expect(dietary.onTap, isNotNull);
+    expect(find.textContaining('맵기·주문 요청'), findsOneWidget);
+  });
 }

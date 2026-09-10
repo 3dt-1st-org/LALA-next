@@ -1195,6 +1195,159 @@ class _FoodPreferencesPageState extends State<FoodPreferencesPage> {
         _SectionTitle(
           title: _text(
             widget.language,
+            ko: '매운 맛 선호',
+            en: 'Spice preference',
+            ja: '辛さの好み',
+            zhHans: '辣度偏好',
+            zhHant: '辣度偏好',
+          ),
+          caption: _text(
+            widget.language,
+            ko: '선택 해제 가능',
+            en: 'Tap to clear',
+            ja: '再タップで解除',
+            zhHans: '再次点按可取消',
+            zhHant: '再次點按可取消',
+          ),
+        ),
+        _Panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _text(
+                  widget.language,
+                  ko: '매운 정도',
+                  en: 'Spice level',
+                  ja: '辛さの程度',
+                  zhHans: '辣度',
+                  zhHant: '辣度',
+                ),
+                style: _controlLabelStyle,
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final value in SpicePreference.values)
+                    ChoiceChip(
+                      key: ValueKey('spice-level-${value.name}'),
+                      label: Text(_spiceLabel(widget.language, value)),
+                      selected: _draft.spiceLevel == value,
+                      onSelected: (_) => setState(() {
+                        _draft = _draft.copyWith(
+                          // Tap-to-clear: a selected chip returns to "not
+                          // saved", so the card only shows explicit choices.
+                          spiceLevel:
+                              _draft.spiceLevel == value ? null : value,
+                        );
+                      }),
+                      selectedColor: const Color(0xFFE24A3B),
+                      labelStyle: TextStyle(
+                        color: _draft.spiceLevel == value
+                            ? Colors.white
+                            : LalaVisualColors.ink,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(
+                          color: _draft.spiceLevel == value
+                              ? const Color(0xFFE24A3B)
+                              : LalaVisualColors.line,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _text(
+                  widget.language,
+                  ko: '선택하지 않으면 식당 카드에 표시하지 않아요.',
+                  en: 'Nothing is shown on the restaurant card until you choose.',
+                  ja: '選択しない限り、お店のカードには表示されません。',
+                  zhHans: '不选择时不会显示在餐厅需求卡上。',
+                  zhHant: '不選擇時不會顯示在餐廳需求卡上。',
+                ),
+                style: const TextStyle(
+                  color: LalaVisualColors.muted,
+                  fontSize: 12,
+                  height: 1.35,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        _SectionTitle(
+          title: _text(
+            widget.language,
+            ko: '주문 요청',
+            en: 'Order requests',
+            ja: '注文リクエスト',
+            zhHans: '点餐请求',
+            zhHant: '點餐請求',
+          ),
+          caption: _text(
+            widget.language,
+            ko: '최대 4개',
+            en: 'Up to 4',
+            ja: '最大4つ',
+            zhHans: '最多 4 个',
+            zhHant: '最多 4 個',
+          ),
+        ),
+        _Panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _text(
+                  widget.language,
+                  ko: '식당에 부탁할 일반 요청',
+                  en: 'Common requests for the restaurant',
+                  ja: 'お店へのお願い',
+                  zhHans: '向餐厅提出的常见请求',
+                  zhHant: '向餐廳提出的常見請求',
+                ),
+                style: _controlLabelStyle,
+              ),
+              const SizedBox(height: 10),
+              _EnumChips<RestaurantOrderRequest>(
+                values: RestaurantOrderRequest.values,
+                selected: _draft.orderRequests,
+                label: (value) => _orderRequestLabel(widget.language, value),
+                onChanged: (next) => setState(
+                  () => _draft = _draft.copyWith(orderRequests: next),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _text(
+                  widget.language,
+                  ko: '선택한 요청만 식당 카드에 한국어로 표시해요.',
+                  en: 'Only chosen requests appear in Korean on the restaurant card.',
+                  ja: '選んだリクエストだけが韓国語カードに表示されます。',
+                  zhHans: '只有选中的请求才会以韩语显示在餐厅需求卡上。',
+                  zhHant: '只有選中的請求才會以韓語顯示在餐廳需求卡上。',
+                ),
+                style: const TextStyle(
+                  color: LalaVisualColors.muted,
+                  fontSize: 12,
+                  height: 1.35,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        _SectionTitle(
+          title: _text(
+            widget.language,
             ko: '안전·식이 조건',
             en: 'Safety and dietary needs',
             ja: '安全・食事上の条件',
@@ -2087,12 +2240,17 @@ class _SectionTitle extends StatelessWidget {
               ),
             ),
             if (caption != null)
-              Text(
-                caption!,
-                style: const TextStyle(
-                  color: LalaVisualColors.muted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+              // Why Flexible: at large text scales the caption's intrinsic
+              // width can exceed the row; it must wrap instead of forcing a
+              // horizontal overflow on the section header.
+              Flexible(
+                child: Text(
+                  caption!,
+                  style: const TextStyle(
+                    color: LalaVisualColors.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
           ],
@@ -3134,6 +3292,49 @@ String _allergenLabel(String language, Allergen value) {
     Allergen.eggs: ['달걀', 'Eggs', '卵', '鸡蛋', '雞蛋'],
     Allergen.gluten: ['글루텐', 'Gluten', 'グルテン', '麸质', '麩質'],
     Allergen.soy: ['콩', 'Soy', '大豆', '大豆', '大豆'],
+  };
+  return _localizedList(language, labels[value]!);
+}
+
+String _spiceLabel(String language, SpicePreference value) {
+  final labels = <SpicePreference, List<String>>{
+    SpicePreference.mild: ['안 매운 음식', 'Mild', '辛くない料理', '不辣', '不辣'],
+    SpicePreference.medium: ['보통 맵기', 'Medium spice', '普通の辛さ', '适中辣度', '適中辣度'],
+    SpicePreference.spicy: ['매운 음식 좋아요', 'Enjoy spicy', '辛いのが好き', '爱吃辣', '愛吃辣'],
+  };
+  return _localizedList(language, labels[value]!);
+}
+
+String _orderRequestLabel(String language, RestaurantOrderRequest value) {
+  final labels = <RestaurantOrderRequest, List<String>>{
+    RestaurantOrderRequest.staffRecommendation: [
+      '추천 부탁',
+      'Ask for a recommendation',
+      'おすすめを頼む',
+      '请推荐',
+      '請推薦',
+    ],
+    RestaurantOrderRequest.smallPortion: [
+      '조금 적게',
+      'Smaller portion',
+      '少なめ',
+      '分量少一些',
+      '份量少一些',
+    ],
+    RestaurantOrderRequest.quietTable: [
+      '조용한 자리',
+      'Quiet table',
+      '静かな席',
+      '安静的位置',
+      '安靜的位置',
+    ],
+    RestaurantOrderRequest.takeout: [
+      '포장 요청',
+      'Pack to go',
+      '持ち帰り',
+      '打包',
+      '打包',
+    ],
   };
   return _localizedList(language, labels[value]!);
 }

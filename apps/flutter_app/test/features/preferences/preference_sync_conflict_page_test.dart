@@ -62,6 +62,51 @@ void main() {
     expect(store.value.avoidStairs, isTrue);
     expect(store.deviceUpdatedAt, '2026-09-03T02:03:04Z');
   });
+
+  testWidgets('spice and order request differences are shown per side', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(393, 852));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final remote = _MemoryRemote(
+      const TravelPreferences(
+        spiceLevel: SpicePreference.mild,
+        orderRequests: <RestaurantOrderRequest>{
+          RestaurantOrderRequest.quietTable,
+        },
+      ),
+    );
+    final store = TravelPreferencesStore();
+    await store.ensureLoaded();
+    // Device side: medium spice saved, no order requests.
+    await store.save(
+      store.value.copyWith(spiceLevel: SpicePreference.medium),
+    );
+    await store.connectAccount(remote);
+    expect(store.syncStatus, TravelPreferencesSyncStatus.conflict);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PreferenceSyncConflictPage(language: 'ko', store: store),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Device side: medium spice + no requests; account side: mild + 1 request.
+    expect(find.textContaining('맵기: 보통'), findsOneWidget);
+    expect(find.textContaining('맵기: 안 매운 음식'), findsOneWidget);
+    expect(find.textContaining('주문 요청 1개'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    // The explicit account choice carries the CP2 values onto the device.
+    await tester.tap(find.byKey(const ValueKey('sync-use-account')));
+    await tester.pumpAndSettle();
+
+    expect(store.value.spiceLevel, SpicePreference.mild);
+    expect(store.value.orderRequests, <RestaurantOrderRequest>{
+      RestaurantOrderRequest.quietTable,
+    });
+  });
 }
 
 class _MemoryRemote implements TravelPreferencesRemote {

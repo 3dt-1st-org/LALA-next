@@ -297,7 +297,9 @@ def _setup_tool_monkeypatch(
     monkeypatch.setattr(
         tool,
         "_read_places_on_cursor",
-        lambda cur, limit, region_place_names=None: places or [_fake_place()],
+        lambda cur, limit, region_place_names=None, after_place_id=None, tour_api_area=None: (
+            places or [_fake_place()]
+        ),
     )
     if collection_fn is not None:
         monkeypatch.setattr(tool, "collect_mentions_for_place", collection_fn)
@@ -1009,12 +1011,15 @@ def test_read_places_region_query_is_canonical_any():
     assert names is not None
     assert "성동구" in names
     cur = _PlaceQueryCursor()
-    places = tool._read_places_on_cursor(cur, 50, names)
+    # P5C: the scoped read REQUIRES the proven TourAPI province qualifier.
+    places = tool._read_places_on_cursor(cur, 50, names, None, "1")
 
     sql, params = cur.queries[0]
     assert "AND region_name_ko = ANY(%s)" in sql
+    assert "AND province_code = %s" in sql
+    assert "AND primary_source = 'tour_api'" in sql
     assert sql.index("ANY(%s)") < sql.index("ORDER BY place_id") < sql.index("LIMIT %s")
-    assert params == (list(names), 50)
+    assert params == (list(names), "1", 50)
     assert [p.region_name_ko for p in places] == ["성동구"]
 
 
@@ -1022,7 +1027,7 @@ def test_read_places_region_limit_applies_within_region():
     """--limit stays region-local: the ANY filter precedes and parameterizes
     before the limit, so the window is cut inside the selected region."""
     cur = _PlaceQueryCursor()
-    tool._read_places_on_cursor(cur, 7, ("성동", "성동구"))
+    tool._read_places_on_cursor(cur, 7, ("성동", "성동구"), None, "1")
     sql, params = cur.queries[0]
     assert params[-1] == 7
     assert sql.index("ANY(%s)") < sql.index("LIMIT %s")
@@ -1103,7 +1108,7 @@ def test_preview_region_scopes_place_read_and_output(monkeypatch, capsys):
     region_applied=true; --limit travels with it."""
     read_calls: list[tuple[int, tuple[str, ...] | None]] = []
 
-    def fake_read(cur, limit, region_place_names=None):
+    def fake_read(cur, limit, region_place_names=None, after_place_id=None, tour_api_area=None):
         read_calls.append((limit, region_place_names))
         return [_fake_place(region_name_ko="성동구")]
 
@@ -1123,7 +1128,7 @@ def test_apply_region_scopes_place_read_and_output(monkeypatch, capsys):
     """Apply threads the region through preflight identically and reports it."""
     read_calls: list[tuple[int, tuple[str, ...] | None]] = []
 
-    def fake_read(cur, limit, region_place_names=None):
+    def fake_read(cur, limit, region_place_names=None, after_place_id=None, tour_api_area=None):
         read_calls.append((limit, region_place_names))
         return [_fake_place(region_name_ko="해운대구")]
 

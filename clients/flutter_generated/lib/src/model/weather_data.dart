@@ -15,6 +15,7 @@ part 'weather_data.g.dart';
 /// WeatherData
 ///
 /// Properties:
+/// * [airQualityOutdoorStatus] - Observed air-quality status derived only from the normalized dust grades (bad/very_bad → bad, good/normal → good); an unknown dust grade stays 'unknown'.
 /// * [dust] 
 /// * [force] 
 /// * [forecast] 
@@ -27,8 +28,14 @@ part 'weather_data.g.dart';
 /// * [recordTime] 
 /// * [source_] 
 /// * [temp] 
+/// * [weatherOutdoorStatus] - Observed weather-only status (KMA nowcast / DB weather flags without the dust flag); 'unknown' when no weather observation exists (an AirKorea-only response or a payload without the explicit provenance key) — never inferred from the merged outdoor_status.
 @BuiltValue()
 abstract class WeatherData implements Built<WeatherData, WeatherDataBuilder> {
+  /// Observed air-quality status derived only from the normalized dust grades (bad/very_bad → bad, good/normal → good); an unknown dust grade stays 'unknown'.
+  @BuiltValueField(wireName: r'air_quality_outdoor_status')
+  WeatherDataAirQualityOutdoorStatusEnum? get airQualityOutdoorStatus;
+  // enum airQualityOutdoorStatusEnum {  good,  bad,  unknown,  };
+
   @BuiltValueField(wireName: r'dust')
   Dust get dust;
 
@@ -67,6 +74,11 @@ abstract class WeatherData implements Built<WeatherData, WeatherDataBuilder> {
   @BuiltValueField(wireName: r'temp')
   String get temp;
 
+  /// Observed weather-only status (KMA nowcast / DB weather flags without the dust flag); 'unknown' when no weather observation exists (an AirKorea-only response or a payload without the explicit provenance key) — never inferred from the merged outdoor_status.
+  @BuiltValueField(wireName: r'weather_outdoor_status')
+  WeatherDataWeatherOutdoorStatusEnum? get weatherOutdoorStatus;
+  // enum weatherOutdoorStatusEnum {  good,  bad,  unknown,  };
+
   WeatherData._();
 
   factory WeatherData([void updates(WeatherDataBuilder b)]) = _$WeatherData;
@@ -90,6 +102,13 @@ class _$WeatherDataSerializer implements PrimitiveSerializer<WeatherData> {
     WeatherData object, {
     FullType specifiedType = FullType.unspecified,
   }) sync* {
+    if (object.airQualityOutdoorStatus != null) {
+      yield r'air_quality_outdoor_status';
+      yield serializers.serialize(
+        object.airQualityOutdoorStatus,
+        specifiedType: const FullType(WeatherDataAirQualityOutdoorStatusEnum),
+      );
+    }
     yield r'dust';
     yield serializers.serialize(
       object.dust,
@@ -156,6 +175,13 @@ class _$WeatherDataSerializer implements PrimitiveSerializer<WeatherData> {
       object.temp,
       specifiedType: const FullType(String),
     );
+    if (object.weatherOutdoorStatus != null) {
+      yield r'weather_outdoor_status';
+      yield serializers.serialize(
+        object.weatherOutdoorStatus,
+        specifiedType: const FullType(WeatherDataWeatherOutdoorStatusEnum),
+      );
+    }
   }
 
   @override
@@ -179,6 +205,13 @@ class _$WeatherDataSerializer implements PrimitiveSerializer<WeatherData> {
       final key = serializedList[i] as String;
       final value = serializedList[i + 1];
       switch (key) {
+        case r'air_quality_outdoor_status':
+          final valueDes = serializers.deserialize(
+            value,
+            specifiedType: const FullType(WeatherDataAirQualityOutdoorStatusEnum),
+          ) as WeatherDataAirQualityOutdoorStatusEnum;
+          result.airQualityOutdoorStatus = valueDes;
+          break;
         case r'dust':
           final valueDes = serializers.deserialize(
             value,
@@ -263,6 +296,13 @@ class _$WeatherDataSerializer implements PrimitiveSerializer<WeatherData> {
           ) as String;
           result.temp = valueDes;
           break;
+        case r'weather_outdoor_status':
+          final valueDes = serializers.deserialize(
+            value,
+            specifiedType: const FullType(WeatherDataWeatherOutdoorStatusEnum),
+          ) as WeatherDataWeatherOutdoorStatusEnum;
+          result.weatherOutdoorStatus = valueDes;
+          break;
         default:
           unhandled.add(key);
           unhandled.add(value);
@@ -290,6 +330,26 @@ class _$WeatherDataSerializer implements PrimitiveSerializer<WeatherData> {
     );
     return result.build();
   }
+}
+
+class WeatherDataAirQualityOutdoorStatusEnum extends EnumClass {
+
+  /// Observed air-quality status derived only from the normalized dust grades (bad/very_bad → bad, good/normal → good); an unknown dust grade stays 'unknown'.
+  @BuiltValueEnumConst(wireName: r'good')
+  static const WeatherDataAirQualityOutdoorStatusEnum good = _$weatherDataAirQualityOutdoorStatusEnum_good;
+  /// Observed air-quality status derived only from the normalized dust grades (bad/very_bad → bad, good/normal → good); an unknown dust grade stays 'unknown'.
+  @BuiltValueEnumConst(wireName: r'bad')
+  static const WeatherDataAirQualityOutdoorStatusEnum bad = _$weatherDataAirQualityOutdoorStatusEnum_bad;
+  /// Observed air-quality status derived only from the normalized dust grades (bad/very_bad → bad, good/normal → good); an unknown dust grade stays 'unknown'.
+  @BuiltValueEnumConst(wireName: r'unknown')
+  static const WeatherDataAirQualityOutdoorStatusEnum unknown = _$weatherDataAirQualityOutdoorStatusEnum_unknown;
+
+  static Serializer<WeatherDataAirQualityOutdoorStatusEnum> get serializer => _$weatherDataAirQualityOutdoorStatusEnumSerializer;
+
+  const WeatherDataAirQualityOutdoorStatusEnum._(String name): super(name);
+
+  static BuiltSet<WeatherDataAirQualityOutdoorStatusEnum> get values => _$weatherDataAirQualityOutdoorStatusEnumValues;
+  static WeatherDataAirQualityOutdoorStatusEnum valueOf(String name) => _$weatherDataAirQualityOutdoorStatusEnumValueOf(name);
 }
 
 class WeatherDataOutdoorStatusEnum extends EnumClass {
@@ -330,5 +390,25 @@ class WeatherDataSource_Enum extends EnumClass {
 
   static BuiltSet<WeatherDataSource_Enum> get values => _$weatherDataSourceEnumValues;
   static WeatherDataSource_Enum valueOf(String name) => _$weatherDataSourceEnumValueOf(name);
+}
+
+class WeatherDataWeatherOutdoorStatusEnum extends EnumClass {
+
+  /// Observed weather-only status (KMA nowcast / DB weather flags without the dust flag); 'unknown' when no weather observation exists (an AirKorea-only response or a payload without the explicit provenance key) — never inferred from the merged outdoor_status.
+  @BuiltValueEnumConst(wireName: r'good')
+  static const WeatherDataWeatherOutdoorStatusEnum good = _$weatherDataWeatherOutdoorStatusEnum_good;
+  /// Observed weather-only status (KMA nowcast / DB weather flags without the dust flag); 'unknown' when no weather observation exists (an AirKorea-only response or a payload without the explicit provenance key) — never inferred from the merged outdoor_status.
+  @BuiltValueEnumConst(wireName: r'bad')
+  static const WeatherDataWeatherOutdoorStatusEnum bad = _$weatherDataWeatherOutdoorStatusEnum_bad;
+  /// Observed weather-only status (KMA nowcast / DB weather flags without the dust flag); 'unknown' when no weather observation exists (an AirKorea-only response or a payload without the explicit provenance key) — never inferred from the merged outdoor_status.
+  @BuiltValueEnumConst(wireName: r'unknown')
+  static const WeatherDataWeatherOutdoorStatusEnum unknown = _$weatherDataWeatherOutdoorStatusEnum_unknown;
+
+  static Serializer<WeatherDataWeatherOutdoorStatusEnum> get serializer => _$weatherDataWeatherOutdoorStatusEnumSerializer;
+
+  const WeatherDataWeatherOutdoorStatusEnum._(String name): super(name);
+
+  static BuiltSet<WeatherDataWeatherOutdoorStatusEnum> get values => _$weatherDataWeatherOutdoorStatusEnumValues;
+  static WeatherDataWeatherOutdoorStatusEnum valueOf(String name) => _$weatherDataWeatherOutdoorStatusEnumValueOf(name);
 }
 

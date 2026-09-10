@@ -22,6 +22,31 @@ _windows: dict[tuple[str, str], _Window] = {}
 _lock = Lock()
 
 
+def _window_allows(key: tuple[str, str], limit: int) -> bool:
+    """Advance the shared fixed window once and report whether it is still open.
+
+    The in-process window is intentionally a development/test seam. Production
+    deployment can replace the ``enforce_*`` seams with the existing
+    edge/distributed limiter without changing route contracts.
+    """
+
+    now = monotonic()
+    with _lock:
+        window = _windows.get(key)
+        if window is None or now - window.started_at >= _WINDOW_SECONDS:
+            _windows[key] = _Window(started_at=now, count=1)
+            return True
+        window.count += 1
+        return window.count <= limit
+
+
+def _hashed_key(route_key: str, actor_key: str, client_key: str) -> tuple[str, str]:
+    # Hashing keeps the in-process key from becoming an accidental observable
+    # identity record while preserving per-actor and per-client isolation.
+    key_material = f"{route_key}:{actor_key}:{client_key}".encode()
+    return (route_key, hashlib.sha256(key_material).hexdigest())
+
+
 def enforce_public_contest_paid_route_limit(
     request: Request,
     *,
@@ -35,17 +60,9 @@ def enforce_public_contest_paid_route_limit(
         return
 
     limit = max(1, limit_per_minute)
-    client_key = _client_key(request)
-    now = monotonic()
-    key = (route_key, client_key)
-    with _lock:
-        window = _windows.get(key)
-        if window is None or now - window.started_at >= _WINDOW_SECONDS:
-            _windows[key] = _Window(started_at=now, count=1)
-            return
-        window.count += 1
-        if window.count <= limit:
-            return
+    key = (route_key, _client_key(request))
+    if _window_allows(key, limit):
+        return
 
     raise ApiError(
         status_code=429,
@@ -62,33 +79,70 @@ def enforce_local_signals_rate_limit(
     actor_key: str,
     limit_per_minute: int,
 ) -> None:
-    """Apply a bounded, replaceable rate-limit seam without logging identity values.
-
-    The in-process window is intentionally a development/test seam. Production
-    deployment can replace this function with the existing edge/distributed
-    limiter without changing Local Signals route contracts.
-    """
-
     limit = max(1, limit_per_minute)
-    client_key = _client_key(request)
-    # Hashing keeps the in-process key from becoming an accidental observable
-    # identity record while preserving per-actor and per-client isolation.
-    key_material = f"{route_key}:{actor_key}:{client_key}".encode()
-    key = (route_key, hashlib.sha256(key_material).hexdigest())
-    now = monotonic()
-    with _lock:
-        window = _windows.get(key)
-        if window is None or now - window.started_at >= _WINDOW_SECONDS:
-            _windows[key] = _Window(started_at=now, count=1)
-            return
-        window.count += 1
-        if window.count <= limit:
-            return
+    key = _hashed_key(route_key, actor_key, _client_key(request))
+    if _window_allows(key, limit):
+        return
 
     raise ApiError(
         status_code=429,
         code="RATE_LIMITED",
         message="Too many Local Signals requests. Please retry shortly.",
+        retryable=True,
+    )
+
+
+def enforce_community_write_rate_limit(
+    request: Request,
+    *,
+    route_key: str,
+    actor_key: str,
+    limit_per_minute: int,
+) -> None:
+    """Bounded per-actor/per-client window for authenticated community writes.
+
+    Same replaceable seam and hashed-key discipline as Local Signals, with a
+    community-specific error contract. Call only after OAuth identity
+    validation so unauthenticated requests never consume an actor window.
+    """
+
+    limit = max(1, limit_per_minute)
+    key = _hashed_key(route_key, actor_key, _client_key(request))
+    if _window_allows(key, limit):
+        return
+
+    raise ApiError(
+        status_code=429,
+        code="COMMUNITY_RATE_LIMITED",
+        message="Too many community requests. Please retry shortly.",
+        retryable=True,
+    )
+
+
+def enforce_chat_message_rate_limit(
+    *,
+    route_key: str,
+    actor_key: str,
+    client_key: str,
+    limit_per_minute: int,
+) -> None:
+    """Bounded per-actor/per-client window for inbound WebSocket chat frames.
+
+    WebSocket frames carry no per-frame ``Request``; callers pass the
+    connection's stable client key (resolved once at handshake). Raises the
+    same bounded ``ApiError`` contract so the frame handler can emit one
+    bounded error frame without echoing message or identity content.
+    """
+
+    limit = max(1, limit_per_minute)
+    key = _hashed_key(route_key, actor_key, client_key)
+    if _window_allows(key, limit):
+        return
+
+    raise ApiError(
+        status_code=429,
+        code="RATE_LIMITED",
+        message="Too many chat messages. Please retry shortly.",
         retryable=True,
     )
 

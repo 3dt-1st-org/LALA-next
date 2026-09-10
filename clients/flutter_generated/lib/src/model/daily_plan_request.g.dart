@@ -14,14 +14,23 @@ class _$DailyPlanRequest extends DailyPlanRequest {
   @override
   final num lng;
   @override
+  final PlanPreferenceContext? preferenceContext;
+  @override
   final int? radiusM;
+  @override
+  final String? selectedPlaceId;
 
   factory _$DailyPlanRequest(
           [void Function(DailyPlanRequestBuilder)? updates]) =>
       (DailyPlanRequestBuilder()..update(updates))._build();
 
   _$DailyPlanRequest._(
-      {this.language, required this.lat, required this.lng, this.radiusM})
+      {this.language,
+      required this.lat,
+      required this.lng,
+      this.preferenceContext,
+      this.radiusM,
+      this.selectedPlaceId})
       : super._();
   @override
   DailyPlanRequest rebuild(void Function(DailyPlanRequestBuilder) updates) =>
@@ -38,7 +47,9 @@ class _$DailyPlanRequest extends DailyPlanRequest {
         language == other.language &&
         lat == other.lat &&
         lng == other.lng &&
-        radiusM == other.radiusM;
+        preferenceContext == other.preferenceContext &&
+        radiusM == other.radiusM &&
+        selectedPlaceId == other.selectedPlaceId;
   }
 
   @override
@@ -47,7 +58,9 @@ class _$DailyPlanRequest extends DailyPlanRequest {
     _$hash = $jc(_$hash, language.hashCode);
     _$hash = $jc(_$hash, lat.hashCode);
     _$hash = $jc(_$hash, lng.hashCode);
+    _$hash = $jc(_$hash, preferenceContext.hashCode);
     _$hash = $jc(_$hash, radiusM.hashCode);
+    _$hash = $jc(_$hash, selectedPlaceId.hashCode);
     _$hash = $jf(_$hash);
     return _$hash;
   }
@@ -58,7 +71,9 @@ class _$DailyPlanRequest extends DailyPlanRequest {
           ..add('language', language)
           ..add('lat', lat)
           ..add('lng', lng)
-          ..add('radiusM', radiusM))
+          ..add('preferenceContext', preferenceContext)
+          ..add('radiusM', radiusM)
+          ..add('selectedPlaceId', selectedPlaceId))
         .toString();
   }
 }
@@ -79,9 +94,20 @@ class DailyPlanRequestBuilder
   num? get lng => _$this._lng;
   set lng(num? lng) => _$this._lng = lng;
 
+  PlanPreferenceContextBuilder? _preferenceContext;
+  PlanPreferenceContextBuilder get preferenceContext =>
+      _$this._preferenceContext ??= PlanPreferenceContextBuilder();
+  set preferenceContext(PlanPreferenceContextBuilder? preferenceContext) =>
+      _$this._preferenceContext = preferenceContext;
+
   int? _radiusM;
   int? get radiusM => _$this._radiusM;
   set radiusM(int? radiusM) => _$this._radiusM = radiusM;
+
+  String? _selectedPlaceId;
+  String? get selectedPlaceId => _$this._selectedPlaceId;
+  set selectedPlaceId(String? selectedPlaceId) =>
+      _$this._selectedPlaceId = selectedPlaceId;
 
   DailyPlanRequestBuilder() {
     DailyPlanRequest._defaults(this);
@@ -93,7 +119,9 @@ class DailyPlanRequestBuilder
       _language = $v.language;
       _lat = $v.lat;
       _lng = $v.lng;
+      _preferenceContext = $v.preferenceContext?.toBuilder();
       _radiusM = $v.radiusM;
+      _selectedPlaceId = $v.selectedPlaceId;
       _$v = null;
     }
     return this;
@@ -113,15 +141,30 @@ class DailyPlanRequestBuilder
   DailyPlanRequest build() => _build();
 
   _$DailyPlanRequest _build() {
-    final _$result = _$v ??
-        _$DailyPlanRequest._(
-          language: language,
-          lat: BuiltValueNullFieldError.checkNotNull(
-              lat, r'DailyPlanRequest', 'lat'),
-          lng: BuiltValueNullFieldError.checkNotNull(
-              lng, r'DailyPlanRequest', 'lng'),
-          radiusM: radiusM,
-        );
+    _$DailyPlanRequest _$result;
+    try {
+      _$result = _$v ??
+          _$DailyPlanRequest._(
+            language: language,
+            lat: BuiltValueNullFieldError.checkNotNull(
+                lat, r'DailyPlanRequest', 'lat'),
+            lng: BuiltValueNullFieldError.checkNotNull(
+                lng, r'DailyPlanRequest', 'lng'),
+            preferenceContext: _preferenceContext?.build(),
+            radiusM: radiusM,
+            selectedPlaceId: selectedPlaceId,
+          );
+    } catch (_) {
+      late String _$failedField;
+      try {
+        _$failedField = 'preferenceContext';
+        _preferenceContext?.build();
+      } catch (e) {
+        throw BuiltValueNestedFieldError(
+            r'DailyPlanRequest', _$failedField, e.toString());
+      }
+      rethrow;
+    }
     replace(_$result);
     return _$result;
   }

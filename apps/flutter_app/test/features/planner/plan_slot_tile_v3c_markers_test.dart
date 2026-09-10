@@ -66,7 +66,7 @@ void main() {
       expect(icon.color, const Color(0xFF0F766E)); // teal token
     });
 
-    testWidgets('closed → red 영업종료/Closed (EN)', (tester) async {
+    testWidgets('closed → red 예상 마감/Est. closed (EN)', (tester) async {
       final slot = LalaPlanSlot(
         period: 'lunch',
         title: 'Lunch',
@@ -76,7 +76,7 @@ void main() {
       await tester.pumpWidget(
         _wrap(PlanSlotTile(slot: slot, language: 'en', onSelectPlace: (_) {})),
       );
-      expect(find.text('Closed'), findsOneWidget);
+      expect(find.text('Est. closed'), findsOneWidget);
       final icon = tester.widget<Icon>(find.byIcon(Icons.cancel_outlined));
       expect(icon.color, const Color(0xFFC53030)); // red token
     });
@@ -96,8 +96,9 @@ void main() {
       expect(icon.color, const Color(0xFF64748B)); // slate token
     });
 
-    testWidgets('null → 미확인/Unknown (honest-empty, never fabricated open)',
-        (tester) async {
+    testWidgets('null → 미확인/Unknown (honest-empty, never fabricated open)', (
+      tester,
+    ) async {
       final slot = LalaPlanSlot(
         period: 'lunch',
         title: '점심',
@@ -206,16 +207,20 @@ void main() {
   });
 
   group('C5 semantics (not color-only)', () {
-    testWidgets('aggregated semantics node includes closure + forecast + AQ',
-        (tester) async {
+    testWidgets('aggregated semantics node includes closure + forecast + AQ', (
+      tester,
+    ) async {
       final slot = LalaPlanSlot(
         period: 'lunch',
         title: '점심',
         place: _place(),
         indoorOutdoor: 'outdoor',
         closureState: 'open',
-        forecastWindow:
-            const LalaForecastItem(time: '11:00', temp: '12°', icon: 'clear'),
+        forecastWindow: const LalaForecastItem(
+          time: '11:00',
+          temp: '12°',
+          icon: 'clear',
+        ),
         airQualityBad: true,
       );
       await tester.pumpWidget(
@@ -230,53 +235,62 @@ void main() {
   });
 
   group('C6 single-language (no mixed-language label)', () {
-    testWidgets('KO renders all markers in Korean, no English leak',
-        (tester) async {
+    testWidgets('KO renders all markers in Korean, no English leak', (
+      tester,
+    ) async {
       final slot = LalaPlanSlot(
         period: 'lunch',
         title: '점심',
         place: _place(),
         indoorOutdoor: 'outdoor',
         closureState: 'closed',
-        forecastWindow:
-            const LalaForecastItem(time: '11:00', temp: '12°', icon: 'clear'),
+        forecastWindow: const LalaForecastItem(
+          time: '11:00',
+          temp: '12°',
+          icon: 'clear',
+        ),
         airQualityBad: true,
       );
       await tester.pumpWidget(
         _wrap(PlanSlotTile(slot: slot, language: 'ko', onSelectPlace: (_) {})),
       );
-      expect(find.text('영업종료'), findsOneWidget);
+      expect(find.text('예상 마감'), findsOneWidget);
       expect(find.text('외부 대기질 나쁨'), findsOneWidget);
       expect(find.text('Open'), findsNothing);
-      expect(find.text('Closed'), findsNothing);
+      expect(find.text('Est. closed'), findsNothing);
       expect(find.text('Outdoor air quality poor'), findsNothing);
     });
 
-    testWidgets('EN renders all markers in English, no Korean leak',
-        (tester) async {
+    testWidgets('EN renders all markers in English, no Korean leak', (
+      tester,
+    ) async {
       final slot = LalaPlanSlot(
         period: 'lunch',
         title: 'Lunch',
         place: _place(name: 'Cafe'),
         indoorOutdoor: 'outdoor',
         closureState: 'closed',
-        forecastWindow:
-            const LalaForecastItem(time: '11:00', temp: '12°', icon: 'clear'),
+        forecastWindow: const LalaForecastItem(
+          time: '11:00',
+          temp: '12°',
+          icon: 'clear',
+        ),
         airQualityBad: true,
       );
       await tester.pumpWidget(
         _wrap(PlanSlotTile(slot: slot, language: 'en', onSelectPlace: (_) {})),
       );
-      expect(find.text('Closed'), findsOneWidget);
+      expect(find.text('Est. closed'), findsOneWidget);
       expect(find.text('Outdoor air quality poor'), findsOneWidget);
-      expect(find.text('영업종료'), findsNothing);
+      expect(find.text('예상 마감'), findsNothing);
       expect(find.text('외부 대기질 나쁨'), findsNothing);
     });
   });
 
   group('C7 honesty marker preserved', () {
-    testWidgets('estimated hours still show (추정)/(est.) with V3 markers',
-        (tester) async {
+    testWidgets('estimated hours still show (추정)/(est.) with V3 markers', (
+      tester,
+    ) async {
       final slot = LalaPlanSlot(
         period: 'lunch',
         title: '점심',
@@ -293,8 +307,9 @@ void main() {
   });
 
   group('C8 existing fields unchanged', () {
-    testWidgets('weatherHint / indoor-outdoor / travel still render',
-        (tester) async {
+    testWidgets('weatherHint / indoor-outdoor / travel still render', (
+      tester,
+    ) async {
       final slot = LalaPlanSlot(
         period: 'lunch',
         title: '점심',
@@ -315,8 +330,9 @@ void main() {
   });
 
   group('C4 overflow-safety + honest-empty', () {
-    testWidgets('no overflow at 393dp with all V3-C markers present',
-        (tester) async {
+    testWidgets('no overflow at 393dp with all V3-C markers present', (
+      tester,
+    ) async {
       await tester.binding.setSurfaceSize(const Size(393, 852));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final slot = LalaPlanSlot(
@@ -340,25 +356,137 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull); // no RenderFlex overflow
-      expect(find.text('영업종료'), findsOneWidget);
+      expect(find.text('예상 마감'), findsOneWidget);
       expect(find.text('14:00 · 31°'), findsOneWidget);
       expect(find.text('외부 대기질 나쁨'), findsOneWidget);
     });
 
-    testWidgets('all V3 null → unknown badge, no forecast, no AQ (honest-empty)',
-        (tester) async {
+    testWidgets(
+      'all V3 null → unknown badge, no forecast, no AQ (honest-empty)',
+      (tester) async {
+        final slot = LalaPlanSlot(
+          period: 'lunch',
+          title: '점심',
+          place: _place(),
+          // All V3 additive fields null (PLAN_FULL_SLOTS off path).
+        );
+        await tester.pumpWidget(
+          _wrap(
+            PlanSlotTile(slot: slot, language: 'ko', onSelectPlace: (_) {}),
+          ),
+        );
+        expect(find.text('미확인'), findsOneWidget); // null → unknown honestly
+        expect(find.textContaining('·'), findsNothing); // no forecast
+        expect(find.textContaining('대기질'), findsNothing); // no AQ
+      },
+    );
+  });
+
+  group('P4 closingSoon badge', () {
+    testWidgets('closingSoon=true renders next to the open badge (KO)', (
+      tester,
+    ) async {
       final slot = LalaPlanSlot(
-        period: 'lunch',
-        title: '점심',
+        period: 'dinner',
+        title: '저녁',
         place: _place(),
-        // All V3 additive fields null (PLAN_FULL_SLOTS off path).
+        closureState: 'open',
+        closingSoon: true,
       );
       await tester.pumpWidget(
         _wrap(PlanSlotTile(slot: slot, language: 'ko', onSelectPlace: (_) {})),
       );
-      expect(find.text('미확인'), findsOneWidget); // null → unknown honestly
-      expect(find.textContaining('·'), findsNothing); // no forecast
-      expect(find.textContaining('대기질'), findsNothing); // no AQ
+      // Open + closing-soon side by side; never the closed label.
+      expect(find.text('영업중'), findsOneWidget);
+      expect(find.text('마감 임박(예상)'), findsOneWidget);
+      expect(find.text('예상 마감'), findsNothing);
+      expect(find.byIcon(Icons.schedule_outlined), findsOneWidget);
     });
+
+    testWidgets('closingSoon=null/false → no badge (honest-empty)', (
+      tester,
+    ) async {
+      for (final value in <bool?>[null, false]) {
+        final slot = LalaPlanSlot(
+          period: 'dinner',
+          title: '저녁',
+          place: _place(),
+          closureState: 'open',
+          closingSoon: value,
+        );
+        await tester.pumpWidget(
+          _wrap(
+            PlanSlotTile(slot: slot, language: 'ko', onSelectPlace: (_) {}),
+          ),
+        );
+        expect(find.text('마감 임박(예상)'), findsNothing, reason: '$value');
+      }
+    });
+
+    testWidgets('closingSoon badge localizes (EN single-language)', (
+      tester,
+    ) async {
+      final slot = LalaPlanSlot(
+        period: 'dinner',
+        title: 'Dinner',
+        place: _place(name: 'Cafe'),
+        closureState: 'open',
+        closingSoon: true,
+      );
+      await tester.pumpWidget(
+        _wrap(PlanSlotTile(slot: slot, language: 'en', onSelectPlace: (_) {})),
+      );
+      expect(find.text('Closing soon (est.)'), findsOneWidget);
+      expect(find.text('마감 임박(예상)'), findsNothing);
+    });
+
+    testWidgets(
+      '320dp + TextScaler.linear(2): all markers incl. closing-soon, no overflow',
+      (tester) async {
+        tester.view.physicalSize = const Size(320, 800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final slot = LalaPlanSlot(
+          period: 'dinner',
+          title: '그레이브릭스커피 고덕점',
+          place: _place(name: '그레이브릭스커피 고덕점'),
+          weatherHint: '오후 한때 소나기',
+          indoorOutdoor: 'outdoor',
+          travelTimeFromPreviousMinutes: 123,
+          estimatedOpeningHours: '07:30-23:30',
+          closureState: 'open',
+          closingSoon: true,
+          forecastWindow: const LalaForecastItem(
+            time: '18:00',
+            temp: '31°',
+            icon: 'rain',
+          ),
+          airQualityBad: true,
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(2)),
+              child: child!,
+            ),
+            home: Scaffold(
+              body: PlanSlotTile(
+                slot: slot,
+                language: 'ko',
+                onSelectPlace: (_) {},
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull); // no RenderFlex overflow
+        expect(find.text('마감 임박(예상)'), findsOneWidget);
+        expect(find.text('영업중'), findsOneWidget);
+        expect(find.text('18:00 · 31°'), findsOneWidget);
+        expect(find.text('외부 대기질 나쁨'), findsOneWidget);
+      },
+    );
   });
 }

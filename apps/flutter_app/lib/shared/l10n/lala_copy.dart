@@ -108,6 +108,29 @@ String liveMapUnavailableLabel(String language) => lalaCopyMulti(
   zhHant: '目前無法顯示地圖。',
 );
 
+/// 오픈 벡터 지도(OpenFreeMap/OpenMapTiles/OSM 기반, 비한국어 로케일) surface의
+/// 접근성 이름.
+String openVectorMapLabel(String language, {bool preview = false}) {
+  if (preview) {
+    return lalaCopyMulti(
+      language,
+      ko: 'LALA 오픈 지도 미리보기',
+      en: 'LALA open map preview',
+      ja: 'LALA オープン地図プレビュー',
+      zhHans: 'LALA 开放地图预览',
+      zhHant: 'LALA 開放地圖預覽',
+    );
+  }
+  return lalaCopyMulti(
+    language,
+    ko: 'LALA 오픈 지도',
+    en: 'LALA open map',
+    ja: 'LALA オープン地図',
+    zhHans: 'LALA 开放地图',
+    zhHant: 'LALA 開放地圖',
+  );
+}
+
 /// 네이버 지도 surface의 접근성 이름.
 String naverMapLabel(String language, {bool preview = false}) {
   if (preview) {

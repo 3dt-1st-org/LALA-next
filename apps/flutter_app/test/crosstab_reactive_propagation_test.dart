@@ -135,7 +135,7 @@ class _PendingPlanBackend implements LalaBackend {
   final Completer<LalaEnvelope<LalaDailyPlan>> _plan =
       Completer<LalaEnvelope<LalaDailyPlan>>();
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() => _plan.future;
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) => _plan.future;
   @override
   Future<LalaEnvelope<LalaIntervention>> getIntervention() =>
       Completer<LalaEnvelope<LalaIntervention>>().future;
@@ -150,7 +150,7 @@ class _PendingPlanBackend implements LalaBackend {
 /// the result into PlanContextStore.
 class _LoadedPlanBackend implements LalaBackend {
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async =>
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async =>
       _envelope(_plan(cacheKey: 'daily_plan:plan-tab'));
   @override
   void close() {}
@@ -166,7 +166,7 @@ class _MapFakeBackend implements LalaBackend {
   Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() async =>
       _envelope(_placesResponse('sig-place', '시그널장소'));
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async =>
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async =>
       _envelope(_plan(cacheKey: 'daily_plan:map-tab'));
   @override
   void close() {}

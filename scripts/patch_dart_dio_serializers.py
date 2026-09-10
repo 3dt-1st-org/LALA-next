@@ -21,8 +21,15 @@ from pathlib import Path
 
 # BuiltValue 모델 클래스 정의 매칭: class Foo ... implements Built<Foo, FooBuilder>
 BUILT_RE = re.compile(r"class\s+(\w+)\b[^{]*\bimplements\s+Built<")
-CAST_RE = re.compile(r"\)\s*as\s+([A-Za-z0-9_<>,\s]+?)\s*;\s*$")
-ASSIGN_RE = re.compile(r"^(\s*)result\.(\w+)\s*=\s*valueDes\s*;\s*$")
+# 후행 cast 캡처. dart-dio 7.12 는 nullable 필드에 `as Foo?;` 를 내므로
+# 후행 `?` 는 제거해서 모델명과 비교한다( CP1: 이 `?` 처리가 빠지면
+# PlanPreferenceContext? 등 nested 모델이 패치되지 않고 invalid_assignment 잔존).
+CAST_RE = re.compile(r"\)\s+as\s+([A-Za-z0-9_<>,\s]+?)\s*\??\s*;\s*$")
+ASSIGN_RE = re.compile(r"^(\s*)result\.(\w+)\s*=\s*valueDes(?:\.toBuilder\(\))?\s*;\s*$")
+# dart-dio 7.12 버그: 정수 enum 기본값을 `const E._(E.number30)` 형태로 내서
+# String name 파라미터에 enum 상수를 넘긴다(const_constructor_param_type_mismatch).
+# built_value 가 생성하는 실제 name 문자열('number30')로 바로잡는다.
+INT_ENUM_DEFAULT_RE = re.compile(r"(const\s+\w+Enum\._\()\w+\.(number\d+)(\))")
 
 
 def collect_built_models(root: Path) -> set[str]:
@@ -43,11 +50,25 @@ def patch_file(path: Path, built_models: set[str]) -> bool:
     for line in lines:
         cast = CAST_RE.search(line)
         if cast:
-            last_cast = cast.group(1).strip().split("<")[0].strip()
+            last_cast = cast.group(1).strip().split("<")[0].removesuffix("?").strip()
         assign = ASSIGN_RE.match(line)
-        if assign and last_cast in built_models:
+        if assign and last_cast is not None:
             indent, field = assign.group(1), assign.group(2)
-            line = f"{indent}result.{field} = valueDes.toBuilder();"
+            # BuiltValue 모델 필드는 toBuilder 필수(generator 누락 버그 #21837),
+            # 반대로 scalar/enum/Date 등은 원본 대입을 유지해야 한다 — dart-dio 가
+            # anyOf nullable 필드에 대해 scalar 에도 toBuilder 를 과다 생성하는
+            # 버그를 되돌린다(스크립트 문서화 동작: "primitive 는 원본 대입 유지").
+            desired = (
+                f"{indent}result.{field} = valueDes.toBuilder();"
+                if last_cast in built_models
+                else f"{indent}result.{field} = valueDes;"
+            )
+            if line != desired:
+                line = desired
+                changed = True
+        fixed = INT_ENUM_DEFAULT_RE.sub(r"\1'\2'\3", line)
+        if fixed != line:
+            line = fixed
             changed = True
         out.append(line)
     if changed:

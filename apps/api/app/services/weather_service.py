@@ -11,6 +11,7 @@ from apps.api.app.core.config import get_settings
 from apps.api.app.core.observability import LOGGER_NAME
 from apps.api.app.services import db_repository, region_catalog
 from apps.api.app.services.dust_quality import (
+    air_quality_outdoor_status,
     build_dust_payload,
     clean_air_quality_value,
     unknown_dust_payload,
@@ -75,6 +76,16 @@ _PROVINCE_REFERENCE_POINTS = {
 def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
     db_weather = db_repository.fetch_latest_weather(lat=lat, lng=lng)
     if db_weather:
+        # P4 provenance: the weather-only status must be captured before the dust
+        # merge overwrites outdoor_status. Only the DB's explicit weather-only
+        # key (flags without is_bad_dust) is a weather observation — a legacy row
+        # without the key carries no weather provenance, so it stays "unknown".
+        # Never inferred from the merged aggregate, icon or temperature.
+        weather_only_status = (
+            _normalize_outdoor_status(db_weather.get("weather_outdoor_status"))
+            if "weather_outdoor_status" in db_weather
+            else "unknown"
+        )
         air_quality = _fetch_airkorea_sido_air_quality(lat=lat, lng=lng)
         if air_quality:
             db_weather["dust"] = air_quality["dust"]
@@ -90,6 +101,14 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
                 db_weather.get("outdoor_status"),
                 air_quality["dust"],
             )
+            db_weather["air_quality_outdoor_status"] = air_quality_outdoor_status(
+                air_quality["dust"]
+            )
+        else:
+            db_weather["air_quality_outdoor_status"] = air_quality_outdoor_status(
+                db_weather.get("dust")
+            )
+        db_weather["weather_outdoor_status"] = weather_only_status
         if not db_weather.get("forecast"):
             db_weather["forecast"] = _derived_forecast_from_observation(db_weather)
         db_weather["force"] = force
@@ -97,6 +116,8 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
 
     official_weather, air_quality = _fetch_official_weather_pair(lat=lat, lng=lng, force=force)
     if official_weather:
+        # KMA-only observation status, captured before the dust merge.
+        weather_only_status = _normalize_outdoor_status(official_weather.get("outdoor_status"))
         if air_quality:
             official_weather["dust"] = air_quality["dust"]
             official_weather["air_quality_location"] = air_quality.get("location")
@@ -110,6 +131,14 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
                 official_weather.get("outdoor_status"),
                 air_quality["dust"],
             )
+            official_weather["air_quality_outdoor_status"] = air_quality_outdoor_status(
+                air_quality["dust"]
+            )
+        else:
+            official_weather["air_quality_outdoor_status"] = air_quality_outdoor_status(
+                official_weather.get("dust")
+            )
+        official_weather["weather_outdoor_status"] = weather_only_status
         return official_weather
     if air_quality:
         weather = {
@@ -130,6 +159,10 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
             "air_quality_location": air_quality.get("location"),
             "air_quality_record_time": air_quality.get("record_time"),
             "source": AIRKOREA_SOURCE,
+            # P4: an AirKorea-only response observed no KMA weather — unknown,
+            # never inferred from the merged status/icon/temperature.
+            "weather_outdoor_status": "unknown",
+            "air_quality_outdoor_status": air_quality_outdoor_status(air_quality["dust"]),
         }
         return weather
 
@@ -143,6 +176,8 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
         "outdoor_status": "unknown",
         "force": force,
         "source": UNAVAILABLE_SOURCE,
+        "weather_outdoor_status": "unknown",
+        "air_quality_outdoor_status": "unknown",
     }
 
 
@@ -473,6 +508,15 @@ def _is_internal_weather_location(value: Any) -> bool:
 
 def _dust_outdoor_status(dust: dict[str, Any]) -> str:
     return "bad" if str(dust.get("grade") or "").strip() in {"bad", "very_bad"} else "good"
+
+
+def _normalize_outdoor_status(value: Any) -> str:
+    # P4: unknown stays unknown — anything outside good/bad/unknown is not a
+    # weather observation we can attribute.
+    text = str(value or "").strip()
+    if text in {"good", "bad", "unknown"}:
+        return text
+    return "unknown"
 
 
 def _merge_outdoor_status_with_dust(status: Any, dust: dict[str, Any]) -> str:

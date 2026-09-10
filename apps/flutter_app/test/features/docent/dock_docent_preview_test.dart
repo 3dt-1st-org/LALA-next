@@ -106,14 +106,15 @@ void main() {
 
   group('honest docent + states', () {
     testWidgets(
-      'without a script shows an honest loading message, no invented text',
+      'without a script shows an honest unavailable message, no invented text',
       (tester) async {
         await tester.pumpWidget(_wrap(_dock(script: null)));
         await tester.pump();
         expect(
-          find.text('도슨트 스크립트를 불러오는 중입니다. 잠시 뒤 다시 확인해 주세요.'),
+          find.text('이 장소의 도슨트 스크립트는 아직 준비되지 않았습니다.'),
           findsOneWidget,
         );
+        expect(find.text('도슨트 스크립트 미제공'), findsOneWidget);
       },
     );
 
@@ -125,9 +126,10 @@ void main() {
       );
       await tester.pump();
       expect(
-        find.text('도슨트 스크립트를 불러오는 중입니다. 잠시 뒤 다시 확인해 주세요.'),
+        find.text('이 장소의 도슨트 스크립트는 아직 준비되지 않았습니다.'),
         findsOneWidget,
       );
+      expect(find.text('도슨트 스크립트 미제공'), findsOneWidget);
       expect(find.textContaining('migration skeleton'), findsNothing);
     });
 
