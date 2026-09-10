@@ -172,13 +172,25 @@ String outdoorLabel(String status, {String language = 'ko'}) {
         zhHans: '注意',
         zhHant: '注意',
       ),
-      _ => status,
+      // Blank omission contract: an empty source stays empty (callers skip
+      // blank segments). Unsupported nonempty statuses must never leak the
+      // raw internal token — an honest localized missing-data label instead.
+      final status when status.trim().isEmpty => status,
+      _ => lalaCopyMulti(
+        language,
+        ko: '정보 없음',
+        en: 'Information unavailable',
+        ja: '情報なし',
+        zhHans: '暂无信息',
+        zhHant: '暫無資訊',
+      ),
     };
   }
   return switch (status) {
     'good' => '좋음',
     'normal' => '보통',
     'bad' => '주의',
-    _ => status,
+    final status when status.trim().isEmpty => status,
+    _ => '정보 없음',
   };
 }

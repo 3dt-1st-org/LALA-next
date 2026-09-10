@@ -15,7 +15,28 @@ String dustGradeLabel(String gradeCode, String gradeKo, String language) {
   // V6: ko 만 KO 등급명 사용. 그 외(en/ja/zh)는 등급 코드의 현지화 라벨.
   if (normalizeLalaLanguage(language) == 'ko') {
     final localizedKo = singleLanguageText(gradeKo, language);
-    return localizedKo ?? gradeCode;
+    if (localizedKo != null) {
+      return localizedKo;
+    }
+    final code = gradeCode.trim();
+    // Blank omission contract: whitespace-only code+missing KO name stays
+    // empty. A KNOWN code with an absent Korean name still gets its correct
+    // known Korean label; only unrecognized nonempty codes fall through to
+    // the honest missing-data label (never the raw token).
+    switch (code) {
+      case '':
+        return gradeCode;
+      case 'good':
+        return '좋음';
+      case 'normal':
+        return '보통';
+      case 'bad':
+        return '나쁨';
+      case 'very_bad':
+        return '매우 나쁨';
+      default:
+        return '정보 없음';
+    }
   }
   if (normalizeLalaLanguage(language) != 'en') {
     return switch (gradeCode.trim()) {
@@ -51,8 +72,17 @@ String dustGradeLabel(String gradeCode, String gradeKo, String language) {
         zhHans: '很差',
         zhHant: '很差',
       ),
+      // Blank stays blank; unsupported nonempty codes get the honest
+      // localized missing-data label instead of the raw internal token.
       final grade when grade.isEmpty => gradeCode,
-      final grade => grade,
+      _ => lalaCopyMulti(
+        language,
+        ko: '정보 없음',
+        en: 'Information unavailable',
+        ja: '情報なし',
+        zhHans: '暂无信息',
+        zhHant: '暫無資訊',
+      ),
     };
   }
   return switch (gradeCode.trim()) {
@@ -61,7 +91,7 @@ String dustGradeLabel(String gradeCode, String gradeKo, String language) {
     'bad' => 'Bad',
     'very_bad' => 'Very bad',
     final grade when grade.isEmpty => gradeKo,
-    final grade => grade,
+    _ => 'Information unavailable',
   };
 }
 
