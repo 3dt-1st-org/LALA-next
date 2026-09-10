@@ -1,0 +1,1207 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-09",
+  "repository": "3dt-1st-org/LALA-next",
+  "state": "completed",
+  "beforeRemoteHeadCount": 68,
+  "plannedDeleteCount": 34,
+  "plannedKeepCount": 34,
+  "openPrs": [
+    {
+      "baseRefName": "geondongkim/fix-runtime-plan-search-20260904",
+      "headRefName": "fix/weather-unknown-localization-20260907",
+      "headRefOid": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+      "isDraft": true,
+      "mergeCommit": null,
+      "mergedAt": null,
+      "number": 206,
+      "state": "OPEN"
+    },
+    {
+      "baseRefName": "main",
+      "headRefName": "geondongkim/fix-runtime-plan-search-20260904",
+      "headRefOid": "a955c2a4377d08553033345373c15216cec4bf94", # pragma: allowlist secret - verified public Git commit ID
+      "isDraft": true,
+      "mergeCommit": null,
+      "mergedAt": null,
+      "number": 187,
+      "state": "OPEN"
+    }
+  ],
+  "bases": {
+    "main": "9e312bb49af7afd981e5bdbbbb314d7d98ddf0e6", # pragma: allowlist secret - verified public Git commit ID
+    "candidate": "8aa184e375f381fa4de0a97bca82ffa3e59ba836" # pragma: allowlist secret - verified public Git commit ID
+  },
+  "branches": [
+    {
+      "sha": "6059535cd971f1d19dffbe7abbd6f214d89ab0d6", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "6059535",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "a4ddb3ffcad4a1b379a6c05d23c1c933a66baea0", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "chore/logto-rebased-on-main",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "92b71199dcac8681a0d859cecd6ee709c569f38a", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "codex/general-openai-docent-mainline",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": [
+        {
+          "number": 66,
+          "state": "CLOSED",
+          "head": "92b71199dcac8681a0d859cecd6ee709c569f38a", # pragma: allowlist secret - verified public Git commit ID
+          "base": "main",
+          "merge": null
+        }
+      ]
+    },
+    {
+      "sha": "a4083ce9a05b8aebde4189e02fd835d4fcf2962f", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "codex/lala-local-signals-spec",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "b19213c77603872815081dc214323c5695884b25", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "codex/lala-terraform-iac",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "2753e9fd989bbc7dc8ff1da928caf95bf6af9d70", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "codex/pr-a-data-ingest",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "9a39077fac3ebfa46d952ee9d60ce0a6bb6edef7", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "codex/pr-b-review-mentions",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "135eb66cb62d0e0a2f43ff36cfc267a76c0b249a", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "codex/pr-c-review-scoring",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "a2560a818654e2bae99649708cda9a7a06c9cfad", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "codex/pr-d-rag-review-chunks",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "1f864f62f506ae48ddfcce628c2532753dc20b4c", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "codex/pr-e-docent-qa-tooling",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "839d940f80ba24f782cfb34c5b8ac69cc67ac77e", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "codex/pr-f-ui-polish",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "daaa5cd4c0c4ba6f34e5c626f99e8469ef687ca7", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "design/ui-ux-improvement-proposal",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "9989e987b47f7e4d62d53e1d439aba1e6f6c7f8e", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "dev",
+      "action": "keep",
+      "reason": "protected-or-open-pr",
+      "prs": []
+    },
+    {
+      "sha": "d9cb85b9cd2f15e0a6b740ec45ef51dc2874ac20", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "docs/stitch-runtime-comparison-update",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 175,
+          "state": "MERGED",
+          "head": "d9cb85b9cd2f15e0a6b740ec45ef51dc2874ac20", # pragma: allowlist secret - verified public Git commit ID
+          "base": "integration/canonical-screen-completion-20260903",
+          "merge": "c09d15755035aa4bda5419324f9e0b981d133055" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 175,
+        "merge": "c09d15755035aa4bda5419324f9e0b981d133055", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "integration/canonical-screen-completion-20260903",
+        "viaSha": "3299e9a732deac0e8efe06972a62a95a91dff302", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          175,
+          181
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-d9cb85b9cd2f"
+    },
+    {
+      "sha": "111211dcf3a837a3ce38bccb2526245ddbb9c97f", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "docs/team-preparation-20260909",
+      "action": "keep",
+      "reason": "protected-or-open-pr",
+      "prs": []
+    },
+    {
+      "sha": "71c22daa7f1afcc2d5a6d396258a5c6a69fc491c", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "feature/canonical-screen-audit-and-gaps",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 174,
+          "state": "MERGED",
+          "head": "71c22daa7f1afcc2d5a6d396258a5c6a69fc491c", # pragma: allowlist secret - verified public Git commit ID
+          "base": "integration/canonical-screen-completion-20260903",
+          "merge": "651b5f245a2eea88acea479f02ff05dd6097fb93" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 174,
+        "merge": "651b5f245a2eea88acea479f02ff05dd6097fb93", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "integration/canonical-screen-completion-20260903",
+        "viaSha": "3299e9a732deac0e8efe06972a62a95a91dff302", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          174,
+          181
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-71c22daa7f1a"
+    },
+    {
+      "sha": "ea787e7e1902ac4afd913544d7ea606cd0e55452", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "feature/naver-collection-continuation-20260906",
+      "action": "delete",
+      "reason": "commit-ancestry",
+      "prs": [
+        {
+          "number": 203,
+          "state": "MERGED",
+          "head": "ea787e7e1902ac4afd913544d7ea606cd0e55452", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "ea787e7e1902ac4afd913544d7ea606cd0e55452" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "commit-ancestry",
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": []
+      },
+      "recoveryTag": "archive/20260909/remote-head-ea787e7e1902"
+    },
+    {
+      "sha": "6fb34265149288397ba707aab24d3591e64b0ba4", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "feature/profile-and-place-routes",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 171,
+          "state": "MERGED",
+          "head": "6fb34265149288397ba707aab24d3591e64b0ba4", # pragma: allowlist secret - verified public Git commit ID
+          "base": "integration/canonical-screen-completion-20260903",
+          "merge": "20d5950098a1dd59e70eee2efd734652bf26d05b" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 171,
+        "merge": "20d5950098a1dd59e70eee2efd734652bf26d05b", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "integration/canonical-screen-completion-20260903",
+        "viaSha": "3299e9a732deac0e8efe06972a62a95a91dff302", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          171,
+          181
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-6fb342651492"
+    },
+    {
+      "sha": "fbc0ba22e46045ebca1f98655492b7d9441debcc", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "feature/round2-broad-product-expansion",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 179,
+          "state": "MERGED",
+          "head": "fbc0ba22e46045ebca1f98655492b7d9441debcc", # pragma: allowlist secret - verified public Git commit ID
+          "base": "integration/canonical-screen-completion-20260903",
+          "merge": "f97215d097acf402f5d41a566916e1cde2298eae" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 179,
+        "merge": "f97215d097acf402f5d41a566916e1cde2298eae", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "integration/canonical-screen-completion-20260903",
+        "viaSha": "3299e9a732deac0e8efe06972a62a95a91dff302", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          179,
+          181
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-fbc0ba22e460"
+    },
+    {
+      "sha": "32b13974943152959acd0ba6bfc383ce22cf4ce0", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "feature/round2-community-trust",
+      "action": "delete",
+      "reason": "commit-ancestry",
+      "prs": [],
+      "proof": {
+        "kind": "commit-ancestry",
+        "viaBranch": "feature/round2-trust-authoring-integration",
+        "viaSha": "a81194a99d44922ea831d6cfaa283eb9012a7e3e", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          180,
+          181
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-32b139749431"
+    },
+    {
+      "sha": "f269c4feef2a0c66b26c9dd9d91f36d773f60cd2", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "feature/round2-local-signals-authoring",
+      "action": "delete",
+      "reason": "commit-ancestry",
+      "prs": [],
+      "proof": {
+        "kind": "commit-ancestry",
+        "viaBranch": "feature/round2-trust-authoring-integration",
+        "viaSha": "a81194a99d44922ea831d6cfaa283eb9012a7e3e", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          180,
+          181
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-f269c4feef2a"
+    },
+    {
+      "sha": "d63064225ea69f5007e20381721ffdc69aa90176", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "feature/round2-plan-resilience-visit-conversion",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "a81194a99d44922ea831d6cfaa283eb9012a7e3e", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "feature/round2-trust-authoring-integration",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 180,
+          "state": "MERGED",
+          "head": "a81194a99d44922ea831d6cfaa283eb9012a7e3e", # pragma: allowlist secret - verified public Git commit ID
+          "base": "integration/canonical-screen-completion-20260903",
+          "merge": "3299e9a732deac0e8efe06972a62a95a91dff302" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 180,
+        "merge": "3299e9a732deac0e8efe06972a62a95a91dff302", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "integration/canonical-screen-completion-20260903",
+        "viaSha": "3299e9a732deac0e8efe06972a62a95a91dff302", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          180,
+          181
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-a81194a99d44"
+    },
+    {
+      "sha": "93df36d9787c58e01aeb87535e05a3b12306befc", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "feature/round2-visitor-access",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "03ae18ace9c99e548b9b84380e2718c95d35e6a0", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "feature/screen-finalization-and-sync",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 173,
+          "state": "MERGED",
+          "head": "03ae18ace9c99e548b9b84380e2718c95d35e6a0", # pragma: allowlist secret - verified public Git commit ID
+          "base": "integration/canonical-screen-completion-20260903",
+          "merge": "55332007304597875201e35dd47d35ab7638d092" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 173,
+        "merge": "55332007304597875201e35dd47d35ab7638d092", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "integration/canonical-screen-completion-20260903",
+        "viaSha": "3299e9a732deac0e8efe06972a62a95a91dff302", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          173,
+          181
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-03ae18ace9c9"
+    },
+    {
+      "sha": "1dc09a74b9704bc60a2c2fe7567be5e4ae69eb30", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "feature/server-travel-preferences",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 169,
+          "state": "MERGED",
+          "head": "1dc09a74b9704bc60a2c2fe7567be5e4ae69eb30", # pragma: allowlist secret - verified public Git commit ID
+          "base": "integration/canonical-screen-completion-20260903",
+          "merge": "52f88cc477ea21e7372f86689623d1e32ce44f08" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 169,
+        "merge": "52f88cc477ea21e7372f86689623d1e32ce44f08", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "integration/canonical-screen-completion-20260903",
+        "viaSha": "3299e9a732deac0e8efe06972a62a95a91dff302", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          169,
+          181
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-1dc09a74b970"
+    },
+    {
+      "sha": "88b9a6467ae12b62525dc632a230eb10f37450ba", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "feature/stitch-functional-gap-expansion",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 178,
+          "state": "MERGED",
+          "head": "88b9a6467ae12b62525dc632a230eb10f37450ba", # pragma: allowlist secret - verified public Git commit ID
+          "base": "integration/canonical-screen-completion-20260903",
+          "merge": "f6067a4a5f9fb3a54399c36f3bdb359be97bc02e" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 178,
+        "merge": "f6067a4a5f9fb3a54399c36f3bdb359be97bc02e", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "integration/canonical-screen-completion-20260903",
+        "viaSha": "3299e9a732deac0e8efe06972a62a95a91dff302", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          178,
+          181
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-88b9a6467ae1"
+    },
+    {
+      "sha": "dce728b067d98cc93e6ace5a0e418d0cc2774dce", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "feature/trip-library-and-overrides",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 172,
+          "state": "MERGED",
+          "head": "dce728b067d98cc93e6ace5a0e418d0cc2774dce", # pragma: allowlist secret - verified public Git commit ID
+          "base": "integration/canonical-screen-completion-20260903",
+          "merge": "a645f3c2e25365db2f76a262c4a36dafd6aede6f" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 172,
+        "merge": "a645f3c2e25365db2f76a262c4a36dafd6aede6f", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "integration/canonical-screen-completion-20260903",
+        "viaSha": "3299e9a732deac0e8efe06972a62a95a91dff302", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          172,
+          181
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-dce728b067d9"
+    },
+    {
+      "sha": "e9a356661f07e94baf0986aea5c123deb17241bc", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "fix/logto-session-profile",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "cd8488dd8cf1b1c2e7052185f4cf3918cdf71e3c", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "fix/open-map-attribution-20260906",
+      "action": "delete",
+      "reason": "commit-ancestry",
+      "prs": [
+        {
+          "number": 204,
+          "state": "MERGED",
+          "head": "cd8488dd8cf1b1c2e7052185f4cf3918cdf71e3c", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "cd8488dd8cf1b1c2e7052185f4cf3918cdf71e3c" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "commit-ancestry",
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": []
+      },
+      "recoveryTag": "archive/20260909/remote-head-cd8488dd8cf1"
+    },
+    {
+      "sha": "a955c2a4377d08553033345373c15216cec4bf94", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "fix/restaurant-entry-paint-20260907",
+      "action": "delete",
+      "reason": "commit-ancestry",
+      "prs": [
+        {
+          "number": 205,
+          "state": "MERGED",
+          "head": "a955c2a4377d08553033345373c15216cec4bf94", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "a955c2a4377d08553033345373c15216cec4bf94" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "commit-ancestry",
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": []
+      },
+      "recoveryTag": "archive/20260909/remote-head-a955c2a4377d"
+    },
+    {
+      "sha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "fix/weather-unknown-localization-20260907",
+      "action": "keep",
+      "reason": "protected-or-open-pr",
+      "prs": [
+        {
+          "number": 206,
+          "state": "OPEN",
+          "head": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": null
+        }
+      ]
+    },
+    {
+      "sha": "c567d357e2ca10d8b30949d46a09910b72e532c3", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "fix/web-map-smoke-iframe-20260904",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 182,
+          "state": "MERGED",
+          "head": "c567d357e2ca10d8b30949d46a09910b72e532c3", # pragma: allowlist secret - verified public Git commit ID
+          "base": "main",
+          "merge": "1e16a355c6e54c72090e6dfe219c81e34587831d" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 182,
+        "merge": "1e16a355c6e54c72090e6dfe219c81e34587831d", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "main",
+        "viaSha": "9e312bb49af7afd981e5bdbbbb314d7d98ddf0e6", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          182
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-c567d357e2ca"
+    },
+    {
+      "sha": "e2efc276b85bb4acab91399208dc9a68045c45c0", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/feature-community-durability-20260905",
+      "action": "delete",
+      "reason": "commit-ancestry",
+      "prs": [
+        {
+          "number": 201,
+          "state": "MERGED",
+          "head": "e2efc276b85bb4acab91399208dc9a68045c45c0", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "4497e620f2186d00354ac749c7417c494327e39a" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "commit-ancestry",
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": []
+      },
+      "recoveryTag": "archive/20260909/remote-head-e2efc276b85b"
+    },
+    {
+      "sha": "0167d2eb8dca6d9c775d42db25ea7bda3f26031d", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/feature-lala-onboarding-language-entry-20260827",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": [
+        {
+          "number": 156,
+          "state": "CLOSED",
+          "head": "0167d2eb8dca6d9c775d42db25ea7bda3f26031d", # pragma: allowlist secret - verified public Git commit ID
+          "base": "codex/lala-service-functional-spec-20260826",
+          "merge": null
+        }
+      ]
+    },
+    {
+      "sha": "23106ad4e0f7bb3c7b57dc5fe6767d9d4ee59676", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/feature-lala-search-region-context-20260827",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": [
+        {
+          "number": 155,
+          "state": "CLOSED",
+          "head": "23106ad4e0f7bb3c7b57dc5fe6767d9d4ee59676", # pragma: allowlist secret - verified public Git commit ID
+          "base": "codex/lala-service-functional-spec-20260826",
+          "merge": null
+        }
+      ]
+    },
+    {
+      "sha": "8011234acea89cf4d44b9eb2b84014dffb650816", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/feature-localized-open-map-provider-20260905",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 197,
+          "state": "MERGED",
+          "head": "8011234acea89cf4d44b9eb2b84014dffb650816", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "7520f05d5c0faca755d0fc83dd7b6211d614d4ec" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 197,
+        "merge": "7520f05d5c0faca755d0fc83dd7b6211d614d4ec", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          197
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-8011234acea8"
+    },
+    {
+      "sha": "45fda2d2b8ebeb9290bdcd29d7a9d8371c9e4b2d", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/feature-round2-docent-polish",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "fe3f7012a427d8749fa3add97aa3dceddc04e141", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/feature-round2-signals-community",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "490c6f3d6bdc4b6279a9ef5fff5a56ef7d583d3f", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/fix-account-sync-resume-20260905",
+      "action": "delete",
+      "reason": "commit-ancestry",
+      "prs": [
+        {
+          "number": 199,
+          "state": "MERGED",
+          "head": "490c6f3d6bdc4b6279a9ef5fff5a56ef7d583d3f", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "be62036c828b7f3ac5aa98d41198b64ed848d18b" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "commit-ancestry",
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": []
+      },
+      "recoveryTag": "archive/20260909/remote-head-490c6f3d6bdc"
+    },
+    {
+      "sha": "feb47b6336d78560c8110ab34908b01045fce170", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/fix-ios-flutter-tts-pod-lock-20260905",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 196,
+          "state": "MERGED",
+          "head": "feb47b6336d78560c8110ab34908b01045fce170", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "b6cf646ec9232a85ad59046408470cbcd33569a7" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 196,
+        "merge": "b6cf646ec9232a85ad59046408470cbcd33569a7", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          196
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-feb47b6336d7"
+    },
+    {
+      "sha": "fb54d0f28484fa5f0704c82324f4d00df02e2970", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/fix-logto-account-sync",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 170,
+          "state": "MERGED",
+          "head": "fb54d0f28484fa5f0704c82324f4d00df02e2970", # pragma: allowlist secret - verified public Git commit ID
+          "base": "integration/canonical-screen-completion-20260903",
+          "merge": "9b2d6c04efedbb145c4aeaf6b2669648872a63d1" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 170,
+        "merge": "9b2d6c04efedbb145c4aeaf6b2669648872a63d1", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "integration/canonical-screen-completion-20260903",
+        "viaSha": "3299e9a732deac0e8efe06972a62a95a91dff302", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          170,
+          181
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-fb54d0f28484"
+    },
+    {
+      "sha": "f49755e04e2351504057c57479d8387a03344b26", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/fix-native-map-locale-transition-20260906",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 200,
+          "state": "MERGED",
+          "head": "f49755e04e2351504057c57479d8387a03344b26", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "8e33a08f9409fcd95cb1155c21e885cd9c96f143" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 200,
+        "merge": "8e33a08f9409fcd95cb1155c21e885cd9c96f143", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          200
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-f49755e04e23"
+    },
+    {
+      "sha": "705579c05e6b435134e93942a97c33b05b605422", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/fix-place-reason-local-time-20260906",
+      "action": "delete",
+      "reason": "commit-ancestry",
+      "prs": [
+        {
+          "number": 202,
+          "state": "MERGED",
+          "head": "705579c05e6b435134e93942a97c33b05b605422", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "4d6d1ac3c1cf9e12334fe09794e93e37bf2d8882" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "commit-ancestry",
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": []
+      },
+      "recoveryTag": "archive/20260909/remote-head-705579c05e6b"
+    },
+    {
+      "sha": "72a582bea7a5c842389ec6348e2bcb035683914c", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/fix-runtime-evidence-gaps-20260904",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 183,
+          "state": "MERGED",
+          "head": "72a582bea7a5c842389ec6348e2bcb035683914c", # pragma: allowlist secret - verified public Git commit ID
+          "base": "main",
+          "merge": "00755cf2853589d5240d89a65508661ecc1db052" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 183,
+        "merge": "00755cf2853589d5240d89a65508661ecc1db052", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "main",
+        "viaSha": "9e312bb49af7afd981e5bdbbbb314d7d98ddf0e6", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          183
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-72a582bea7a5"
+    },
+    {
+      "sha": "a955c2a4377d08553033345373c15216cec4bf94", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/fix-runtime-plan-search-20260904",
+      "action": "keep",
+      "reason": "protected-or-open-pr",
+      "prs": [
+        {
+          "number": 187,
+          "state": "OPEN",
+          "head": "a955c2a4377d08553033345373c15216cec4bf94", # pragma: allowlist secret - verified public Git commit ID
+          "base": "main",
+          "merge": null
+        }
+      ]
+    },
+    {
+      "sha": "d54a36b85086e9a7be2b574578f047457b40ffe0", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/fix-runtime-truthfulness-20260905",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 198,
+          "state": "MERGED",
+          "head": "d54a36b85086e9a7be2b574578f047457b40ffe0", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "b5455a942b9af98160fb6c0df4fbc4a01fcda163" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 198,
+        "merge": "b5455a942b9af98160fb6c0df4fbc4a01fcda163", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          198
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-d54a36b85086"
+    },
+    {
+      "sha": "9aa12472305157bf5d6d1d2eef13cfde99db7866", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/integrate-p4-closing-soon-20260905",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 192,
+          "state": "MERGED",
+          "head": "9aa12472305157bf5d6d1d2eef13cfde99db7866", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "71062d58f0e779f9c1f711c70c0a8b97f2ac9080" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 192,
+        "merge": "71062d58f0e779f9c1f711c70c0a8b97f2ac9080", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          192
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-9aa124723051"
+    },
+    {
+      "sha": "e14ae0cac1e818c07b02d962b607f37f81458a03", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/integrate-p6a-offline-qa-20260905",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 194,
+          "state": "MERGED",
+          "head": "e14ae0cac1e818c07b02d962b607f37f81458a03", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "50548786621b6ab98a53161664206c9e967da0bb" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 194,
+        "merge": "50548786621b6ab98a53161664206c9e967da0bb", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          194
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-e14ae0cac1e8"
+    },
+    {
+      "sha": "591f8d8374efa58d4b2ec094ccb2c7dbdebda087", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/integrate-p7-community-hardening-20260905",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 193,
+          "state": "MERGED",
+          "head": "591f8d8374efa58d4b2ec094ccb2c7dbdebda087", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "415477ce55910e31e757421cd33d535e90a1bf45" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 193,
+        "merge": "415477ce55910e31e757421cd33d535e90a1bf45", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          193
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-591f8d8374ef"
+    },
+    {
+      "sha": "8c648a1986a6671db9c9d129ea1f95e14abadc48", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/lala-cleanroom-program",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": [
+        {
+          "number": 61,
+          "state": "MERGED",
+          "head": "2eb9c064a766388c23381d3ca4dd03357c521bce", # pragma: allowlist secret - verified public Git commit ID
+          "base": "main",
+          "merge": "a785c6585d7a52db1be759aa3091d07ac6ca2f4f" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ]
+    },
+    {
+      "sha": "4c50fa01df36b2af6204a6d4593480ea6e2b4307", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/lala-plan-review-ingestion",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": [
+        {
+          "number": 59,
+          "state": "MERGED",
+          "head": "d41b8875852da6f9e4549deba832bce9bf1ed869", # pragma: allowlist secret - verified public Git commit ID
+          "base": "main",
+          "merge": "f3ff880a306f9f323001619840cbb53448286e8f" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ]
+    },
+    {
+      "sha": "19baad4c8b83fa9151604027c010fb6c2703d5ef", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/lala-review-ingestion-foundation",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": [
+        {
+          "number": 60,
+          "state": "MERGED",
+          "head": "e250500ca637a473d9d2a52974c2932120f6a2da", # pragma: allowlist secret - verified public Git commit ID
+          "base": "main",
+          "merge": "970922c5398b9c5bd5235dd30178f3fce2a9d144" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ]
+    },
+    {
+      "sha": "3c79ab83516ce0eff14fed0a7984ab06b02abc7d", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/lala-zai-implementation",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "55ea871d715c4deeded18520cff9aeef67d87187", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/p4-air-quality-integration-20260905",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 191,
+          "state": "MERGED",
+          "head": "55ea871d715c4deeded18520cff9aeef67d87187", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "4111feb5b2a9df5fffe47a209b1e5a66ce6dce8e" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 191,
+        "merge": "4111feb5b2a9df5fffe47a209b1e5a66ce6dce8e", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          191
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-55ea871d715c"
+    },
+    {
+      "sha": "a7d8bb4d36261702602150d40d079e3299b71989", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/p4-closing-soon-20260905",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "d378acd20e6c5a0caa4b7fa501e1178404f16254", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/p4-distinct-air-quality-20260905",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "c91a42dc0eb3631e4ef091da54483ad1ed77910f", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/p6-docent-judge-contract-20260905",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "8f78f7a53048682a61ee89ee695289a6fa5b9355", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/p6-offline-qa-foundation-20260905",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "78e55c1fea7ca82d3f0f62bf38c8b4f9d2c48edf", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/p6b-docent-judge-integration-20260905",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 195,
+          "state": "MERGED",
+          "head": "78e55c1fea7ca82d3f0f62bf38c8b4f9d2c48edf", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "0041d0c9de6fdc8daf2e34d546b69439cf948875" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 195,
+        "merge": "0041d0c9de6fdc8daf2e34d546b69439cf948875", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          195
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-78e55c1fea7c"
+    },
+    {
+      "sha": "bc60dbf1ba65d3a153c357a4d8a580b7662d995c", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/p7-community-write-guards-20260905",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "5dbabe86cbd63776ea9d5caffc4a329557a4e1a6", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/p7-feed-epoch-20260905",
+      "action": "keep",
+      "reason": "not-proven-merged",
+      "prs": []
+    },
+    {
+      "sha": "18bc64b6423836405e7e68000fb06b244f372e5f", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/preference-aware-plans-20260905",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 188,
+          "state": "MERGED",
+          "head": "18bc64b6423836405e7e68000fb06b244f372e5f", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "2039cc6802bb42b7424b14189bb7668736f66cb5" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 188,
+        "merge": "2039cc6802bb42b7424b14189bb7668736f66cb5", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          188
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-18bc64b64238"
+    },
+    {
+      "sha": "81ac1fd326268dabcde025254992aef34dae5c74", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/restaurant-communication-20260905",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 189,
+          "state": "MERGED",
+          "head": "81ac1fd326268dabcde025254992aef34dae5c74", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "f1338d8fcac00f75392dbfd1e9d37b2ab37f5146" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 189,
+        "merge": "f1338d8fcac00f75392dbfd1e9d37b2ab37f5146", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          189
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-81ac1fd32626"
+    },
+    {
+      "sha": "4ccc4944f7883110c94fe1e7b960b2f20c24c4c7", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "geondongkim/weather-observed-time-20260905",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 190,
+          "state": "MERGED",
+          "head": "4ccc4944f7883110c94fe1e7b960b2f20c24c4c7", # pragma: allowlist secret - verified public Git commit ID
+          "base": "geondongkim/fix-runtime-plan-search-20260904",
+          "merge": "495d74bf39d6edbd3e5171e2a29fcc99471e2d6e" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 190,
+        "merge": "495d74bf39d6edbd3e5171e2a29fcc99471e2d6e", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "fix/weather-unknown-localization-20260907",
+        "viaSha": "8aa184e375f381fa4de0a97bca82ffa3e59ba836", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          190
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-4ccc4944f788"
+    },
+    {
+      "sha": "3299e9a732deac0e8efe06972a62a95a91dff302", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "integration/canonical-screen-completion-20260903",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 181,
+          "state": "MERGED",
+          "head": "3299e9a732deac0e8efe06972a62a95a91dff302", # pragma: allowlist secret - verified public Git commit ID
+          "base": "main",
+          "merge": "75b96632a8e73b42164ebdbca5d367b248ba6d02" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 181,
+        "merge": "75b96632a8e73b42164ebdbca5d367b248ba6d02", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "main",
+        "viaSha": "9e312bb49af7afd981e5bdbbbb314d7d98ddf0e6", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          181
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-3299e9a732de"
+    },
+    {
+      "sha": "6e9782a3f3dcc150902942826754f94642af266e", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "integration/lala-consolidation-20260805",
+      "action": "delete",
+      "reason": "merged-pr-exact-head",
+      "prs": [
+        {
+          "number": 107,
+          "state": "MERGED",
+          "head": "6e9782a3f3dcc150902942826754f94642af266e", # pragma: allowlist secret - verified public Git commit ID
+          "base": "main",
+          "merge": "a79294e17ed9a6ecae41faa4caac428af4276a1d" # pragma: allowlist secret - verified public Git commit ID
+        }
+      ],
+      "proof": {
+        "kind": "merged-pr-exact-head",
+        "pr": 107,
+        "merge": "a79294e17ed9a6ecae41faa4caac428af4276a1d", # pragma: allowlist secret - verified public Git commit ID
+        "viaBranch": "main",
+        "viaSha": "9e312bb49af7afd981e5bdbbbb314d7d98ddf0e6", # pragma: allowlist secret - verified public Git commit ID
+        "mergeChain": [
+          107
+        ]
+      },
+      "recoveryTag": "archive/20260909/remote-head-6e9782a3f3dc"
+    },
+    {
+      "sha": "9e312bb49af7afd981e5bdbbbb314d7d98ddf0e6", # pragma: allowlist secret - verified public Git commit ID
+      "branch": "main",
+      "action": "keep",
+      "reason": "protected-or-open-pr",
+      "prs": []
+    }
+  ],
+  "execution": {
+    "beforeRemoteHeadCount": 68,
+    "afterRemoteHeadCount": 34,
+    "deletedBranchCount": 34,
+    "recoveryTagCount": 34,
+    "recoveryTagsVerifiedBeforeDeletion": true,
+    "exactHeadLeasesUsed": true,
+    "atomicDeletionSucceeded": true,
+    "keptHeadsUnchangedDuringDeletion": true,
+    "openPrsPreserved": [
+      187,
+      206
+    ],
+    "localWorktreesRemoved": 0,
+    "productImplementationStarted": false
+  }
+}

@@ -1,0 +1,21 @@
+# Session A progress — P1 account & server preference races/recovery
+
+## Phase
+CORRECTION COMPLETE (rev 2) — PR #199 at 77d94637, all CI green.
+Authoritative report: output/local/session-a-account-sync-completion-report-20260906.md
+
+## Heads
+- Base: b5455a942b9af98160fb6c0df4fbc4a01fcda163 (#187 branch geondongkim/fix-runtime-plan-search-20260904)
+- HEAD: 77d94637 (85bbe065 token fence; 51f7d014 save fence; 77d94637 guarded local mutations), pushed
+
+## Round 2 (independent-verification correction)
+- Q1 refetch epoch-recheck, Q2a generation-guarded adoption, Q3 fenced clear, Q4 PUT pairing re-derivation,
+  initial-load guard, use-account concurrency; 9 new expected-correct regressions in
+  travel_preferences_correction_race_test.dart.
+- Focused auth+preferences 112 green; full flutter test 1201 green; analyze clean; pre-commit passed;
+  CI (api/flutter/unix) all PASS at 77d94637. First report's false no-unresolved claim and elapsed
+  estimate corrected in the report (git timestamps).
+
+## Next
+- Runtime verifier steps unchanged (real Logto login, live token refresh, device A/B switch, throttled
+  save/logout interleavings). No production caller for clear(); boundary documented.
