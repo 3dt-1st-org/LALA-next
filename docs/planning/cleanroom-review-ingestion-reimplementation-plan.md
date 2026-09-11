@@ -15,7 +15,10 @@
 > LALA-next tree in this worktree.
 >
 > Reconciliation note (2026-08-19, corrected 2026-08-22 and 2026-08-24,
-> re-verified 2026-09-08 against PR #60's merged migration + service source):
+> re-verified 2026-09-08 against PR #60's merged migration + service source,
+> and re-verified 2026-09-11 against PR #60's foundation worktree
+> (`geondongkim/lala-review-ingestion-foundation`) and the current
+> `origin/main` canonical sequence):
 > this revision aligns the plan with the approved contract decisions and with
 > PR #60's **merged** foundation (`062_review_ingestion_governance.sql` +
 > `apps/api/app/services/review_ingest_governance.py`). Locked facts it
@@ -89,7 +92,7 @@ review text** to end users.
 | **Aggregate evidence** | Weekly, place-level rolled-up counts/sentiment/attributes — the only form that feeds scoring/RAG/UI. |
 | **Docent lane** | `AZURE_OPENAI_DOCENT_DEPLOYMENT` (`gpt-5.4-mini`) — generation, QA, recheck. Unchanged by this plan (§16, §22). |
 | **Bulk lane** | `AZURE_OPENAI_REVIEW_BATCH_DEPLOYMENT` (`gpt-5.4-nano`) — extraction, normalization, ad classification. Unchanged by this plan (§14, §15, §22). |
-| **Governance foundation** | `062_review_ingestion_governance.sql` + `apps/api/app/services/review_ingest_governance.py` (PR #60) — source registry, run ledger, aggregate-only receipts/dedupe, typed quarantine. DB governance only; **no external-provider calls**. |
+| **Governance foundation** | `062_review_ingestion_governance.sql` + `apps/api/app/services/review_ingest_governance.py` (PR #60) — source registry (`ingest.review_sources`), run ledger, aggregate-only receipts/dedupe, typed quarantine. DB governance only; **no external-provider calls**. |
 
 Out of scope (owned by sibling plans, consumed only via their contracts):
 scoring weights (`local-value-v2`), day-plan scheduling, map clustering,
@@ -773,8 +776,11 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
 
 > **Migration-numbering rule (locked):** `062` is already in use by
 > `062_review_ingestion_governance.sql` on `main`, and the canonical sequence on
-> `main` has since continued past it (at the time of this revision, through
-> `067_community_post_reports.sql`). The TARGET items above therefore carry
+> `main` has since continued past it (as re-verified 2026-09-11 against
+> `origin/main`, through `068_community_chat_durable_controls.sql`; the
+> earlier "through `067_community_post_reports.sql`" anchor in this note was
+> already stale when written, since `068` had landed on `main` beforehand).
+> The TARGET items above therefore carry
 > **no number — not even a document-list position that could be misread as one**:
 > each takes the next free canonical number at the time it is implemented,
 > chosen against `sql/canonical/` on `main` at implementation time — never a
