@@ -178,7 +178,7 @@ eval fixtures.
 
 All migrations flow through `apps/api/app/services/canonical_sql.py`
 (`load_canonical_sql_plan`, `scan_sql_safety`, `execute_canonical_sql`), which
-loads the ordered `sql/canonical/*.sql` set (baseline `000`→`067` on `main`,
+loads the ordered `sql/canonical/*.sql` set (baseline `000`→`068` on `main`,
 pinned by `CANONICAL_MIGRATION_ORDER`; `require_baseline` fails on drift) and
 rejects unsafe statements.
 
@@ -188,14 +188,14 @@ is the current review-governance foundation and is already on `main`;
 **already taken** by unrelated merged work, and the canonical sequence on
 `main` has since continued past them (`065_user_travel_preferences.sql`,
 `066_trip_library_and_visit_feedback.sql`,
-`067_community_post_reports.sql`), so **no slice in this program may claim
-`063`–`067`**. `068_community_chat_durable_controls.sql` is in flight — the
-community-chat durable-controls lane (PR #201) authored it and merged onto open
-draft PR #187's branch, which targets `main` — so `068` is treated as taken
-too. The **aggregate-only persistent receipt/dedupe plus the DB-backed source
-gate** — the item earlier drafts held out as a separate migration — **shipped
-inside `062`** (see below), so it consumes no number of its own. The next
-review-data migration is therefore the `travel.place_enrichments`
+`067_community_post_reports.sql`, and
+`068_community_chat_durable_controls.sql` — the durable-controls lane's PRs
+#187/#201 have merged), so **no slice in this program may claim
+`063`–`068`**. The **aggregate-only persistent receipt/dedupe plus the
+DB-backed source gate** — the item earlier drafts held out as a separate
+migration — **shipped inside `062`** (see below), so it consumes no number of
+its own. The next review-data migration is therefore the
+`travel.place_enrichments`
 replay-audit uniqueness slice, and it takes the **first free number after
 `062`–`068`, which is `069`**; the subsequent RAG, planner, and facet
 migrations below carry `070`–`072` so every number in this program stays
@@ -225,7 +225,10 @@ and do not consume these numbers.)
   for a rejected license class, `source_disabled`, `source_not_registered`,
   `source_provider_mismatch`, `source_terms_mismatch`) and
   runs source-gate → run → receipt → quarantine → finalize inside one transaction
-  (`persist_review_ingest_run` / `govern_review_ingest_on_cursor`). Source
+  (`persist_review_ingest_run`, as PR #60 ships it; a later post-#60 refactor on
+  `main` added the cursor-taking `govern_review_ingest_on_cursor` variant for
+  callers that co-locate the aggregate upsert in the same transaction — the
+  one-transaction guarantee holds in both forms). Source
   registration itself (`register_review_source`) is a separate idempotent
   admin-only operation in its **own** transaction — an operator action, not part
   of the worker batch boundary, and deliberately exposed by no public endpoint.
@@ -259,7 +262,7 @@ assigned a migration number until the legal/retention/access decision (DG-11)
 clears. Raw review bodies are not stored, served, logged, or embedded anywhere
 (§4.4). Earlier drafts proposed a raw-retention migration; that proposal is
 superseded — do not renumber it into the canonical sequence (numbers `062`–`068`
-are already in use on `main` or claimed in flight).
+are already in use on `main`).
 
 No wave may introduce a migration out of this order or bypass `scan_sql_safety`.
 
@@ -395,7 +398,7 @@ possible). All migrations are listed in §3.2.
 
 | Slice | Scope (smallest mergeable) | Tests | Live-data acceptance | Rollback / flag | Risk / dependency |
 | --- | --- | --- | --- | --- | --- |
-| **W0-a Migration-runner contract** | **Shipped on `main`**: `canonical_sql.py` pins `CANONICAL_MIGRATION_ORDER` (baseline `000`→`067`, `require_baseline` fails on drift) and `test_canonical_sql.py` asserts ordering, numeric determinism, duplicate-prefix rejection, and `scan_sql_safety` in CI. No new table. | `scan_sql_safety` runs in CI; ordering test green. | N/A (no data). | None (governance only). | Low. Blocks W1–W5 from shipping migrations. |
+| **W0-a Migration-runner contract** | **Shipped on `main`**: `canonical_sql.py` pins `CANONICAL_MIGRATION_ORDER` (baseline `000`→`068`, `require_baseline` fails on drift) and `test_canonical_sql.py` asserts ordering, numeric determinism, duplicate-prefix rejection, and `scan_sql_safety` in CI. No new table. | `scan_sql_safety` runs in CI; ordering test green. | N/A (no data). | None (governance only). | Low. Blocks W1–W5 from shipping migrations. |
 | **W0-b Model-role router** | **Shipped on `main`** (PR #68): `apps/api/app/services/model_client.py` with pure `resolve(role)`/`resolve_all()` over `ModelRole = {review_bulk, review_recheck, docent, docent_qa, place_enrichment, embedding}`, `config.py` `model_role_overrides` fed from env `LALA_MODEL_ROLE_<ROLE>`, legacy role aliases + legacy `openai_*_model` settings fields honored. **No prompt copy; `resolve()` never constructs an SDK client.** | Router resolves each role to `(role, provider, model_id, client)` metadata; defaults = `gpt-5.4-nano` / `gpt-5.4-mini` / `text-embedding-3-small`. | `LALA_ENABLE_LIVE_AI=false` keeps offline; resolve() works without keys. | No live-call behavior changes until a caller boundary is enabled. | Medium. Touched by W2/W3/W4. |
 | **W0-c Feature-flag registry** | **Shipped on `main`** (PR #70): `apps/api/app/core/feature_flags.py::FEATURE_FLAG_REGISTRY` is the single typed namespace for every rollout control named by the W1–W6 slices below (each with `LALA_`-prefixed env input, default `false`/current behavior, and slice owner); absent variables resolve to the listed current behavior and invalid typed overrides fail closed. | Flag-default test asserts no-op deploy (`test_feature_flags.py` on `main`). | N/A. | Flags off = today. | Low. Prevents flag-name collisions across waves. |
 | **W0-d Safety-contract test spine** | **Shipped on `main`** (PR #71): `test_safety_contracts.py` now carries the cross-cutting assertions — no-raw-text-in-RAG/docent (incl. an approved-source fixture proving raw blog text quarantines before aggregation), no-PII-in-aggregates, no-secrets-in-logs, fail-closed place reads, plus the pre-existing secret/deploy/smoke contracts. Waves extend this spine; it is the §9 DoD backbone. | Spine green on `main`; new gaps land red-first. | N/A (contract). | None. | Low. |
@@ -415,7 +418,7 @@ possible). All migrations are listed in §3.2.
 
 | Slice | Scope | Tests | Live-data acceptance | Rollback / flag | Risk / dependency |
 | --- | --- | --- | --- | --- | --- |
-| **W2-a Review-ingest governance foundation (`062`)** | Shipped as `062_review_ingestion_governance.sql` + `review_ingest_governance.py` (on `main`; landed with PR #60 and hardened by later merges — organic-status quarantine codes, full-digest `aggregate_key`, atomic receipts, retry-safe `received_count` on run resume and `register_review_source` connection close, PR #141): `ingest.review_sources` provenance registry + the DB-authoritative source gate, the `community.ingest_runs` run-accounting extension (`review_source_name` FK → registered source, `run_key` idempotency, counters, `failure_category`), `ingest.review_ingest_receipts` persistent aggregate-only cross-batch dedupe, and `community.ingest_quarantine` dead-letter. The boundary loads the source row from `ingest.review_sources` and **aborts** a `rejected`/disabled/absent/mismatched source with distinct governance codes (`source_license_rejected`/`source_disabled`/`source_not_registered`/`source_provider_mismatch`/`source_terms_mismatch`; not a quarantine) before any record is accepted; source-gate → run → receipt → quarantine → finalize runs in one transaction (`govern_review_ingest_on_cursor`), while `register_review_source` stays a separate admin-only transaction. **Not an immutable ledger; no raw-body column.** Emits an aggregate-only `ApprovedReviewAggregate` (`extra="forbid"`, `enforce_no_raw_review_text`). | Governance tests (license-gate rejection, cross-run dedupe, quarantine routing, transaction rollback, no-raw-text, resume/rollback edge cases) — on `main` (PR #60 + follow-ups). | A governed batch produces a receipted, counted ledger row without storing raw text. | None (additive schema). | High (privacy/legal). Foundation for W2-c/d/e. |
+| **W2-a Review-ingest governance foundation (`062`)** | Shipped as `062_review_ingestion_governance.sql` + `review_ingest_governance.py` (on `main`; landed with PR #60 and hardened by later merges — organic-status quarantine codes, full-digest `aggregate_key`, atomic receipts, retry-safe `received_count` on run resume and `register_review_source` connection close, PR #141): `ingest.review_sources` provenance registry + the DB-authoritative source gate, the `community.ingest_runs` run-accounting extension (`review_source_name` FK → registered source, `run_key` idempotency, counters, `failure_category`), `ingest.review_ingest_receipts` persistent aggregate-only cross-batch dedupe, and `community.ingest_quarantine` dead-letter. The boundary loads the source row from `ingest.review_sources` and **aborts** a `rejected`/disabled/absent/mismatched source with distinct governance codes (`source_license_rejected`/`source_disabled`/`source_not_registered`/`source_provider_mismatch`/`source_terms_mismatch`; not a quarantine) before any record is accepted; source-gate → run → receipt → quarantine → finalize runs in one transaction (`persist_review_ingest_run`, as PR #60 ships it; the post-#60 `main` refactor `govern_review_ingest_on_cursor` preserves the same guarantee), while `register_review_source` stays a separate admin-only transaction. **Not an immutable ledger; no raw-body column.** Emits an aggregate-only `ApprovedReviewAggregate` (`extra="forbid"`, `enforce_no_raw_review_text`). | Governance tests (license-gate rejection, cross-run dedupe, quarantine routing, transaction rollback, no-raw-text, resume/rollback edge cases) — on `main` (PR #60 + follow-ups). | A governed batch produces a receipted, counted ledger row without storing raw text. | None (additive schema). | High (privacy/legal). Foundation for W2-c/d/e. |
 | **W2-b `travel.place_enrichments` replay-audit uniqueness (`069`)** | **The aggregate receipt + cross-batch dedupe + DB-backed source gate originally proposed here shipped inside `062` (folded into W2-a)** — `ingest.review_ingest_receipts` dedupes on source + external_key + `content_sha256` (no raw text), and the `ingest.review_sources` license gate (`license_class ∈ {licensed, public_processed, approved_export, rejected}`) aborts a `rejected`/disabled/absent/mismatched source up front (distinct `source_license_rejected`/`source_disabled`/`source_not_registered`/`source_provider_mismatch`/`source_terms_mismatch` codes), so this slice is reduced to its remaining target: the additive unique `(place_id, enrichment_type, prompt_version)` on `travel.place_enrichments` (G8 mirror auditing) — the next review-data migration, assigned the first free canonical number (`069`) because `062`–`068` are taken. **No raw-body retention (BLOCKED_EXTERNAL); no external-provider calls.** | Cross-batch dedupe + transaction-rollback + license-gate-rejection + no-raw-text tests already shipped with `062`; this slice adds the place_enrichments uniqueness test. | An aggregate resolves to a `source_run_id` + `license_class`; a `rejected` source is recorded but never processed. | Flags `REVIEW_AGGREGATE_RECEIPT` / `REVIEW_LICENSE_GATE` not needed (shipped in `062`). | Medium. Live acquisition stays BLOCKED_EXTERNAL (DG-1); the gate/receipt are shipped. |
 | **W2-c Quarantine / dead-letter (shipped in `062`) + replay** | `062` ships `community.ingest_quarantine` (typed metadata only — no body column; idempotent dead-letter dedupe via partial unique `(provider, external_key, reason_category) WHERE resolved_at IS NULL`); `review_ingest_governance.py::_insert_quarantine_entries` persists. Replay is TARGET: `--since/--window/--provider/--place-id` on the guarded tools, re-reading normalized `community.posts` + the 062 run ledger (**never a raw store** — BLOCKED_EXTERNAL). | Quarantine-routing test (062); replay idempotency test. | A low-confidence/ambiguous signal is quarantined, not scored. | Flag `REVIEW_QUARANTINE`. | Medium. DG-4 review-queue UI owner. |
 | **W2-d Bulk-lane AI ad classifier + attribute mirror** | Second-pass nano classifier (`review_ai_classifier.py` — contract `{decision, is_ad, is_relevant, ad_confidence, relevance_confidence, reason_code}`, low-confidence → `recheck_required`/not retained; contract + tests on `main`, batch-lane wiring remaining) after deterministic `AD_MARKERS`; mirror attributes to `travel.place_enrichments` (G8; the idempotent mirror insert is on `main` in `review_attribute_batch.py`). `review_quality_score` null when <3 organic (honest absence). | Ad-classifier test; <3-organic-null test; mirror test. | `place_mentions_weekly` + `place_enrichments` carry aligned attributes. | Flag `REVIEW_AI_CLASSIFIER`; `LALA_ENABLE_LIVE_AI`. | Medium. Cost/quota (DG-10). |
@@ -626,7 +629,7 @@ a single PR may carry slices from one owner only (coordinate via §3 pins).
 
 | # | Slice | Owner subsystem | Dependency / decision gate |
 | --- | --- | --- | --- |
-| P0-1 | W0-a migration-runner contract + CI ordering assertion | SQL / platform | **Shipped on `main`**: `canonical_sql.py` pins `CANONICAL_MIGRATION_ORDER` (`000`→`067`, `require_baseline` rejects drift) and `test_canonical_sql.py` runs ordering, determinism, duplicate-prefix, baseline-drift, and `scan_sql_safety` assertions in CI. |
+| P0-1 | W0-a migration-runner contract + CI ordering assertion | SQL / platform | **Shipped on `main`**: `canonical_sql.py` pins `CANONICAL_MIGRATION_ORDER` (`000`→`068`, `require_baseline` rejects drift) and `test_canonical_sql.py` runs ordering, determinism, duplicate-prefix, baseline-drift, and `scan_sql_safety` assertions in CI. |
 | P0-2 | W0-b model-role router (`resolve(role)`) | AI / config | **Shipped on `main`** (PR #68). |
 | P0-3 | W0-c feature-flag registry | Platform / config | **Shipped on `main`** (PR #70). |
 | P0-4 | W0-d safety-contract test spine | QA / test | **Shipped on `main`** (PR #71). |
