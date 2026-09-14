@@ -1,0 +1,25 @@
+flowchart TB
+  identity["identity · 2 tables<br/>계정 연결·탈퇴 식별"]
+  profile["profile · 1 table<br/>기본 취향"]
+  planning["planning · 4 tables<br/>저장·일정·방문·여행 설정"]
+  travel["travel · 5 tables<br/>장소·보강·날씨·도슨트·행사"]
+  ingest["ingest · 3 tables<br/>원본 출처·허용 출처·중복 영수증"]
+  economy["economy · 4 tables<br/>소비·상권·프랜차이즈"]
+  culture["culture · 1 table<br/>문화 행사"]
+  analytics["analytics · 2 tables<br/>상점 분류·추천 점수"]
+  rag["rag · 1 table<br/>근거·임베딩"]
+  community["community · 27 tables<br/>외부 언급·사용자 글·Local Signals·채팅<br/>DB에는 24개 테이블"]
+  ops["ops · 3 tables<br/>작업·의존성·비용"]
+  compat["compat · tables 0 / views 2<br/>이전 API 모양의 조회 투영"]
+  identity --> profile
+  identity --> planning
+  identity --> community
+  ingest --> economy
+  culture -.-> rag
+  community -.-> analytics
+  economy -.-> analytics
+  analytics -.-> travel
+  travel --> rag
+  travel -.-> planning
+  travel -.-> compat
+  ops -.-> ingest
