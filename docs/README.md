@@ -1,5 +1,11 @@
 # LALA 개발 문서
 
+## 환경과 CI/CD 전환
+
+[2026-09-15 Local·CI·Staging·Production 설계](planning/environment-ci-foundation-20260915/README.md)는
+최신 main 조사와 후속 구현 기준이다. 외부 API·비밀 접근, DB migration·seed, 세 개발자의 PR 흐름과 PM 검수를 다룬다.
+문서 작성 완료 상태이며 CI·클라우드·배포 전환은 아직 적용하지 않았다.
+
 ## 팀 공동 개발 준비
 
 [2026-09-09 개발 준비 묶음](planning/team-development-preparation-20260909/README.md)부터 읽는다.

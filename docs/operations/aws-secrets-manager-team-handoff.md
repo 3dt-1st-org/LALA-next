@@ -12,7 +12,7 @@ This is the source-of-truth handoff for LALA runtime secrets and reproducible Fl
 | Developer build role | URL-restricted map client config plus Logto endpoint, audience, public app IDs, and redirect URIs needed for the selected platform | `DB_DSN`, OpenAI, Naver Search API secret, Logto management credentials, API bearer, or public-data keys |
 | Developer workstation | Local `.env` or `.env.local` only when explicitly needed | A copied production runtime env file |
 
-The API resolves each supported setting in this order: process environment, AWS Secrets Manager (`LALA_AWS_SM_PREFIX`, default `lala-next/`), then legacy Azure Key Vault. Normal AWS operation uses the EC2 instance role and individual Secrets Manager values. `LALA_STATIC_SNAPSHOT_FALLBACK=false` remains the normal state; a snapshot is an outage-only read-only fallback, never normal data.
+For runtime secret resolution, follow the [runtime contract](aws-secrets-manager-runtime-contract.md) and `apps/api/app/core/runtime_secrets.py`: `api` and `worker` read registered secrets from AWS Secrets Manager only, using the process IAM role and `LALA_AWS_SM_PREFIX` (default `lala-next/`). They do not fall back to process secret values, dotenv, or Azure Key Vault. `ci` reads explicit test environment values only. `local` prefers process values, optionally reads AWS when `LALA_LOCAL_USE_AWS_SECRETS` is enabled, and retains the legacy Key Vault compatibility path. `LALA_STATIC_SNAPSHOT_FALLBACK=false` remains the normal state; a snapshot is an outage-only read-only fallback, never normal data.
 
 ## Secret inventory and ownership
 
@@ -70,8 +70,9 @@ scripts/unix/flutter_with_build_env.sh \
 ```
 
 The wrapper resolves current process values first, then build-only Secrets
-Manager entries, then `.env.local` and `.env` in isolated subshells. An
-explicit map SSM parameter remains the highest-priority map override. It does
+Manager entries, then `.env.local` and `.env` in isolated subshells. When the
+process map value is empty, an explicit map SSM parameter is tried before
+Secrets Manager. It does
 not read or pass `NAVER_CLIENT_SECRET`, API bearer tokens, DB credentials,
 OpenAI keys, or Logto management secrets. Platform-specific Logto redirect
 names are preferred; legacy shared URI names are compatibility inputs only.

@@ -1,5 +1,11 @@
 # LALA-next
 
+## Local · CI · Staging · Production 전환
+
+[2026-09-15 환경·CI 전환 설계](docs/planning/environment-ci-foundation-20260915/README.md)에서
+최신 main의 현재 구성, 환경별 외부 API·키 접근, DB·seed, 단계별 PR와 웹·앱 검수 절차를 확인한다.
+현재는 **설계 문서 완료 / 구현 대기**다. 기존 main CI 성공 후 운영 자동 배포는 아직 유효하다.
+
 ## 현재 팀 공동 개발 준비
 
 [2026-09-09 준비 문서](docs/planning/team-development-preparation-20260909/README.md)에서
