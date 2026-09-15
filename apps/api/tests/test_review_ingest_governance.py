@@ -1163,6 +1163,73 @@ def test_persist_review_ingest_run_received_count_is_retry_safe_on_resume(monkey
     assert finalized[-1][1] == 3
 
 
+def test_persist_review_ingest_run_resume_same_window_is_idempotent(monkeypatch):
+    """Re-running the SAME window (same run_key) must not double-emit.
+
+    The run row is resumed (same run id), and every receipt already exists
+    from the first run, so the second run emits zero new aggregates and
+    counts the records as duplicates.  This is the cross-run persistent
+    dedupe guarantee for the *same* run_key, complementing the separate-run
+    test which uses a different window.
+    """
+    store: dict[str, object] = {}
+    _install_fake_psycopg2(monkeypatch, store)
+    _prime_happy_source(store)
+
+    record = _record_dict("post-1", seed="stable content")
+    first = governance.persist_review_ingest_run(
+        dsn="postgresql://redacted",
+        source_name=FICTIONAL_SOURCE_NAME,
+        expected_provider=FICTIONAL_PROVIDER,
+        expected_terms_version=TERMS_VERSION,
+        records=[record],
+        window_start=date(2026, 7, 20),  # same window -> same run_key
+    )
+    second = governance.persist_review_ingest_run(
+        dsn="postgresql://redacted",
+        source_name=FICTIONAL_SOURCE_NAME,
+        expected_provider=FICTIONAL_PROVIDER,
+        expected_terms_version=TERMS_VERSION,
+        records=[record],
+        window_start=date(2026, 7, 20),  # SAME window -> resume same run_key
+    )
+
+    assert first.run.processed_count == 1
+    assert len(first.accepted) == 1
+    # Resume: run row reused, receipt already exists -> all replays.
+    assert second.run.processed_count == 0
+    assert second.run.duplicate_count == 1
+    assert second.accepted == ()
+    assert second.accepted_records == ()
+
+
+def test_persist_review_ingest_run_rolls_back_on_receipt_failure(monkeypatch):
+    """Failure during receipt insert must roll back the entire transaction.
+
+    No aggregates are returned, nothing is committed, and the run row
+    write (which happened before receipts) is rolled back by the single
+    transaction boundary.
+    """
+    store: dict[str, object] = {}
+    _install_fake_psycopg2(monkeypatch, store)
+    _prime_happy_source(store)
+    # Fail at the receipt-insert step (after run row is created).
+    store["fail_on"] = "insert into ingest.review_ingest_receipts"
+
+    with pytest.raises(RuntimeError, match="simulated db failure"):
+        governance.persist_review_ingest_run(
+            dsn="postgresql://redacted",
+            source_name=FICTIONAL_SOURCE_NAME,
+            expected_provider=FICTIONAL_PROVIDER,
+            expected_terms_version=TERMS_VERSION,
+            records=[_record_dict("post-1", seed="x")],
+            window_start=date(2026, 7, 20),
+        )
+
+    assert store.get("rolled_back") is True
+    assert store.get("committed") is not True
+
+
 def test_register_review_source_closes_connection_on_failure(monkeypatch):
     """The registration connection must close even when the upsert fails.
 
@@ -1195,3 +1262,25 @@ def test_register_review_source_defaults_connect_timeout(monkeypatch):
     )
     # Same default as persist_review_ingest_run for consistency.
     assert store["connects"] == [("postgresql://redacted", 5)]
+
+
+# --- model invariants: no raw-text field name on any governance model ---
+
+
+@pytest.mark.parametrize(
+    "model_cls",
+    [
+        governance.ReviewIngestResult,
+        governance.ReviewIngestRunSummary,
+        governance.ApprovedReviewAggregate,
+        governance.ReviewQuarantineEntry,
+        governance.QuarantineSafeMetadata,
+    ],
+)
+def test_review_models_carry_no_raw_text_field_names(model_cls):
+    """No governance model field name may shadow a raw-text column."""
+    field_names = set(model_cls.model_fields)
+    assert field_names.isdisjoint(governance.RAW_REVIEW_TEXT_FIELDS), (
+        f"{model_cls.__name__} declares a raw-text field name: "
+        f"{field_names & set(governance.RAW_REVIEW_TEXT_FIELDS)}"
+    )
