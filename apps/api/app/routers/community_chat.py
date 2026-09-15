@@ -65,15 +65,8 @@ CHAT_MESSAGE_REST_LIMIT_PER_MINUTE = 30
 WS_TICKET_LIMIT_PER_MINUTE = 30
 MEMBER_ADD_LIMIT_PER_MINUTE = 20
 
-# Durable WebSocket handshake contract (see P7 devlog/runbook):
-#   * bearer tokens are never accepted on the WebSocket URL — the client
-#     exchanges its OAuth bearer for a short-lived single-use ticket over REST
-#     (``POST /rooms/{room_id}/ws-ticket``) and the ticket is claimed with one
-#     atomic database UPDATE before the socket is accepted;
-#   * browsers send ``Origin`` on every handshake: absent Origin (native
-#     clients) is allowed, an Origin must match the request host (same-origin)
-#     or the configured CORS allowlist;
-#   * frames, frame rate and connection lifetime are bounded.
+# WebSocket auth uses short-lived DB-claimed tickets; Origin, frames, rate, and
+# connection lifetime stay bounded at the socket boundary.
 MAX_FRAME_BYTES = 8192
 WS_IDLE_TIMEOUT_SECONDS = 600
 MAX_CONNECTIONS_PER_ROOM = 200

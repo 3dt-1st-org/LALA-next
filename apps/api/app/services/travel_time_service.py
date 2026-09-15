@@ -1,9 +1,4 @@
-"""Haversine 기반 도보 이동 시간 추정 서비스.
-
-truthfulness: 외부 routing API(travel-time authority)가 없을 때 사용하는
-정직한 추정치. Haversine 직선거리 ÷ 보행 속도(4 km/h ≈ 67 m/min)로 계산하며,
-결과는 "estimated" 라벨과 함께 반환된다. 실측 authority 값이 아님을 명시한다.
-"""
+"""Haversine-based walking-time estimates; never an external routing authority."""
 
 from __future__ import annotations
 
@@ -78,22 +73,8 @@ def live_routing_enabled() -> bool:
 def resolve_travel_time_authority_minutes(
     lat1: float, lng1: float, lat2: float, lng2: float
 ) -> int | None:
-    """V5-C routing seam: authoritative Directions ETA, or honest null.
-
-    This is the travel-time AUTHORITY surface (Kakao/Naver Directions), distinct from
-    the Haversine ESTIMATE (`estimate_walking_minutes`) which stays byte-for-byte.
-
-    - Flag OFF (default) -> None. The Haversine estimate stands alone; no authority.
-    - Flag ON -> still None in V5. Real Kakao/Naver Directions are BLOCKED_EXTERNAL /
-      V7 (contract §3a); the hook is present but the Directions invocation never fires,
-      so the authority stays honestly null rather than guessing a route/ETA.
-
-    The V7 call site is the marked branch below. It must ship no network/paid call in V5.
-    """
+    """Authoritative Directions ETA hook; returns None until routing is implemented."""
     if not live_routing_enabled():
         return None
-    # --- V7 boundary (BLOCKED_EXTERNAL in V5) -------------------------------------
-    # When live routing lands, the Kakao/Naver Directions request goes here. It is
-    # intentionally a no-op in V5: returning None keeps the authority honest and proves
-    # no outbound HTTP/paid call ships on any V5 path regardless of the flag state.
+    # V7 boundary: no network or paid Directions call ships on the current path.
     return None

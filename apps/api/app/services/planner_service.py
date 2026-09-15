@@ -588,9 +588,7 @@ def _fallback_candidate_name(language: str) -> str:
 
 
 def _full_slots_enabled() -> bool:
-    # PLAN_FULL_SLOTS gates the V3 additive slot projections (D2/D3/D4/D6) and the
-    # closure trigger (D5). getattr fallback mirrors places_service: test doubles that
-    # omit feature_flags stay flag-off (byte-for-byte pre-V3 behavior).
+    # Registry default and incomplete test doubles stay flag-off, omitting additive keys.
     flags = getattr(get_settings(), "feature_flags", None) or {}
     return bool(flags.get("PLAN_FULL_SLOTS", False))
 
@@ -786,8 +784,7 @@ def _daily_plan_slots(
     ri = 0
     ni = 0
 
-    # D-1 고정 배정: 선택 장소는 첫 슬롯에 배정 후 used 처리 — 아래 deterministic
-    # allocation 은 나머지 3슬롯만 채운다(선택 장소의 중복/재배정 없음).
+    # 선택 장소는 첫 matching slot에 한 번만 고정 배정한다.
     selected_period: str | None = None
     if selected_place is not None:
         selected_period = "lunch" if selected_place.get("category") == "restaurant" else "morning"
@@ -802,7 +799,7 @@ def _daily_plan_slots(
         return _take_deduping(others, "n")
 
     def _take_deduping(group: list[dict], state_key: str) -> dict | None:
-        # advance the matching pointer, skipping already-used place_ids (dedupe).
+        # Advance the matching pointer while preserving place_id dedupe.
         nonlocal ri, ni
         i = ri if state_key == "r" else ni
         while i < len(group):
@@ -879,9 +876,7 @@ def _daily_plan_slots(
             travel_time_authorities[period] = None
         prev_place = place if place is not None else prev_place
 
-    # D6: swappable_alternatives populated from the existing candidate-pool leftovers
-    # (already-fetched places not assigned to any slot). Flag-off ⇒ empty dict ⇒ each
-    # slot stays swappable_alternatives: [] (byte-for-byte pre-V3).
+    # Alternatives come only from already-fetched leftovers; flag-off leaves [].
     full_slots = _full_slots_enabled()
     swappable = (
         _swappable_alternatives_by_period(assigned=assigned, place_candidates=place_candidates)
@@ -965,10 +960,9 @@ def _plan_slot(
     routing_authority_enabled: bool = False,
     travel_time_authority: int | None = None,
 ) -> dict:
-    # start_time: 관용적 시간대 시작 시각(09:00/12:00/14:00/18:00). opening-hours authority
-    # 확보 전까지 표준 관례 기반 추정값.
+    # start_time is a conventional period start, not venue authority.
     # travel_time: Haversine 직선거리 기반 도보 추정(분). routing authority 확보 전까지 추정.
-    # stay_duration/opening_hours_valid/indoor_outdoor/franchise: authority 부재 → null.
+    # stay_duration/franchise remain null; hours/indoor are estimates/projections.
     indoor_outdoor = None
     if place and place.get("is_indoor") is not None:
         indoor_outdoor = "indoor" if place["is_indoor"] else "outdoor"
@@ -1001,9 +995,7 @@ def _plan_slot(
         "unavailable_reason": None if place else unavailable_reason,
     }
     if full_slots:
-        # PLAN_FULL_SLOTS additive projections (D2/D3/D4). Flag-off omits these keys so
-        # the slot payload stays byte-for-byte the pre-V3 shape; values are projections
-        # of already-fetched weather/AQ + opening-hours data (no new external call).
+        # Additive projections from already-fetched weather/AQ and estimated hours.
         slot["closure_state"] = _closure_state(oh_valid=oh_valid, place=place)
         slot["closing_soon"] = cs_valid
         slot["forecast_window"] = _nearest_forecast_window(start_time=start_t, weather=weather)

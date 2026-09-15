@@ -3,17 +3,11 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
-import os
 from datetime import UTC, datetime
 from typing import Any
 
-from apps.api.app.core.key_vault import get_secret_if_configured
 from apps.api.app.core.redaction import redact_secret_text
-from apps.api.app.core.runtime_secrets import (
-    get_runtime_profile,
-    load_runtime_environment,
-    resolve_runtime_secret,
-)
+from apps.api.app.core.runtime_secrets import load_runtime_environment
 from apps.api.app.services import region_catalog
 from apps.api.app.services.culture_info_ingest import (
     CULTURE_INFO_BASE_URL,
@@ -26,6 +20,7 @@ from apps.api.app.services.culture_info_ingest import (
     upsert_culture_info_events,
 )
 from apps.api.app.services.job_runs import duration_ms, record_job_run
+from apps.api.app.tools.batch_helpers import apply_guard_error, env_or_secret
 
 CONFIRM_TEXT = "APPLY_CULTURE_INFO_INGEST"
 ALLOW_ENV = "ALLOW_CULTURE_INFO_INGEST_APPLY"
@@ -211,22 +206,11 @@ def _plan_payload(
 
 
 def _apply_guard_error(args: argparse.Namespace) -> str:
-    if args.confirm != CONFIRM_TEXT:
-        return f"--apply requires --confirm {CONFIRM_TEXT}."
-    if os.getenv(ALLOW_ENV) != "1":
-        return f"--apply requires {ALLOW_ENV}=1 in the process environment."
-    return ""
+    return apply_guard_error(args, confirm_text=CONFIRM_TEXT, allow_env=ALLOW_ENV)
 
 
 def _env_or_secret(env_name: str, secret_name: str) -> str:
-    return resolve_runtime_secret(
-        env_name,
-        secret_name,
-        key_vault_loader=lambda _url, name: get_secret_if_configured(
-            (os.getenv("KEY_VAULT_URL") or "").strip(), name
-        ),
-        required=get_runtime_profile() in {"api", "worker"},
-    )
+    return env_or_secret(env_name, secret_name)
 
 
 def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:

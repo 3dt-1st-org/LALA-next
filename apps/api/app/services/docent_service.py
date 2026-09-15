@@ -11,6 +11,10 @@ from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
 from apps.api.app.services import ai_service, db_repository, speech_service
 from apps.api.app.services.normalization import display_language, format_celsius_label
 from apps.api.app.services.request_identity import generation_identity
+from apps.api.app.services.source_labels import (
+    UPSTREAM_SOURCE_LABELS_EN,
+    UPSTREAM_SOURCE_LABELS_KO,
+)
 
 _DOCENT_PROMPT_VERSION = "docent-v1"
 
@@ -1005,9 +1009,7 @@ def _localize_internal_terms(text: str, *, language: str) -> str:
             "attraction": "attraction",
             "restaurant": "restaurant",
             "event": "event",
-            "tour_api": "Korea Tourism Organization data",
-            "kcisa": "Korea Culture Information Service data",
-            "kopis": "KOPIS performing arts data",
+            **UPSTREAM_SOURCE_LABELS_EN,
         }
     else:
         replacements = {
@@ -1015,9 +1017,7 @@ def _localize_internal_terms(text: str, *, language: str) -> str:
             "attraction": "명소",
             "restaurant": "맛집",
             "event": "행사",
-            "tour_api": "한국관광공사 데이터",
-            "kcisa": "문화정보원 데이터",
-            "kopis": "공연예술통합전산망 데이터",
+            **{key: f"{value} 데이터" for key, value in UPSTREAM_SOURCE_LABELS_KO.items()},
         }
     for source, replacement in replacements.items():
         text = re.sub(
@@ -1056,20 +1056,17 @@ def _format_distance(distance_m: int) -> str:
 
 
 def _ko_source_label(source: str | None) -> str | None:
-    return {
-        "tour_api": "한국관광공사 데이터",
-        "kcisa": "문화정보원 데이터",
-        "kopis": "공연예술통합전산망 데이터",
+    labels = {
+        **{key: f"{value} 데이터" for key, value in UPSTREAM_SOURCE_LABELS_KO.items()},
         "db": "운영 DB",
         "public_mvp_snapshot": "제한적 오프라인 데이터",
-    }.get((source or "").strip())
+    }
+    return labels.get((source or "").strip())
 
 
 def _en_source_label(source: str | None) -> str | None:
     return {
-        "tour_api": "Korea Tourism Organization data",
-        "kcisa": "Korea Culture Information Service data",
-        "kopis": "KOPIS performing arts data",
+        **UPSTREAM_SOURCE_LABELS_EN,
         "db": "the live LALA database",
         "public_mvp_snapshot": "limited offline data",
     }.get((source or "").strip())

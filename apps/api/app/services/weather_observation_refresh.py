@@ -7,6 +7,7 @@ from typing import Any
 
 from apps.api.app.services import weather_service
 from apps.api.app.services.dust_quality import clean_air_quality_value
+from apps.api.app.services.job_runs import record_job_run as _record_job_run
 
 KST = timezone(timedelta(hours=9), "Asia/Seoul")
 
@@ -230,28 +231,16 @@ def record_job_run(
     error_message: str | None,
     connect_timeout: int,
 ) -> None:
-    if not dsn:
-        return
-    import psycopg2
-
-    sql = """
-        INSERT INTO ops.job_runs (
-            job_name,
-            status,
-            started_at,
-            finished_at,
-            duration_ms,
-            error_message
-        )
-        VALUES (%s, %s, %s, %s, %s, %s)
-    """
-    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                sql,
-                (job_name, status, started_at, finished_at, duration_ms, error_message),
-            )
-        conn.commit()
+    _record_job_run(
+        dsn=dsn,
+        job_name=job_name,
+        status=status,
+        started_at=started_at,
+        finished_at=finished_at,
+        duration_ms=duration_ms,
+        error_message=error_message,
+        connect_timeout=connect_timeout,
+    )
 
 
 def _observation_params(observation: WeatherObservation) -> dict[str, Any]:

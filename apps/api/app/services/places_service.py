@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 from apps.api.app.core.config import get_settings
@@ -9,29 +10,16 @@ from apps.api.app.services import (
     public_mvp_data,
 )
 from apps.api.app.services.normalization import normalize_language
+from apps.api.app.services.source_labels import (
+    UPSTREAM_SOURCE_LABELS_EN,
+    UPSTREAM_SOURCE_LABELS_KO,
+)
 
 _ALLOWED_CATEGORIES = {"all", "attraction", "restaurant", "event", "culture_venue"}
 
 _INDOOR_PREFERRED_CATEGORIES = {"restaurant", "culture_venue"}
 
-# D2 — S1 per-source provenance labels. Mirrors the KO branch of the client
-# externalSourceLabel (home_view_helpers.dart); canonical/empty/unknown → omit.
-_UPSTREAM_SOURCE_LABELS: dict[str, str] = {
-    "tour_api": "한국관광공사",
-    "kcisa": "문화정보원",
-    "kopis": "공연예술통합전산망",
-}
-
-# EN S1 phrases, taken verbatim from docent_service._en_source_label so one EN
-# naming exists per source across API surfaces; canonical/empty/unknown → omit.
-_UPSTREAM_SOURCE_PHRASES_EN: dict[str, str] = {
-    "tour_api": "Korea Tourism Organization data",
-    "kcisa": "Korea Culture Information Service data",
-    "kopis": "KOPIS performing arts data",
-}
-
-# Lane-1 internal reason inputs: projected into the place dict for the composer
-# to read, then stripped before the /places response is serialized (§8).
+# Internal reason inputs are consumed by the composer and stripped before serialization.
 _INTERNAL_REASON_KEYS = ("_local_activity_band", "_has_linked_event")
 
 
@@ -127,7 +115,6 @@ def list_places(
         query_echo["ne_lat"] = ne_lat
         query_echo["ne_lng"] = ne_lng
 
-    # Collect current signals for reason/freshness derivation
     # current_time stays a UTC anchor: freshness is elapsed absolute time, so a
     # UTC anchor keeps it correct regardless of venue timezone.
     current_time = datetime.now(UTC)
@@ -136,21 +123,13 @@ def list_places(
     # honestly omitted (current_weather stays {}); never fabricated.
     current_weather = db_repository.fetch_latest_weather(lat=lat, lng=lng) or {}
 
-    # Enrich places with reason and freshness
-    enriched_places = []
-    for place in db_places:
-        enriched_place = dict(place)
-        reason = _derive_place_reason(
-            place=place,
-            current_weather=current_weather,
-            language=language,
-        )
-        freshness = _format_freshness(place.get("updated_at"), current_time, language)
-
-        enriched_place["reason"] = reason
-        enriched_place["freshness"] = freshness
-        _strip_internal_reason_inputs(enriched_place)
-        enriched_places.append(enriched_place)
+    enriched_places = _enrich_places(
+        db_places,
+        current_weather=current_weather,
+        current_time=current_time,
+        language=language,
+        freshness_timestamp=lambda place: place.get("updated_at"),
+    )
 
     if enriched_places:
         return {
@@ -174,23 +153,14 @@ def list_places(
             limit=limit,
         )
         if public_places:
-            # Enrich static places with reason/freshness
-            enriched_public = []
-            for place in public_places:
-                enriched_place = dict(place)
-                reason = _derive_place_reason(
-                    place=place,
-                    current_weather=current_weather,
-                    language=language,
-                )
-                freshness = _format_freshness(
-                    public_mvp_data.snapshot_generated_at(), current_time, language
-                )
-
-                enriched_place["reason"] = reason
-                enriched_place["freshness"] = freshness
-                _strip_internal_reason_inputs(enriched_place)
-                enriched_public.append(enriched_place)
+            snapshot_generated_at = public_mvp_data.snapshot_generated_at()
+            enriched_public = _enrich_places(
+                public_places,
+                current_weather=current_weather,
+                current_time=current_time,
+                language=language,
+                freshness_timestamp=lambda _place: snapshot_generated_at,
+            )
 
             return {
                 "count": len(enriched_public),
@@ -201,7 +171,7 @@ def list_places(
                 "source": public_mvp_data.SOURCE_NAME,
                 "location_engine": "static_snapshot",
                 # Truthful snapshot build timestamp (or honest None if absent).
-                "data_as_of": public_mvp_data.snapshot_generated_at(),
+                "data_as_of": snapshot_generated_at,
             }
 
     return {
@@ -219,6 +189,30 @@ def _places_without_scores(places: list[dict]) -> list[dict]:
     return [{**place, "score": None} for place in places]
 
 
+def _enrich_places(
+    places: list[dict],
+    *,
+    current_weather: dict,
+    current_time: datetime,
+    language: str,
+    freshness_timestamp: Callable[[dict], str | datetime | None],
+) -> list[dict]:
+    enriched_places = []
+    for place in places:
+        enriched_place = dict(place)
+        enriched_place["reason"] = _derive_place_reason(
+            place=place,
+            current_weather=current_weather,
+            language=language,
+        )
+        enriched_place["freshness"] = _format_freshness(
+            freshness_timestamp(place), current_time, language
+        )
+        _strip_internal_reason_inputs(enriched_place)
+        enriched_places.append(enriched_place)
+    return enriched_places
+
+
 def _strip_internal_reason_inputs(place: dict) -> None:
     """Remove Lane-1 internal reason inputs so they never leave the service (§8)."""
     for key in _INTERNAL_REASON_KEYS:
@@ -233,8 +227,8 @@ def _upstream_source_reason_phrase(upstream_source: str, *, language: str = "ko"
     """
     key = (upstream_source or "").strip()
     if language == "en":
-        return _UPSTREAM_SOURCE_PHRASES_EN.get(key)
-    label = _UPSTREAM_SOURCE_LABELS.get(key)
+        return UPSTREAM_SOURCE_LABELS_EN.get(key)
+    label = UPSTREAM_SOURCE_LABELS_KO.get(key)
     return f"{label} 데이터" if label else None
 
 
