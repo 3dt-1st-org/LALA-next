@@ -13,6 +13,39 @@ env:
   LALA_RUNTIME_PROFILE: ci
 
 jobs:
+  postgres-regressions:
+    name: Local PostgreSQL production regressions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev --frozen
+      - name: Start disposable database
+        run: |
+          docker build -t lala-test-postgres infra/local-postgres
+          docker run -d --name lala-test-db --tmpfs /var/lib/postgresql/data -p 127.0.0.1:55439:5432 -e POSTGRES_USER=audit -e POSTGRES_PASSWORD=local-audit-only -e POSTGRES_DB=lala_audit lala-test-postgres
+          for attempt in $(seq 1 60); do
+            if docker exec lala-test-db pg_isready -U audit -d lala_audit; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Apply canonical schema and run isolated regressions
+        env:
+          PYTHONPATH: apps/api/tests/network_guard:.
+          ALLOW_CANONICAL_SQL_APPLY: "1"
+        run: |
+          export DB_DSN="$(printf '%s://%s:%s@%s/%s' postgresql audit local-audit-only 127.0.0.1:55439 lala_audit)"
+          export AUDIT_IDENTITY_TEST_DSN="$DB_DSN" LOCAL_AUDIT_DSN="$DB_DSN" PAID_TEST_DB_DSN="$DB_DSN" LALA_TEST_DB_DSN="$DB_DSN"
+          .venv/bin/python -m apps.api.app.tools.apply_canonical_sql --apply --confirm APPLY_CANONICAL_SQL
+          unset DB_DSN
+          .venv/bin/pytest apps/api/tests/test_identity_lifecycle.py apps/api/tests/test_community_production_regressions.py apps/api/tests/test_paid_cost_controls.py apps/api/tests/test_production_runtime.py
+      - name: Remove disposable database
+        if: always()
+        run: docker rm -f lala-test-db
+
   api-tests:
     name: API tests and safety contracts
     runs-on: windows-latest

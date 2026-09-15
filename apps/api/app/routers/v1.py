@@ -162,9 +162,7 @@ def delete_me(
     issuer = identity.issuer or ""
     subject = identity.subject or ""
     try:
-        identity_service.mark_user_deleting(issuer, subject)
-        management_client.delete_user(subject)
-        identity_service.finalize_user_deletion(issuer, subject)
+        identity_service.delete_account(issuer, subject, management_client)
     except Exception:
         request.app.state.metrics.record_auth_event("account_deletion_failure")
         raise

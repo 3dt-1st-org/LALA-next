@@ -12,6 +12,8 @@ from apps.api.app.services import ai_service, db_repository, speech_service
 from apps.api.app.services.normalization import display_language, format_celsius_label
 from apps.api.app.services.request_identity import generation_identity
 
+_DOCENT_PROMPT_VERSION = "docent-v1"
+
 _STORY_KEYWORDS_KO = (
     "역사",
     "유래",
@@ -61,6 +63,45 @@ _ATTRACTION_REVIEW_GUARD_CATEGORIES = {"attraction", "culture_venue"}
 
 
 def generate_script(request: DocentScriptRequest) -> dict:
+    from apps.api.app.services.paid_cost_control import run_paid_generation
+
+    settings = get_settings()
+    paid_embedding = (
+        settings.rag_retrieval_mode == "hybrid"
+        and getattr(settings, "rag_embedding_method", "local-hash") == "openai"
+    )
+    if (
+        not ai_service.live_ai_enabled()
+        and not ai_service.rerank_ai_enabled()
+        and not paid_embedding
+    ):
+        return _generate_script(request)
+    # Include every accepted context field, prompt/provider versions, and corpus
+    # generation. Retrieval/reranking is inside the single flight as it can pay
+    # for embeddings and a mini-model before text generation starts.
+    identity = generation_identity(
+        "docent_script_paid_v1",
+        {
+            "request": request.model_dump(),
+            "prompt_version": _DOCENT_PROMPT_VERSION,
+            "model": getattr(settings, "openai_docent_model", ""),
+            "model_roles": getattr(settings, "model_role_overrides", {}),
+            "embedding_model": getattr(settings, "openai_embedding_model", ""),
+            "embedding_method": getattr(settings, "rag_embedding_method", "local-hash"),
+            "live_ai": ai_service.live_ai_enabled(),
+            "rerank_ai": ai_service.rerank_ai_enabled(),
+            "generation": settings.rag_embedding_generation,
+            "retrieval": settings.rag_retrieval_mode,
+        },
+    )
+    return run_paid_generation(
+        identity["cache_key"],
+        16000 + len(request.model_dump_json()),
+        lambda: _generate_script(request),
+    )
+
+
+def _generate_script(request: DocentScriptRequest) -> dict:
     settings = get_settings()
     retrieval_mode = (settings.rag_retrieval_mode or "legacy").strip().lower()
     if retrieval_mode == "hybrid":
@@ -1050,7 +1091,13 @@ def _readable_place_id(place_id: str, *, language: str) -> str:
 
 
 def generate_audio(request: DocentAudioRequest) -> bytes:
-    return speech_service.synthesize_docent_audio(request)
+    from apps.api.app.services.paid_cost_control import run_paid_generation
+
+    return run_paid_generation(
+        audio_identity(request)["cache_key"],
+        len(request.script),
+        lambda: speech_service.synthesize_docent_audio(request),
+    )
 
 
 def script_identity(
@@ -1060,10 +1107,10 @@ def script_identity(
 ) -> dict[str, str]:
     settings = get_settings()
     payload: dict[str, object] = {
-        "place_id": request.place_id,
-        "category": request.category,
-        "language": request.language,
-        "mode": request.mode,
+        "request": request.model_dump(),
+        "prompt_version": _DOCENT_PROMPT_VERSION,
+        "model": getattr(settings, "openai_docent_model", ""),
+        "model_roles": getattr(settings, "model_role_overrides", {}),
         # A reindex (generation bump) or retrieval-mode switch must invalidate stale cached
         # scripts, so both are part of the cache identity.
         "embedding_generation": settings.rag_embedding_generation,
@@ -1109,6 +1156,7 @@ def audio_identity(request: DocentAudioRequest) -> dict[str, str]:
     return generation_identity(
         "docent_audio",
         {
+            "voice_version": "azure-default-voices-v1",
             "script": request.script.strip(),
             "language": request.language,
         },

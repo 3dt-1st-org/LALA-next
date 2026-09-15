@@ -132,9 +132,10 @@ def test_finalize_user_deletion_atomically_removes_user_and_inserts_digest_tombs
     assert len(connect_calls) == 1
     assert "pg_advisory_xact_lock" in executed[0][0]
     assert "DELETE FROM identity.users" in executed[1][0]
-    assert "INSERT INTO identity.deleted_users" in executed[2][0]
-    assert "ON CONFLICT (identity_digest) DO NOTHING" in executed[2][0]
-    digest = executed[2][1][0]
+    assert "DELETE FROM identity.deletion_jobs" in executed[2][0]
+    assert "INSERT INTO identity.deleted_users" in executed[3][0]
+    assert "ON CONFLICT (identity_digest) DO NOTHING" in executed[3][0]
+    digest = executed[3][1][0]
     assert isinstance(digest, bytes)
     assert len(digest) == 32
     assert b"issuer.example" not in digest

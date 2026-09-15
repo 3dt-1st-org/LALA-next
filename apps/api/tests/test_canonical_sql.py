@@ -28,6 +28,9 @@ EXPECTED_CANONICAL_MIGRATION_ORDER = (
     "066_trip_library_and_visit_feedback.sql",
     "067_community_post_reports.sql",
     "068_community_chat_durable_controls.sql",
+    "069_identity_deletion_jobs.sql",
+    "070_community_durability.sql",
+    "071_api_cost_controls.sql",
 )
 
 
@@ -65,7 +68,7 @@ def test_load_canonical_sql_plan_is_safe_and_ordered():
     assert plan.ok is True
     assert tuple(item.name for item in plan.files) == EXPECTED_CANONICAL_MIGRATION_ORDER
     assert canonical_sql.CANONICAL_MIGRATION_ORDER == EXPECTED_CANONICAL_MIGRATION_ORDER
-    assert canonical_sql.CANONICAL_MIGRATION_LATEST == "068_community_chat_durable_controls.sql"
+    assert canonical_sql.CANONICAL_MIGRATION_LATEST == "071_api_cost_controls.sql"
     assert plan.to_dict()["statement_count"] >= 10
     assert all(len(item.sha256) == 64 for item in plan.files)
 
@@ -99,7 +102,7 @@ def test_canonical_migration_filename_contract_rejects_duplicate_or_invalid_pref
 
 def test_future_migration_does_not_silently_extend_the_merged_baseline():
     future_names = EXPECTED_CANONICAL_MIGRATION_ORDER + (
-        "069_rag_knowledge_retrieval_metadata.sql",
+        "072_rag_knowledge_retrieval_metadata.sql",
     )
 
     with pytest.raises(ValueError, match="baseline drifted"):

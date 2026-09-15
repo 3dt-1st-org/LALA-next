@@ -107,7 +107,7 @@ def run_smoke(
         )
         _wait_for_api(base_url, api_process)
 
-        readyz = _request_json(f"{base_url}/readyz")
+        readyz = _request_json(f"{base_url}/readyz", expected_status=503)
         checks = (readyz.get("data") or {}).get("checks") or {}
         if checks.get("client_identity") != "oauth-configured":
             raise RuntimeError(f"Unexpected client_identity: {checks.get('client_identity')}")

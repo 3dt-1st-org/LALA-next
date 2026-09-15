@@ -7,6 +7,9 @@ from datetime import date
 from typing import Any
 
 from apps.api.app.core.config import Settings, get_settings
+from apps.api.app.core.database import connect_db
+from apps.api.app.core.errors import ServiceError
+from apps.api.app.services.identity_repository import lock_active_actor
 
 # Persisted-envelope version. Independent of canonical-SQL migration numbering:
 # bumping this makes every older persisted plan read as version-mismatch -> null
@@ -19,8 +22,16 @@ TRIP_OVERRIDE_SCHEMA_VERSION = 1
 SLOT_PERIODS = ("morning", "lunch", "afternoon", "dinner")
 
 
-class PlanningRepositoryUnavailable(RuntimeError):
+class PlanningRepositoryUnavailable(ServiceError):
     """The planning action store cannot be reached."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=503,
+            code="PLANNING_DB_UNAVAILABLE",
+            message="Planning storage is temporarily unavailable.",
+            retryable=True,
+        )
 
 
 class TripPreferenceOverrideRevisionConflict(RuntimeError):
@@ -47,7 +58,7 @@ class PlanningRepository:
         self._connect = connect or _connect
 
     @contextmanager
-    def _cursor(self) -> Iterator[Any]:
+    def _cursor(self, *, issuer: str, subject: str) -> Iterator[Any]:
         if not self._settings.db_dsn:
             raise PlanningRepositoryUnavailable()
         try:
@@ -58,8 +69,9 @@ class PlanningRepository:
             with closing(self._connect(dsn=self._settings.db_dsn, connect_timeout=3)) as conn:
                 with conn:
                     with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                        lock_active_actor(cur, issuer, subject)
                         yield cur
-        except (PlanningRepositoryUnavailable, TripPreferenceOverrideRevisionConflict):
+        except (ServiceError, TripPreferenceOverrideRevisionConflict):
             raise
         except Exception as exc:  # pragma: no cover - DB unreachable in CI
             raise PlanningRepositoryUnavailable() from exc
@@ -67,7 +79,7 @@ class PlanningRepository:
     # -- saved places (D2) ------------------------------------------------
 
     def list_saved_places(self, *, issuer: str, subject: str) -> list[dict[str, Any]]:
-        with self._cursor() as cur:
+        with self._cursor(issuer=issuer, subject=subject) as cur:
             cur.execute(
                 """
                 SELECT place_id, source, saved_at
@@ -92,7 +104,7 @@ class PlanningRepository:
         # Idempotent toggle: the composite PK makes repeat-save a no-op delta
         # and DELETE is naturally idempotent, so save -> unsaved -> save never
         # leaves a duplicate row (A4).
-        with self._cursor() as cur:
+        with self._cursor(issuer=issuer, subject=subject) as cur:
             if active:
                 cur.execute(
                     """
@@ -127,7 +139,7 @@ class PlanningRepository:
     ) -> dict[str, Any]:
         # Upsert one plan per user per day. The envelope is serialized here, not
         # by a client toJson, and rebound through a version guard on read.
-        with self._cursor() as cur:
+        with self._cursor(issuer=issuer, subject=subject) as cur:
             cur.execute(
                 """
                 INSERT INTO planning.user_plans
@@ -158,7 +170,7 @@ class PlanningRepository:
         # Read path is fail-soft: corrupt envelope -> null, future/mismatched
         # schema_version -> null, missing row -> null (A7/A8/D8/D9). Never raises
         # on data shape.
-        with self._cursor() as cur:
+        with self._cursor(issuer=issuer, subject=subject) as cur:
             cur.execute(
                 """
                 SELECT schema_version, envelope, updated_at
@@ -190,7 +202,7 @@ class PlanningRepository:
         before: date | None,
         limit: int,
     ) -> list[dict[str, Any]]:
-        with self._cursor() as cur:
+        with self._cursor(issuer=issuer, subject=subject) as cur:
             cur.execute(
                 """
                 SELECT
@@ -225,7 +237,7 @@ class PlanningRepository:
         subject: str,
         plan_date: date,
     ) -> dict[str, Any]:
-        with self._cursor() as cur:
+        with self._cursor(issuer=issuer, subject=subject) as cur:
             cur.execute(
                 """
                 DELETE FROM planning.slot_visits
@@ -260,7 +272,7 @@ class PlanningRepository:
         subject: str,
         plan_date: date,
     ) -> dict[str, Any] | None:
-        with self._cursor() as cur:
+        with self._cursor(issuer=issuer, subject=subject) as cur:
             cur.execute(
                 """
                 SELECT schema_version, revision, payload, updated_at
@@ -281,7 +293,7 @@ class PlanningRepository:
         expected_revision: int,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        with self._cursor() as cur:
+        with self._cursor(issuer=issuer, subject=subject) as cur:
             cur.execute(
                 """
                 SELECT revision
@@ -353,7 +365,7 @@ class PlanningRepository:
         subject: str,
         plan_date: date,
     ) -> dict[str, Any]:
-        with self._cursor() as cur:
+        with self._cursor(issuer=issuer, subject=subject) as cur:
             cur.execute(
                 """
                 DELETE FROM planning.trip_preference_overrides
@@ -387,7 +399,7 @@ class PlanningRepository:
             raise ValueError("slot_period is not a known plan period")
         if reason_code is not None and status != "not_visited":
             raise ValueError("reason_code is only valid for not_visited")
-        with self._cursor() as cur:
+        with self._cursor(issuer=issuer, subject=subject) as cur:
             cur.execute(
                 """
                 INSERT INTO planning.slot_visits
@@ -455,7 +467,7 @@ class PlanningRepository:
         subject: str,
         plan_date: date,
     ) -> list[dict[str, Any]]:
-        with self._cursor() as cur:
+        with self._cursor(issuer=issuer, subject=subject) as cur:
             cur.execute(
                 """
                 SELECT
@@ -472,11 +484,7 @@ class PlanningRepository:
 
 
 def _connect(*, dsn: str, connect_timeout: int) -> object:
-    try:
-        import psycopg2
-    except Exception as exc:  # pragma: no cover - psycopg2 optional in CI
-        raise PlanningRepositoryUnavailable() from exc
-    return psycopg2.connect(dsn, connect_timeout=connect_timeout)
+    return connect_db(dsn, connect_timeout=connect_timeout)
 
 
 def get_planning_repository() -> PlanningRepository:

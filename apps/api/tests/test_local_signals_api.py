@@ -371,7 +371,7 @@ def test_write_ownership_and_invalid_transition_are_enforced() -> None:
     assert invalid_transition.value.code == "INVALID_STATUS_TRANSITION"
 
 
-def test_whitespace_idempotency_key_falls_back_to_deterministic_request_key() -> None:
+def test_present_invalid_idempotency_key_is_rejected() -> None:
     request = Request(
         {
             "type": "http",
@@ -383,12 +383,11 @@ def test_whitespace_idempotency_key_falls_back_to_deterministic_request_key() ->
     )
     payload = {"body": "same"}
 
-    first = _idempotency_key(request, "   ", payload)
-    second = _idempotency_key(request, "\t", payload)
-
-    assert first
-    assert first == second
-    assert first != ""
+    for value in ("   ", "\t", "x" * 201, "a\x00b"):
+        with pytest.raises(ApiError) as error:
+            _idempotency_key(request, value, payload)
+        assert error.value.code == "IDEMPOTENCY_KEY_INVALID"
+    assert _idempotency_key(request, None, payload) == _idempotency_key(request, None, payload)
 
 
 def test_feature_flag_off_is_honest_disabled_response(client, api_key, monkeypatch) -> None:
@@ -763,3 +762,11 @@ def test_rate_limit_seam_is_actor_scoped_and_returns_safe_error() -> None:
 
     assert exc_info.value.status_code == 429
     assert exc_info.value.code == "RATE_LIMITED"
+
+
+@pytest.fixture(autouse=True)
+def _isolate_actor_guard_for_sql_doubles(monkeypatch):
+    # Real deletion fencing is covered by PostgreSQL production regressions.
+    monkeypatch.setattr(
+        "apps.api.app.services.local_signals_service.lock_active_actor", lambda *args: None
+    )

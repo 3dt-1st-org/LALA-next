@@ -657,6 +657,11 @@ def test_docent_script_uses_db_place_profile_when_rag_is_empty(
     auth_headers,
     monkeypatch,
 ):
+    # This test mocks database grounding; admission storage is covered by the
+    # real local PostgreSQL cost-control suite rather than this fake DSN.
+    monkeypatch.setattr(
+        "apps.api.app.services.paid_cost_control.enforce_db_window", lambda key, limit: True
+    )
     monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
     monkeypatch.setattr(
         "apps.api.app.services.db_repository.fetch_docent_knowledge_context",
@@ -805,6 +810,11 @@ def test_docent_script_rejects_live_db_request_without_verified_grounding(
     auth_headers,
     monkeypatch,
 ):
+    # This test mocks database grounding; admission storage is covered by the
+    # real local PostgreSQL cost-control suite rather than this fake DSN.
+    monkeypatch.setattr(
+        "apps.api.app.services.paid_cost_control.enforce_db_window", lambda key, limit: True
+    )
     monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
     monkeypatch.setattr(
         "apps.api.app.services.db_repository.fetch_docent_knowledge_context",

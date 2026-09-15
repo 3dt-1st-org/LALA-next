@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from time import perf_counter
 
 from fastapi import FastAPI, Request
@@ -8,10 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from apps.api.app.core.config import get_settings
+from apps.api.app.core.database import close_database_pools
 from apps.api.app.core.errors import ApiError
 from apps.api.app.core.metrics import RuntimeMetrics, route_path_from_scope
 from apps.api.app.core.observability import append_access_log, configure_logging, request_log_extra
 from apps.api.app.core.openapi import configure_openapi
+from apps.api.app.core.request_limits import RequestBodyLimitMiddleware
 from apps.api.app.core.responses import ensure_request_id, error_envelope, safe_validation_details
 from apps.api.app.routers.community import router as community_router
 from apps.api.app.routers.community_chat import router as community_chat_router
@@ -36,19 +39,38 @@ def create_app() -> FastAPI:
         # embedding method (and no explicit dev/test escape hatch) fails startup with a
         # clear config error instead of degrading per-request (R1 wiring).
         assert_semantic_embedding_when_live(settings)
+
+    @asynccontextmanager
+    async def lifespan(app):
+        yield
+        close_database_pools()
+
     app = FastAPI(
         title="LALA-next Public API",
         version=settings.app_version,
         description="FastAPI edge for the Flutter-facing LALA-next contract.",
+        lifespan=lifespan,
     )
     app.state.metrics = RuntimeMetrics()
+    app.add_middleware(RequestBodyLimitMiddleware)
     if settings.cors_allow_origins:
         app.add_middleware(
             CORSMiddleware,
             allow_origins=list(settings.cors_allow_origins),
-            allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-            allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Request-ID"],
-            expose_headers=["X-Request-ID", "X-Request-Duration-Ms"],
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=[
+                "Authorization",
+                "Content-Type",
+                "X-API-Key",
+                "X-Request-ID",
+                "Idempotency-Key",
+            ],
+            expose_headers=[
+                "X-Request-ID",
+                "X-Request-Duration-Ms",
+                "X-LALA-Request-Hash",
+                "X-LALA-Cache-Key",
+            ],
             max_age=600,
         )
 
@@ -56,7 +78,22 @@ def create_app() -> FastAPI:
     async def request_id_middleware(request: Request, call_next):
         request_id = ensure_request_id(request)
         started_at = perf_counter()
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            # Exception text can contain SQL parameters or credentials; record its type only.
+            logger.error(
+                "request_failed request_id=%s exception_type=%s", request_id, type(exc).__name__
+            )
+            response = JSONResponse(
+                status_code=500,
+                content=error_envelope(
+                    request=request,
+                    code="INTERNAL_ERROR",
+                    message="The request could not be completed.",
+                    retryable=False,
+                ),
+            )
         duration_ms = round((perf_counter() - started_at) * 1000, 2)
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Request-Duration-Ms"] = f"{duration_ms:.2f}"

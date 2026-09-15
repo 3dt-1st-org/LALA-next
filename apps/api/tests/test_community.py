@@ -138,7 +138,7 @@ def test_list_posts_passes_null_viewer_when_anonymous() -> None:
 
 
 def test_create_post_inserts_author_identity_tags_and_returns_row() -> None:
-    repository, executed = _repo([_post_row(), {"id": AUTHOR_USER_ID}])
+    repository, executed = _repo([_post_row(), {"author_user_id": AUTHOR_USER_ID}])
 
     row = repository.create_post(
         issuer=ISSUER, subject=SUBJECT, title="title", body="body", tags=["travel"]
@@ -177,7 +177,7 @@ def test_toggle_like_unlikes_when_existing_row_removed() -> None:
     assert "count(*)" in executed[1][0]
 
 
-def test_create_comment_resolves_author_identity_across_two_cursors() -> None:
+def test_create_comment_resolves_author_identity_in_same_transaction() -> None:
     inserted = {
         "id": POST_ID,
         "post_id": POST_ID,
@@ -187,7 +187,7 @@ def test_create_comment_resolves_author_identity_across_two_cursors() -> None:
         "created_at": NOW,
         "updated_at": NOW,
     }
-    repository, executed = _repo([inserted, {"id": AUTHOR_ID}])
+    repository, executed = _repo([inserted, {"author_user_id": AUTHOR_ID}])
 
     row = repository.create_comment(post_id=POST_ID, issuer=ISSUER, subject=SUBJECT, body="hi")
 
@@ -920,3 +920,11 @@ def test_viewer_identity_helper_only_exposes_oauth_identities() -> None:
     )
     assert _viewer_identity(RequestIdentity(mode="static")) == (None, None)
     assert _viewer_identity(RequestIdentity(mode="public")) == (None, None)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_actor_guard_for_sql_doubles(monkeypatch):
+    # Real deletion fencing is covered by PostgreSQL production regressions.
+    monkeypatch.setattr(
+        "apps.api.app.services.community_service.lock_active_actor", lambda *args: None
+    )

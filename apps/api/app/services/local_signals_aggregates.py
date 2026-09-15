@@ -35,6 +35,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from apps.api.app.core.config import Settings, get_settings
+from apps.api.app.core.database import connect_db
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.services.region_catalog import manual_region_place_names
 from apps.api.app.services.review_ingest_governance import ALLOWED_LICENSE_CLASSES
@@ -183,11 +184,7 @@ class LocalSignalsAggregatesRepository:
 
 
 def _connect(*, dsn: str, connect_timeout: int) -> object:
-    try:
-        import psycopg2
-    except Exception as exc:
-        raise LocalSignalsAggregatesRepositoryUnavailable() from exc
-    return psycopg2.connect(dsn, connect_timeout=connect_timeout)
+    return connect_db(dsn, connect_timeout=connect_timeout)
 
 
 class LocalSignalsAggregatesService:
