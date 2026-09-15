@@ -1,4 +1,4 @@
-"""Local PostgreSQL regressions; opt in using LOCAL_AUDIT_DSN (loopback only)."""
+"""Local PostgreSQL regressions; opt in using TEST_DB_DSN (loopback only)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
-from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 import psycopg2
@@ -23,14 +22,12 @@ from apps.api.app.routers import community_chat as chat
 from apps.api.app.services import community_service as community
 from apps.api.app.services import local_signals_service as signals
 from apps.api.app.services.community_chat_service import CommunityChatRepository
+from apps.api.tests.local_database import local_test_dsn
 
 
 @pytest.fixture
 def database():
-    dsn = os.environ.get("LOCAL_AUDIT_DSN")
-    if not dsn:
-        pytest.skip("LOCAL_AUDIT_DSN is required for local PostgreSQL regressions")
-    assert urlsplit(dsn).hostname in {"127.0.0.1", "localhost", "::1"}
+    dsn = local_test_dsn()
     issuer, subject = "https://audit.invalid", str(uuid4())
     settings = Settings(db_dsn=dsn, feature_flags={"LOCAL_SIGNALS_WRITE": True})
     with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
@@ -128,13 +125,14 @@ def test_local_signals_durable_concurrent_retry_submit_and_rollback(database, mo
 import json, os
 from apps.api.app.core.config import Settings
 from apps.api.app.services.local_signals_service import LocalSignalsRepository, LocalSignalsService
-settings = Settings(db_dsn=os.environ['LOCAL_AUDIT_DSN'], feature_flags={'LOCAL_SIGNALS_WRITE': True})
+settings = Settings(db_dsn=os.environ['TEST_DB_DSN'], feature_flags={'LOCAL_SIGNALS_WRITE': True})
 service = LocalSignalsService(LocalSignalsRepository(settings), settings=settings)
 print(json.dumps(service.create_draft(issuer=os.environ['AUDIT_ISSUER'], subject=os.environ['AUDIT_SUBJECT'], values=json.loads(os.environ['AUDIT_VALUES']), idempotency_key='draft')))
 """,
         ],
         env={
             **os.environ,
+            "TEST_DB_DSN": settings.db_dsn,
             "AUDIT_ISSUER": issuer,
             "AUDIT_SUBJECT": subject,
             "AUDIT_VALUES": json.dumps(values(), default=str),

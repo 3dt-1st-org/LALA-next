@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
 from unittest.mock import Mock
-from urllib.parse import urlsplit
 from uuid import uuid4
 
 import pytest
@@ -25,6 +23,7 @@ from apps.api.app.services.identity_repository import (
     lock_active_actor,
 )
 from apps.api.app.services.identity_service import IdentityService
+from apps.api.tests.local_database import local_test_dsn
 
 
 @pytest.mark.parametrize("dependency", ["oauth", "logto"])
@@ -82,10 +81,7 @@ def test_delete_dependency_allows_resuming_a_pending_job():
 
 @pytest.fixture
 def local_repository():
-    dsn = os.environ.get("AUDIT_IDENTITY_TEST_DSN")
-    if not dsn:
-        pytest.skip("Set AUDIT_IDENTITY_TEST_DSN to a local Docker database")
-    assert urlsplit(dsn).hostname in {"localhost", "127.0.0.1", "::1"}
+    dsn = local_test_dsn()
     import psycopg2
 
     with psycopg2.connect(dsn) as conn, conn.cursor() as cur:

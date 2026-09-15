@@ -326,24 +326,13 @@ burst는 테스트 장소 1개와 소수의 합성 계정/커뮤니티 데이터
 - `lala-audit-unit.log`: 기존 전체 테스트 결과.
 - `lala-audit-db.log`: 최종 진단 결과.
 
-재현 시 기존 서비스와 겹치지 않는 위 컨테이너/포트인지 확인하고 임시 DB를 다시 만든다. 진단은 아래 고정 로컬 DSN을 코드에서 사용한다. 이 명령의 자격값은 폐기 가능한 로컬 테스트 전용이며 실제 비밀이 아니다.
+기존 진단 코드는 과거 관찰 기록으로만 유지한다. 수정 후 재현은 아래 정식 runner를 사용한다. 컨테이너 이름·사용자·비밀번호·DB 이름은 실행 시 생성하고 포트는 Docker가 배정한다. 설정은 환경변수로 주입하며 출력하거나 저장소에 기록하지 않는다. TCP SQL 성공을 확인한 뒤 migration을 시작하고 종료 시 임시 DB를 제거한다.
 
 ```bash
-docker build -t lala-audit-postgres:20260915 infra/local-postgres
-docker run -d --name lala-audit-db-20260915 \
-  -p 127.0.0.1:55439:5432 --tmpfs /var/lib/postgresql/data:rw \
-  -e POSTGRES_USER=audit -e POSTGRES_PASSWORD=local-audit-only \
-  -e POSTGRES_DB=lala_audit lala-audit-postgres:20260915
-docker exec lala-audit-db-20260915 pg_isready -U audit -d lala_audit
-env -i HOME="$HOME" PATH="$PATH" \
-  PYTHONPATH=artifacts/tmp/backend-api-audit-20260915:. LALA_RUNTIME_PROFILE=ci \
-  .venv/bin/python -c 'from apps.api.app.services.canonical_sql import execute_canonical_sql,load_canonical_sql_plan; print(execute_canonical_sql(dsn="postgresql://audit:local-audit-only@127.0.0.1:55439/lala_audit",plan=load_canonical_sql_plan()))'
-env -i HOME="$HOME" PATH="$PATH" \
-  PYTHONPATH=artifacts/tmp/backend-api-audit-20260915:. LALA_RUNTIME_PROFILE=ci \
-  AWS_EC2_METADATA_DISABLED=true \
-  .venv/bin/python -m pytest artifacts/tmp/backend-api-audit-20260915/test_live_db.py -v -o addopts=''
-docker rm -f lala-audit-db-20260915
+uv run --frozen python -m apps.api.app.tools.test_postgres_regressions
 ```
+
+사용자가 별도로 생성한 폐기 가능한 로컬 DB는 공통 `TEST_DB_DSN`으로 선택할 수 있다. 파일 주입은 `apps/api/tests/.env.example`를 참고하여 Git에서 제외된 `.env.test.local`에 값을 두고 `TEST_DB_ENV_FILE`로 명시한다. 자동으로 개발용 `.env`나 앱 `DB_DSN`을 읽지 않는다. 테스트는 테이블 정리를 수행하므로 공유·개발 데이터 DB를 지정하면 안 된다.
 
 ## 6. 승인 후 리팩토링안
 

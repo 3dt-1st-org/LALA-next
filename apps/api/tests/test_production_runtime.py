@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import socket
 import threading
 import time
 from contextlib import closing
-from urllib.parse import urlparse
 
 import psycopg2
 import pytest
@@ -20,6 +18,7 @@ from apps.api.app.core.config import Settings
 from apps.api.app.core.request_limits import RequestBodyLimitMiddleware
 from apps.api.app.main import create_app
 from apps.api.app.routers import health
+from apps.api.tests.local_database import local_test_dsn
 
 
 def test_chunked_body_is_bounded_before_application():
@@ -108,10 +107,7 @@ def test_operational_metrics_rejects_untrusted_peer(monkeypatch):
 
 
 def test_local_pool_bounds_reuses_and_rolls_back(monkeypatch):
-    dsn = os.getenv("LALA_TEST_DB_DSN", "")
-    if not dsn:
-        pytest.skip("Local Docker PostgreSQL not configured")
-    assert urlparse(dsn).hostname in {"127.0.0.1", "localhost", "::1"}
+    dsn = local_test_dsn()
     database.close_database_pools()
     monkeypatch.setenv("LALA_DB_POOL_SIZE", "1")
     monkeypatch.setenv("LALA_DB_POOL_WAIT_MS", "20")

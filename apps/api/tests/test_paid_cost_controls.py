@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import ipaddress
-import os
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -21,6 +19,8 @@ from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
 from apps.api.app.schemas.planning import SavePlanRequest, TripPreferenceOverridePayload
 from apps.api.app.services import docent_service
 from apps.api.app.services import paid_cost_control as cost
+from apps.api.tests.local_database import local_test_dsn
+from apps.api.tests.local_database import validate_local_test_dsn as _validate_local_test_dsn
 
 
 @pytest.fixture(autouse=True)
@@ -188,31 +188,10 @@ def test_configured_db_fails_closed(monkeypatch):
     assert not cost._budgets
 
 
-def _validate_local_test_dsn(dsn: str) -> None:
-    from psycopg2.extensions import parse_dsn
-
-    parsed = parse_dsn(dsn)
-    # Reject service indirection, Unix sockets, multihost DSNs and hostaddr
-    # overrides: none may bypass the explicit destructive-test host check.
-    if parsed.get("service") or parsed.get("hostaddr"):
-        raise ValueError("PAID_TEST_DB_DSN must use an explicit loopback host")
-    host = parsed.get("host", "")
-    if host == "localhost":
-        return
-    try:
-        allowed = ipaddress.ip_address(host).is_loopback
-    except ValueError:
-        allowed = False
-    if not allowed:
-        raise ValueError("PAID_TEST_DB_DSN must use an explicit loopback host")
-
-
 @pytest.fixture
 def db(monkeypatch):
-    dsn = os.getenv("PAID_TEST_DB_DSN")
-    if not dsn:
-        pytest.skip("PAID_TEST_DB_DSN must name a disposable local PostgreSQL database")
-    _validate_local_test_dsn(dsn)
+    dsn = local_test_dsn()
+    monkeypatch.setenv("TEST_DB_DSN", dsn)
     import psycopg2
 
     with closing(psycopg2.connect(dsn)) as conn, conn, conn.cursor() as cur:
@@ -238,7 +217,7 @@ def test_db_shared_process_single_flight_and_restart(db):
 import os, time
 from apps.api.app.core.config import Settings
 from apps.api.app.services import paid_cost_control as c
-c.get_settings = lambda: Settings(db_dsn=os.environ["PAID_TEST_DB_DSN"], paid_daily_request_limit=1)
+c.get_settings = lambda: Settings(db_dsn=os.environ["TEST_DB_DSN"], paid_daily_request_limit=1)
 def fake():
     print("PAID", flush=True)
     time.sleep(.2)
@@ -336,7 +315,7 @@ import os
 from apps.api.app.core.config import Settings
 from apps.api.app.core.errors import ApiError
 from apps.api.app.services import paid_cost_control as c
-c.get_settings = lambda: Settings(db_dsn=os.environ["PAID_TEST_DB_DSN"], paid_daily_request_limit=1)
+c.get_settings = lambda: Settings(db_dsn=os.environ["TEST_DB_DSN"], paid_daily_request_limit=1)
 def forbidden():
     raise AssertionError("must not invoke paid client")
 try:
@@ -501,13 +480,13 @@ from apps.api.app.core.config import Settings
 from apps.api.app.core.errors import ApiError
 from apps.api.app.core import rate_limit as r
 from apps.api.app.services import paid_cost_control as c
-r.get_settings = c.get_settings = lambda: Settings(db_dsn=os.environ["PAID_TEST_DB_DSN"])
+r.get_settings = c.get_settings = lambda: Settings(db_dsn=os.environ["TEST_DB_DSN"])
 request = Request({"type": "http", "client": ("127.0.0.2", 1), "headers": []})
 for lane in ("community", "local", "chat"):
     kwargs = dict(route_key=lane, actor_key="validated:actor", limit_per_minute=1)
     try:
         if lane == "chat":
-            r.enforce_chat_message_rate_limit(client_key="changed-peer", **kwargs)
+            r.enforce_chat_message_rate_limit(client_key=str(request.client.host), **kwargs)
         elif lane == "community":
             r.enforce_community_write_rate_limit(request, **kwargs)
         else:
