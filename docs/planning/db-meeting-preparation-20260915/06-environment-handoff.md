@@ -1,12 +1,21 @@
 # 개발 환경과 협업 가이드 인계
 
-상태: **현황 조사·적용 제안 / 팀 운영 절차 합의 전**. 진희님이 조사한 로컬 → CI → 스테이징 → 운영 구분에 LALA의 실제 구성과 차이를 대응하였다. 클라우드 생성·설정 변경·배포는 수행하지 않았다.
+상태: **개발·검증 순서와 DB 도구 결정 / 환경 구성·인계 대기**. 진희님이 조사한 로컬 → CI → 스테이징 → 운영 구분에 LALA의 실제 구성과 차이를 대응하였다. 클라우드 생성·설정 변경·배포는 수행하지 않았다.
+
+## 9월 15일 회의 결정
+
+1. 로컬에서 담당 기능을 검사하고, CI에서 통합 검사를 거쳐 스테이징에서 사용자 관점의 QA를 한 뒤 프로덕션으로 배포한다.
+2. FastAPI 백엔드의 ORM은 SQLAlchemy, DB 마이그레이션은 Alembic을 사용한다.
+3. 운영 DB는 개발 시험 대상으로 사용하지 않는다. 로컬·CI는 격리된 비운영 DB와 seed를 사용한다.
+4. 개발 API 주소·시험 계정·적용 DB 구조·승격 조건은 아직 인계되지 않았으므로 구현 착수 전에 담당과 완료 조건을 정한다.
+
+SQLAlchemy·Alembic 선택은 확정했지만, 기존 canonical SQL 18개를 Alembic의 최초 기준선으로 삼을지 마이그레이션 이력으로 옮길지는 정하지 않았다. 운영 DB의 확인된 차이를 자동으로 삭제하거나 역변경하지 않는다.
 
 ## 현재 환경표
 
 | 층 | 9/15 확인한 사실 | 준비 상태·해야 할 일 | 담당·리뷰 제안 |
 |---|---|---|---|
-| 코드 기준 | main `765570a2`, dev `9989e987`; 서로 다른 기준 | 이번 ERD는 main 고정. 오래된 dev를 새 통합 기준으로 간주하지 않음 | 건동·진희 |
+| 코드 기준 | DB 조사는 main `765570a2`, dev는 `9989e987` 기준. 현재 main은 PR #208 병합 뒤 `42690fc1` | #208은 테스트만 추가해 스키마 대조 결과에는 영향 없음. ERD 기준 SHA를 계속 명시 | 건동·진희 |
 | 로컬 DB 구성 | compose.local.yml: PostgreSQL 16 + PostGIS/vector, loopback 포트 기본 55432 | 구성 존재. 이 PC의 .env DB 연결은 connection refused. 이번에 DB를 시작/생성하지 않음 | 건동 / 진희 |
 | 운영 DB | AWS RDS PostgreSQL 15.18, PostGIS 3.4.6, vector 0.8.2 | 구조 조회 완료. 068 차이와 RAG 추가 구조 확인 | 건동 / 진희 |
 | 기존 로컬 Azure 설정 | .env.local의 PostgreSQL 주소 DNS 미확인 | 사용할 개발 주소로 인증하지 않음. 파일은 보존 | 건동 |
@@ -47,7 +56,7 @@ GitHub dev environment의 보호 규칙 개수는 조회 시 0개였다. 이는 
 | .env.local에 로컬 DB 주소 | 이 PC의 기존 .env.local은 과거 Azure 대상. runtime profile·명시 파일 경로로 통제 | 운영/과거 주소가 자동 선택되지 않음을 확인 |
 | DATABASE_URL로 환경 전환 | 이 저장소의 논리 설정 이름은 DB_DSN, api/worker는 Secrets Manager | 실제 설정 이름과 프로필 우선순위 일치 |
 | CI에서 PostgreSQL service container | 현재 ci.yml에는 없음 | 도입 후 실제 DB 통합 결과가 CI 산출물로 남음 |
-| migration 도구로 스키마 일치 | 현재 canonical SQL + guarded plan/apply 경로 사용 | 18개 파일 및 operator-pending 적용 기준·hash·순서 합의 |
+| migration 도구로 스키마 일치 | 신규 기준은 SQLAlchemy ORM + Alembic. 기존 canonical SQL과 guarded plan/apply 경로가 이미 존재 | 18개 파일과 operator-pending 차이의 기준선·이관·검증·복구 방법 합의 |
 | PR merge 또는 배포 전 스테이징 검사 | main CI → EC2 배포 구성이 있고, Azure dev는 별도 과거 lane | 병합 전/후 검사 위치·기준 SHA·배포 승격 조건 명시 |
 
 Prisma 등 일반 예시를 현재 Python API가 사용하는 migration 도구라고 소개하지 않는다. 기존 SQL canonicalization 문서의 Azure SSOT·8개 파일 목록도 과거 설명이므로, 현재 AWS 조사 결과와 18개 파일 manifest를 함께 제공한다.
