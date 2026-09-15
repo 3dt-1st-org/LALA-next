@@ -294,7 +294,7 @@ def test_list_messages_emits_count_then_paginated_query() -> None:
 
 
 def test_create_message_is_access_guarded_and_emits_fanout_notify() -> None:
-    repository, executed = _repo([_inserted_message_row(), {"id": AUTHOR_ID}])
+    repository, executed = _repo([_inserted_message_row(), {"author_user_id": AUTHOR_ID}])
 
     row = repository.create_message(room_id=ROOM_ID, issuer=ISSUER, subject=SUBJECT, body="hello")
 
@@ -344,7 +344,7 @@ def test_create_message_idempotent_created_path_claims_stores_and_notifies() -> 
         [
             {"idempotency_key": "key-1"},  # claim
             _inserted_message_row(),  # guarded insert
-            {"id": AUTHOR_ID},  # author resolve
+            {"author_user_id": AUTHOR_ID},  # author resolve
         ]
     )
     request_hash = canonical_request_hash({"room_id": str(ROOM_ID), "body": "hello"})
@@ -1002,15 +1002,13 @@ def test_verify_room_access_for_actors_aggregates_and_propagates_failure(
 
         # Exact production signature: a kwarg mismatch must fail here loudly
         # instead of being swallowed by **kwargs.
-        def authenticated_room_access(
-            self,
-            *,
-            room_id: UUID,
-            issuer: str,
-            subject: str,
-        ) -> dict[str, Any] | None:
-            self.checked.append((issuer, subject))
-            return self.rows.get((issuer, subject))
+        def authorized_actors(self, *, room_id: UUID, actors: list[tuple[str, str]]) -> set[str]:
+            self.checked.extend(actors)
+            return {
+                f"{issuer}:{subject}"
+                for issuer, subject in actors
+                if self.rows.get((issuer, subject))
+            }
 
     service = AccessService(
         {
@@ -1030,9 +1028,7 @@ def test_verify_room_access_for_actors_aggregates_and_propagates_failure(
     assert service.checked == [(ISSUER, SUBJECT), ("https://revoked", "revoked")]
 
     class FailingService:
-        def authenticated_room_access(
-            self, *, room_id: UUID, issuer: str, subject: str
-        ) -> dict[str, Any] | None:
+        def authorized_actors(self, *, room_id: UUID, actors: list[tuple[str, str]]) -> set[str]:
             raise ServiceError(
                 status_code=503,
                 code="COMMUNITY_CHAT_DB_UNAVAILABLE",
@@ -1072,6 +1068,14 @@ class _KeyedAccessCursor:
         self._executed.append((sql, params))
         self._last_sql = sql
         self._last_params = tuple(params) if params is not None else ()
+
+    def fetchall(self):
+        issuers, subjects, _room_id = self._last_params
+        return [
+            {"issuer": issuer, "subject": subject}
+            for issuer, subject in zip(issuers, subjects, strict=True)
+            if (issuer, subject) in self._allowed
+        ]
 
     def fetchone(self) -> Any:
         # authenticated_room_access binds (room_id, issuer, subject, ...access)
@@ -1143,9 +1147,9 @@ def test_production_verifier_real_service_delivers_and_denies_by_account(
     asyncio.run(run())
 
     # Both decisions ran the real authenticated SQL predicate.
-    assert len(executed) == 2
+    assert len(executed) == 1
     for sql, _params in executed:
-        assert "FROM identity.users u" in sql
+        assert "JOIN identity.users u" in sql
         assert "u.status = 'active'" in sql
         assert "community.chat_room_members" in sql
 
@@ -2125,3 +2129,11 @@ def test_fanout_old_generation_never_clobbers_or_delivers_after_replacement() ->
         bridge.release.set()
         bridge.stop(timeout=5)
         loop.close()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_actor_guard_for_sql_doubles(monkeypatch):
+    # Real deletion fencing is covered by PostgreSQL production regressions.
+    monkeypatch.setattr(
+        "apps.api.app.services.community_chat_service.lock_active_actor", lambda *args: None
+    )

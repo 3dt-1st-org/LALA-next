@@ -5,7 +5,10 @@ import contextlib
 import json
 from collections import deque
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+from functools import partial
+from threading import BoundedSemaphore
 from typing import Annotated
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -91,12 +94,48 @@ _INVALID_BODY_HELP = "Message must be a JSON object with a body of 1-4000 charac
 # ---------------------------------------------------------------------------
 
 
+DB_WORK_CAPACITY = 16
+SEND_TIMEOUT_SECONDS = 2.0
+MAX_PENDING_BROADCASTS = 32
+_db_work_slots = BoundedSemaphore(DB_WORK_CAPACITY)
+_db_executor = ThreadPoolExecutor(max_workers=DB_WORK_CAPACITY, thread_name_prefix="chat-db")
+
+
+async def _run_db(function, **kwargs):
+    # Admission happens before submitting work: no unbounded executor queue.
+    if not _db_work_slots.acquire(blocking=False):
+        raise ServiceError(
+            status_code=503,
+            code="DATABASE_UNAVAILABLE",
+            message="Chat is busy. Please retry.",
+            retryable=True,
+        )
+    try:
+        future = _db_executor.submit(partial(function, **kwargs))
+    except BaseException:
+        _db_work_slots.release()
+        raise
+    # Cancellation of the caller must not release a still-running DB worker slot.
+    future.add_done_callback(lambda _: _db_work_slots.release())
+    return await asyncio.shield(asyncio.wrap_future(future))
+
+
+async def _send_json(websocket, payload):
+    try:
+        await asyncio.wait_for(websocket.send_json(payload), SEND_TIMEOUT_SECONDS)
+    except TimeoutError:
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(websocket.close(code=1013), SEND_TIMEOUT_SECONDS)
+        raise WebSocketDisconnect(code=1013) from None
+
+
 @dataclass
 class _Connection:
     websocket: WebSocket
     room_id: UUID
     issuer: str
     subject: str
+    sending: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     @property
     def actor_key(self) -> str:
@@ -130,6 +169,7 @@ class ConnectionManager:
     """
 
     def __init__(self) -> None:
+        self._pending_broadcasts = 0
         self._rooms: dict[UUID, list[_Connection]] = {}
         self._recent_ids: deque[str] = deque()
         self._recent_id_set: set[str] = set()
@@ -176,30 +216,39 @@ class ConnectionManager:
         connections = list(self._rooms.get(room_id, []))
         if not connections:
             return
-        allowed = await self._resolve_allowed_actors(room_id, connections)
-        dead: list[_Connection] = []
-        for connection in connections:
-            if exclude is not None and connection.websocket is exclude:
-                continue
+        if self._pending_broadcasts >= MAX_PENDING_BROADCASTS:
+            return  # Durable history is the recovery path under overload.
+        self._pending_broadcasts += 1
+        try:
+            allowed = await self._resolve_allowed_actors(room_id, connections)
             if allowed is None:
-                # Cannot verify (verifier missing/unavailable): fail closed
-                # with no delivery and no permissive fallback; sockets stay
-                # for the retryable REST/reconnect paths.
-                continue
-            if connection.actor_key not in allowed:
-                # Revoked after admission: close content-free and evict. The
-                # same 1008 policy code as a failed handshake keeps denial
-                # indistinguishable and never echoes payload or identity.
-                with contextlib.suppress(Exception):
-                    await connection.websocket.close(code=1008)
-                dead.append(connection)
-                continue
-            try:
-                await connection.websocket.send_json(payload)
-            except Exception:
-                dead.append(connection)
-        for connection in dead:
-            self.disconnect(connection.websocket, room_id)
+                return
+
+            async def deliver(connection):
+                if exclude is not None and connection.websocket is exclude:
+                    return
+                if connection.sending.locked():
+                    self.disconnect(connection.websocket, room_id)
+                    with contextlib.suppress(Exception):
+                        await asyncio.wait_for(
+                            connection.websocket.close(code=1013), SEND_TIMEOUT_SECONDS
+                        )
+                    return
+                async with connection.sending:
+                    try:
+                        if connection.actor_key not in allowed:
+                            self.disconnect(connection.websocket, room_id)
+                            await asyncio.wait_for(
+                                connection.websocket.close(code=1008), SEND_TIMEOUT_SECONDS
+                            )
+                        else:
+                            await _send_json(connection.websocket, payload)
+                    except Exception:
+                        self.disconnect(connection.websocket, room_id)
+
+            await asyncio.gather(*(deliver(connection) for connection in connections))
+        finally:
+            self._pending_broadcasts -= 1
 
     async def _resolve_allowed_actors(
         self,
@@ -274,35 +323,9 @@ async def _verify_room_access_for_actors(
     room_id: UUID,
     actors: list[tuple[str, str]],
 ) -> set[str]:
-    """Current room access for each connected actor (delivery-time gate).
-
-    Uses ``authenticated_room_access`` — the same room predicate as
-    reads/writes plus the active-account requirement — so a deleting or
-    hard-deleted actor's admitted socket loses delivery authority even in
-    public rooms. No parallel authorization policy. Each check is a bounded
-    single query run off the event loop via ``asyncio.to_thread`` (work is
-    bounded by the per-room connection cap). Any store failure propagates so
-    the manager fails closed while keeping sockets for the retryable REST
-    path.
-    """
-
+    """Revalidate all recipients in one database query, off the event loop."""
     service = get_community_chat_service()
-    results = await asyncio.gather(
-        *(
-            asyncio.to_thread(
-                service.authenticated_room_access,
-                room_id=room_id,
-                issuer=issuer,
-                subject=subject,
-            )
-            for issuer, subject in actors
-        )
-    )
-    allowed: set[str] = set()
-    for (issuer, subject), row in zip(actors, results, strict=True):
-        if row is not None:
-            allowed.add(f"{issuer}:{subject}")
-    return allowed
+    return await _run_db(service.authorized_actors, room_id=room_id, actors=actors)
 
 
 manager.attach_access_verifier(_verify_room_access_for_actors)
@@ -530,7 +553,8 @@ async def create_message(
         actor_key=_actor_key(identity.issuer or "", identity.subject or ""),
         limit_per_minute=CHAT_MESSAGE_REST_LIMIT_PER_MINUTE,
     )
-    payload = service.create_message(
+    payload = await _run_db(
+        service.create_message,
         room_id=room_id,
         issuer=identity.issuer or "",
         subject=identity.subject or "",
@@ -573,7 +597,7 @@ async def chat_room_ws(
         return
     active_service = service or get_community_chat_service()
     try:
-        claim = active_service.claim_ws_ticket(ticket=ticket, room_id=room_id)
+        claim = await _run_db(active_service.claim_ws_ticket, ticket=ticket, room_id=room_id)
     except ServiceError:
         # Store unavailable: ask the client to retry shortly (REST fallback).
         await websocket.close(code=1013)
@@ -637,26 +661,28 @@ async def _handle_chat_message(
     """
 
     if len(raw.encode("utf-8", errors="replace")) > MAX_FRAME_BYTES:
-        await websocket.send_json({"type": "error", "error": {"code": "FRAME_TOO_LARGE"}})
+        await _send_json(websocket, {"type": "error", "error": {"code": "FRAME_TOO_LARGE"}})
         return
 
     try:
         parsed = json.loads(raw)
     except (json.JSONDecodeError, TypeError):
-        await websocket.send_json({"type": "error", "error": {"code": "INVALID_JSON"}})
+        await _send_json(websocket, {"type": "error", "error": {"code": "INVALID_JSON"}})
         return
 
     if not isinstance(parsed, dict):
-        await websocket.send_json(
-            {"type": "error", "error": {"code": "INVALID_MESSAGE", "message": _INVALID_BODY_HELP}}
+        await _send_json(
+            websocket,
+            {"type": "error", "error": {"code": "INVALID_MESSAGE", "message": _INVALID_BODY_HELP}},
         )
         return
 
     try:
         message = ChatMessageIn.model_validate(parsed)
     except ValidationError:
-        await websocket.send_json(
-            {"type": "error", "error": {"code": "INVALID_MESSAGE", "message": _INVALID_BODY_HELP}}
+        await _send_json(
+            websocket,
+            {"type": "error", "error": {"code": "INVALID_MESSAGE", "message": _INVALID_BODY_HELP}},
         )
         return
 
@@ -668,14 +694,15 @@ async def _handle_chat_message(
             limit_per_minute=CHAT_MESSAGE_LIMIT_PER_MINUTE,
         )
     except ApiError as exc:
-        await websocket.send_json(
-            {"type": "error", "error": {"code": exc.code, "message": exc.message}}
+        await _send_json(
+            websocket, {"type": "error", "error": {"code": exc.code, "message": exc.message}}
         )
         return
 
     active_service = service or get_community_chat_service()
     try:
-        payload = active_service.create_message(
+        payload = await _run_db(
+            active_service.create_message,
             room_id=room_id,
             issuer=issuer,
             subject=subject,
@@ -683,8 +710,8 @@ async def _handle_chat_message(
             idempotency_key=message.idempotency_key,
         )
     except ServiceError as exc:
-        await websocket.send_json(
-            {"type": "error", "error": {"code": exc.code, "message": exc.message}}
+        await _send_json(
+            websocket, {"type": "error", "error": {"code": exc.code, "message": exc.message}}
         )
         return
 

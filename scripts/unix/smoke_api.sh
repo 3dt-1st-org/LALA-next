@@ -268,23 +268,23 @@ if [[ -n "$AUTH_CONFIG_FILE" ]]; then
   trap 'rm -f "$AUTH_CONFIG_FILE"' EXIT
 fi
 
-smoke_get "/api/v1/places?lat=37.2636&lng=127.0286&radius_m=1000" "${CURL_AUTH_ARGS[@]}"
-smoke_get "/api/v1/weather?lat=37.2636&lng=127.0286" "${CURL_AUTH_ARGS[@]}"
-smoke_get "/api/v1/plans/intervention?lat=37.2636&lng=127.0286&radius_m=1000" "${CURL_AUTH_ARGS[@]}"
+smoke_get "/api/v1/places?lat=37.2636&lng=127.0286&radius_m=1000" ${CURL_AUTH_ARGS[@]+"${CURL_AUTH_ARGS[@]}"}
+smoke_get "/api/v1/weather?lat=37.2636&lng=127.0286" ${CURL_AUTH_ARGS[@]+"${CURL_AUTH_ARGS[@]}"}
+smoke_get "/api/v1/plans/intervention?lat=37.2636&lng=127.0286&radius_m=1000" ${CURL_AUTH_ARGS[@]+"${CURL_AUTH_ARGS[@]}"}
 
 PLAN_BODY='{"lat":37.2636,"lng":127.0286,"radius_m":1000,"language":"ko"}'
-smoke_post_json "/api/v1/plans/daily" "$PLAN_BODY" "${CURL_AUTH_ARGS[@]}" >/dev/null
+smoke_post_json "/api/v1/plans/daily" "$PLAN_BODY" ${CURL_AUTH_ARGS[@]+"${CURL_AUTH_ARGS[@]}"} >/dev/null
 
 SCRIPT_BODY='{"place_id":"tour-api-3066000","place_name":"중랑아트센터","category":"culture_venue","language":"ko","mode":"brief"}'
-SCRIPT_RESULT="$(smoke_post_json "/api/v1/docents/script" "$SCRIPT_BODY" "${CURL_AUTH_ARGS[@]}")"
+SCRIPT_RESULT="$(smoke_post_json "/api/v1/docents/script" "$SCRIPT_BODY" ${CURL_AUTH_ARGS[@]+"${CURL_AUTH_ARGS[@]}"})"
 
 AUDIO_BODY='{"script":"LALA smoke audio","language":"ko"}'
 SERVER_SPEECH_MODE="$(readyz_mode speech)"
 SERVER_LIVE_SPEECH_STATUS="$(readyz_check live_speech)"
 if [[ "$SERVER_SPEECH_MODE" == "live-azure" || "$SERVER_LIVE_SPEECH_STATUS" == "enabled" ]]; then
-  smoke_post_audio "$AUDIO_BODY" "${CURL_AUTH_ARGS[@]}"
+  smoke_post_audio "$AUDIO_BODY" ${CURL_AUTH_ARGS[@]+"${CURL_AUTH_ARGS[@]}"}
 else
-  smoke_post_audio_disabled "$AUDIO_BODY" "${CURL_AUTH_ARGS[@]}"
+  smoke_post_audio_disabled "$AUDIO_BODY" ${CURL_AUTH_ARGS[@]+"${CURL_AUTH_ARGS[@]}"}
 fi
 
 if [[ "$PAID_DEPENDENCY" == "true" ]]; then
@@ -310,7 +310,7 @@ import os
 print(json.dumps({"script": os.environ["SCRIPT_TEXT"], "language": "ko"}, ensure_ascii=False))
 PY
 )"
-  smoke_post_audio "$AUDIO_BODY" "${CURL_AUTH_ARGS[@]}"
+  smoke_post_audio "$AUDIO_BODY" ${CURL_AUTH_ARGS[@]+"${CURL_AUTH_ARGS[@]}"}
   echo "Audio smoke returned audio/mpeg bytes."
 fi
 

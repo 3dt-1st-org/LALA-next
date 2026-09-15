@@ -4,7 +4,6 @@ import json
 import logging
 from uuid import UUID
 
-import pytest
 from fastapi.testclient import TestClient
 
 from apps.api.app.core.auth import RequestIdentity, require_logto_identity
@@ -283,8 +282,8 @@ def test_metrics_counts_account_deletion_service_failures_without_identity_label
     monkeypatch.setenv("LALA_GUEST_ACCESS", "true")
 
     class IdentityService:
-        def mark_user_deleting(self, issuer, subject):
-            return None
+        def delete_account(self, issuer, subject, management_client):
+            management_client.delete_user(subject)
 
     class FailingManagementClient:
         def delete_user(self, subject):
@@ -335,7 +334,7 @@ def test_metrics_counts_identity_deletion_stage_failure_once(client, monkeypatch
     monkeypatch.setenv("LALA_GUEST_ACCESS", "true")
 
     class FailingIdentityService:
-        def mark_user_deleting(self, issuer, subject):
+        def delete_account(self, issuer, subject, management_client):
             raise ServiceError(
                 status_code=503,
                 code="IDENTITY_DB_UNAVAILABLE",
@@ -364,8 +363,8 @@ def test_metrics_counts_unexpected_deletion_stage_failure_once(client, monkeypat
     monkeypatch.setenv("LALA_GUEST_ACCESS", "true")
 
     class IdentityService:
-        def mark_user_deleting(self, issuer, subject):
-            return None
+        def delete_account(self, issuer, subject, management_client):
+            management_client.delete_user(subject)
 
     class UnexpectedManagementClient:
         def delete_user(self, subject):
@@ -379,11 +378,11 @@ def test_metrics_counts_unexpected_deletion_stage_failure_once(client, monkeypat
     client.app.dependency_overrides[get_identity_service] = IdentityService
     client.app.dependency_overrides[get_logto_management_client] = UnexpectedManagementClient
 
-    with pytest.raises(RuntimeError, match="unexpected deletion failure"):
-        client.request(
-            "DELETE",
-            "/api/v1/me",
-            json={"confirmation": "delete-my-account"},
-        )
+    response = client.request(
+        "DELETE",
+        "/api/v1/me",
+        json={"confirmation": "delete-my-account"},
+    )
+    assert response.status_code == 500
 
     assert "lala_next_account_deletion_failure_total 1" in client.get("/metrics").text

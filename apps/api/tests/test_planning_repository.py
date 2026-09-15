@@ -14,6 +14,13 @@ from apps.api.app.services.planning_repository import (
 )
 
 
+@pytest.fixture(autouse=True)
+def isolate_identity_guard(monkeypatch):
+    monkeypatch.setattr(
+        "apps.api.app.services.planning_repository.lock_active_actor", lambda *args: None
+    )
+
+
 def _settings() -> Settings:
     return Settings(db_dsn="postgresql://redacted")
 

@@ -25,7 +25,7 @@ def test_readyz_reports_degraded_without_required_env(client, monkeypatch):
 
     response = client.get("/readyz")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     body = response.json()
     assert body["ok"] is True
     assert body["data"]["status"] == "degraded"
@@ -62,7 +62,7 @@ def test_readyz_accepts_bearer_token_as_client_auth(client, monkeypatch):
 
     response = client.get("/readyz")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     body = response.json()
     assert body["data"]["checks"]["client_auth"] == "configured"
     assert body["data"]["checks"]["client_identity"] == "static"
@@ -108,7 +108,7 @@ def test_legacy_public_demo_mode_env_alias_is_ignored(client, monkeypatch):
 
     response = client.get("/readyz")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     checks = response.json()["data"]["checks"]
     assert checks["client_auth"] == "missing"
     assert checks["client_identity"] == "missing"
@@ -128,7 +128,7 @@ def test_readyz_reports_public_contest_access(client, monkeypatch):
 
     response = client.get("/readyz")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     data = response.json()["data"]
     checks = data["checks"]
     assert checks["client_auth"] == "public-contest"
@@ -151,7 +151,7 @@ def test_readyz_reports_oauth_identity_rollout_configuration(client, monkeypatch
 
     response = client.get("/readyz")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     checks = response.json()["data"]["checks"]
     assert checks["client_identity"] == "transition"
     assert checks["oauth_issuer"] == "configured"
@@ -323,7 +323,7 @@ def test_readyz_never_exposes_configuration_values(client, monkeypatch):
 
     response = client.get("/readyz")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     for marker in markers.values():
         assert marker not in response.text
 
@@ -337,7 +337,7 @@ def test_readyz_reports_db_degraded_when_probe_fails(client, monkeypatch):
 
     response = client.get("/readyz")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     body = response.json()
     assert body["data"]["status"] == "degraded"
     assert body["data"]["checks"]["db"] == "degraded"
@@ -372,7 +372,7 @@ def test_readyz_reports_identity_schema_degraded_without_changing_general_db_sta
 
     response = client.get("/readyz")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     data = response.json()["data"]
     assert data["status"] == "degraded"
     assert data["checks"]["db"] == "configured"
@@ -393,7 +393,7 @@ def test_readyz_reports_degraded_when_postgis_probe_fails(client, monkeypatch):
 
     response = client.get("/readyz")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     body = response.json()
     assert body["data"]["status"] == "degraded"
     assert body["data"]["checks"]["db"] == "configured"
@@ -532,7 +532,7 @@ def test_readyz_reports_rag_serving_state_report_only(client, monkeypatch):
 def test_readyz_reports_rag_serving_state_defaults(client):
     response = client.get("/readyz")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     body = response.json()
     assert body["data"]["checks"]["rag_retrieval_mode"] == "legacy"
     assert body["data"]["checks"]["rag_embedding_method"] == "local-hash"
@@ -550,7 +550,7 @@ def test_readyz_reports_worker_contract_registry_failure(client, monkeypatch):
 
     response = client.get("/readyz")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     body = response.json()
     assert body["data"]["status"] == "degraded"
     assert body["data"]["checks"]["worker_contracts"] == "degraded"
@@ -660,7 +660,7 @@ def test_v1_guest_access_coexists_with_logto_derived_jwt_validation_unauthentica
     monkeypatch.setenv("LALA_PUBLIC_CONTEST_ACCESS", "true")
 
     readiness_response = client.get("/readyz")
-    assert readiness_response.status_code == 200
+    assert readiness_response.status_code == 503
     # Logto-derived: legacy OAUTH_* are unset, so "configured" can only come from
     # derive_logto_oidc_urls() populating oauth_issuer/audience/jwks_url.
     assert readiness_response.json()["data"]["checks"]["jwt_validation"] == "configured"

@@ -16,7 +16,7 @@ def test_readyz_reports_oauth_jwt_auth_without_static_credentials(client, monkey
 
     response = client.get("/readyz")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     checks = response.json()["data"]["checks"]
     assert checks["client_auth"] == "configured"
     assert checks["client_identity"] == "oauth-configured"

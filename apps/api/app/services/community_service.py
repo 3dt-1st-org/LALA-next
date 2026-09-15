@@ -7,8 +7,10 @@ from typing import Any
 from uuid import UUID
 
 from apps.api.app.core.config import Settings, get_settings
+from apps.api.app.core.database import connect_db
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.services.community_idempotency import canonical_request_hash
+from apps.api.app.services.identity_repository import lock_active_actor
 
 IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60
 IDEMPOTENCY_SCOPE_POST_CREATE = "community.post.create"
@@ -155,10 +157,12 @@ class CommunityRepository:
                 updated_at
         """
         with self._cursor() as cur:
+            lock_active_actor(cur, issuer, subject)
             cur.execute(sql, (issuer, subject, title, body, tags))
             row = cur.fetchone()
             assert row is not None  # RETURNING always yields one row on insert.
             row["author_user_id"] = _resolve_author_user_id(cur, issuer, subject)
+            _post_payload(row)
         return row
 
     def create_post_idempotent(
@@ -215,6 +219,7 @@ class CommunityRepository:
                 created_at, updated_at
         """
         with self._cursor() as cur:
+            lock_active_actor(cur, issuer, subject)
             cur.execute(purge_sql, (IDEMPOTENCY_SCOPE_POST_CREATE,))
             cur.execute(
                 claim_sql,
@@ -311,19 +316,14 @@ class CommunityRepository:
                 updated_at
         """
         with self._cursor() as cur:
+            lock_active_actor(cur, issuer, subject)
             cur.execute(sql, (str(post_id), issuer, subject, body, str(post_id)))
             row = cur.fetchone()
-        if row is None:
-            return None
-        with self._cursor() as cur:
-            cur.execute(
-                "SELECT id AS author_user_id FROM identity.users "
-                "WHERE issuer = %s AND subject = %s",
-                (issuer, subject),
-            )
-            identity_row = cur.fetchone()
-        row["author_user_id"] = identity_row["id"] if identity_row else None  # type: ignore[index]
-        return row
+            if row is None:
+                return None
+            row["author_user_id"] = _resolve_author_user_id(cur, issuer, subject)
+            _comment_payload(row)
+            return row
 
     def toggle_like(self, *, post_id: UUID, issuer: str, subject: str) -> dict[str, Any] | None:
         delete_sql = """
@@ -342,6 +342,7 @@ class CommunityRepository:
             "SELECT count(*)::int AS like_count FROM community.post_likes WHERE post_id = %s"
         )
         with self._cursor() as cur:
+            lock_active_actor(cur, issuer, subject)
             cur.execute(delete_sql, (str(post_id), issuer, subject))
             deleted = cur.fetchone()
             if deleted is not None:
@@ -414,6 +415,7 @@ class CommunityRepository:
             RETURNING followee_issuer
         """
         with self._cursor() as cur:
+            lock_active_actor(cur, follower_issuer, follower_subject)
             cur.execute(resolve_followee_sql, (str(followee_user_id),))
             followee = cur.fetchone()
             if followee is None:
@@ -472,6 +474,7 @@ class CommunityRepository:
             RETURNING r.id, r.reason_code, r.status, (xmax = 0) AS inserted
         """
         with self._cursor() as cur:
+            lock_active_actor(cur, issuer, subject)
             cur.execute(author_sql, (str(post_id),))
             post = cur.fetchone()
             if post is None:
@@ -503,18 +506,14 @@ class CommunityRepository:
                 with conn:
                     with conn.cursor(cursor_factory=RealDictCursor) as cur:
                         yield cur
-        except CommunityRepositoryUnavailable:
+        except (CommunityRepositoryUnavailable, ServiceError):
             raise
         except Exception as exc:
             raise CommunityRepositoryUnavailable() from exc
 
 
 def _connect(*, dsn: str, connect_timeout: int):
-    try:
-        import psycopg2
-    except Exception as exc:
-        raise CommunityRepositoryUnavailable() from exc
-    return psycopg2.connect(dsn, connect_timeout=connect_timeout)
+    return connect_db(dsn, connect_timeout=connect_timeout)
 
 
 def _resolve_author_user_id(cur: Any, issuer: str, subject: str) -> Any:
@@ -523,7 +522,7 @@ def _resolve_author_user_id(cur: Any, issuer: str, subject: str) -> Any:
         (issuer, subject),
     )
     identity_row = cur.fetchone()
-    return identity_row["id"] if identity_row else None
+    return identity_row["author_user_id"] if identity_row else None
 
 
 class CommunityService:

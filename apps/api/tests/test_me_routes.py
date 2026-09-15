@@ -36,6 +36,11 @@ class FakeIdentityService:
         self.marked: list[tuple[str, str]] = []
         self.finalized: list[tuple[str, str]] = []
 
+    def delete_account(self, issuer, subject, management_client):
+        self.mark_user_deleting(issuer, subject)
+        management_client.delete_user(subject)
+        self.finalize_user_deletion(issuer, subject)
+
     def provision_user(self, issuer: str, subject: str) -> LocalUser:
         self.provisioned.append((issuer, subject))
         return USER

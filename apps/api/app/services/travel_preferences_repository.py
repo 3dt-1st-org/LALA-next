@@ -7,6 +7,9 @@ from datetime import datetime
 from typing import Any
 
 from apps.api.app.core.config import Settings, get_settings
+from apps.api.app.core.database import connect_db
+from apps.api.app.core.errors import ServiceError
+from apps.api.app.services.identity_repository import lock_active_actor
 
 TRAVEL_PREFERENCES_SCHEMA_VERSION = 1
 
@@ -37,7 +40,7 @@ class TravelPreferencesRepository:
         self._connect = connect or _connect
 
     def get(self, *, issuer: str, subject: str) -> TravelPreferencesRecord | None:
-        with self._cursor() as cur:
+        with self._cursor(issuer=issuer, subject=subject) as cur:
             cur.execute(
                 """
                 SELECT schema_version, revision, payload, updated_at
@@ -57,7 +60,7 @@ class TravelPreferencesRepository:
         expected_revision: int,
         preferences: dict[str, Any],
     ) -> TravelPreferencesRecord:
-        with self._cursor() as cur:
+        with self._cursor(issuer=issuer, subject=subject) as cur:
             cur.execute(
                 """
                 SELECT revision
@@ -118,7 +121,7 @@ class TravelPreferencesRepository:
             return _required_record(updated)
 
     @contextmanager
-    def _cursor(self) -> Iterator[Any]:
+    def _cursor(self, *, issuer: str, subject: str) -> Iterator[Any]:
         if not self._settings.db_dsn:
             raise TravelPreferencesRepositoryUnavailable()
         try:
@@ -129,8 +132,13 @@ class TravelPreferencesRepository:
             with closing(self._connect(dsn=self._settings.db_dsn, connect_timeout=3)) as conn:
                 with conn:
                     with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                        lock_active_actor(cur, issuer, subject)
                         yield cur
-        except (TravelPreferencesRepositoryUnavailable, TravelPreferencesRevisionConflict):
+        except (
+            ServiceError,
+            TravelPreferencesRepositoryUnavailable,
+            TravelPreferencesRevisionConflict,
+        ):
             raise
         except Exception as exc:  # pragma: no cover - DB-specific failure
             raise TravelPreferencesRepositoryUnavailable() from exc
@@ -141,11 +149,7 @@ def get_travel_preferences_repository() -> TravelPreferencesRepository:
 
 
 def _connect(*, dsn: str, connect_timeout: int) -> object:
-    try:
-        import psycopg2
-    except Exception as exc:  # pragma: no cover
-        raise TravelPreferencesRepositoryUnavailable() from exc
-    return psycopg2.connect(dsn, connect_timeout=connect_timeout)
+    return connect_db(dsn, connect_timeout=connect_timeout)
 
 
 def _as_json(value: dict[str, Any]) -> Any:

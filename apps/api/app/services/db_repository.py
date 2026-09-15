@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from apps.api.app.core.config import get_settings
+from apps.api.app.core.database import connect_db
 from apps.api.app.services import region_catalog
 from apps.api.app.services.dust_quality import build_dust_payload
 from apps.api.app.services.official_media import normalize_official_image_url
@@ -30,11 +31,7 @@ def check_db_status(dsn: str) -> str:
     if not dsn:
         return "skipped"
     try:
-        import psycopg2
-    except Exception:
-        return "degraded"
-    try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -59,11 +56,7 @@ def check_identity_schema_status(dsn: str) -> str:
     if not dsn:
         return "skipped"
     try:
-        import psycopg2
-    except Exception:
-        return "degraded"
-    try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -120,11 +113,7 @@ def check_postgis_status(dsn: str) -> str:
     if not dsn:
         return "skipped"
     try:
-        import psycopg2
-    except Exception:
-        return "degraded"
-    try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -149,7 +138,6 @@ def check_data_freshness_status(dsn: str, *, weather_max_hours: int = 24) -> str
     if not dsn:
         return "skipped"
     try:
-        import psycopg2
         from psycopg2.extras import RealDictCursor
     except Exception:
         return "degraded"
@@ -161,7 +149,7 @@ def check_data_freshness_status(dsn: str, *, weather_max_hours: int = 24) -> str
             (SELECT max(updated_at) FROM rag.knowledge_chunks) AS rag_updated_at
     """
     try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(sql)
                 row = cur.fetchone()
@@ -200,7 +188,6 @@ def fetch_places(
     if not dsn:
         return []
     try:
-        import psycopg2
         from psycopg2.extras import RealDictCursor
     except Exception:
         raise DatabaseReadError("psycopg2_unavailable") from None
@@ -349,7 +336,7 @@ def fetch_places(
     else:
         params = (*base_params, radius_m, max(1, min(limit, 100)))
     try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(sql, params)
                 rows = list(cur.fetchall())
@@ -554,7 +541,6 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
     if not dsn:
         return None
     try:
-        import psycopg2
         from psycopg2.extras import RealDictCursor
     except Exception:
         return None
@@ -619,7 +605,7 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
         LIMIT 1
     """
     try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(sql, (lng, lat, min_lat, max_lat, min_lng, max_lng, lat, lng))
                 row = cur.fetchone()
@@ -674,7 +660,6 @@ def fetch_nearest_region_labels(
     if not dsn or limit <= 0:
         return []
     try:
-        import psycopg2
         from psycopg2.extras import RealDictCursor
     except Exception:
         return []
@@ -701,7 +686,7 @@ def fetch_nearest_region_labels(
         LIMIT %s
     """
     try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(sql, (lng, lat, min_lat, max_lat, min_lng, max_lng, limit))
                 rows = list(cur.fetchall())
@@ -734,7 +719,6 @@ def fetch_docent_script_cache(
     if not dsn:
         return None
     try:
-        import psycopg2
         from psycopg2.extras import RealDictCursor
     except Exception:
         return None
@@ -760,7 +744,7 @@ def fetch_docent_script_cache(
     """
     params = (place_id, category, language, mode)
     try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(sql, params)
                 row = cur.fetchone()
@@ -791,7 +775,6 @@ def fetch_docent_knowledge_context(
     if not dsn or not place_id.strip() or limit <= 0:
         return []
     try:
-        import psycopg2
         from psycopg2.extras import RealDictCursor
     except Exception:
         return []
@@ -823,7 +806,7 @@ def fetch_docent_knowledge_context(
         LIMIT %s
     """
     try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(sql, (place_id.strip(), limit))
                 rows = cur.fetchall()
@@ -853,7 +836,6 @@ def fetch_docent_place_profile_context(*, place_id: str) -> list[dict[str, Any]]
     if not dsn or not normalized_place_id:
         return []
     try:
-        import psycopg2
         from psycopg2.extras import RealDictCursor
     except Exception:
         return []
@@ -875,7 +857,7 @@ def fetch_docent_place_profile_context(*, place_id: str) -> list[dict[str, Any]]
         LIMIT 1
     """
     try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(sql, (normalized_place_id,))
                 row = cur.fetchone()
@@ -1108,10 +1090,6 @@ def save_docent_script_cache(
     dsn = get_settings().db_dsn
     if not dsn:
         return False
-    try:
-        import psycopg2
-    except Exception:
-        return False
 
     sql = """
         INSERT INTO travel.docent_scripts (
@@ -1143,7 +1121,7 @@ def save_docent_script_cache(
     """
     params = (place_id, category, language, mode, script, source, ttl_sec)
     try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor() as cur:
                 cur.execute(sql, params)
             conn.commit()

@@ -13,6 +13,14 @@ from apps.api.app.services.travel_preferences_repository import (
     TravelPreferencesRevisionConflict,
 )
 
+
+@pytest.fixture(autouse=True)
+def isolate_identity_guard(monkeypatch):
+    monkeypatch.setattr(
+        "apps.api.app.services.travel_preferences_repository.lock_active_actor", lambda *args: None
+    )
+
+
 UPDATED_AT = datetime(2026, 9, 2, tzinfo=UTC)
 ROOT = Path(__file__).resolve().parents[3]
 PREFERENCES_SQL = ROOT / "sql" / "canonical" / "065_user_travel_preferences.sql"

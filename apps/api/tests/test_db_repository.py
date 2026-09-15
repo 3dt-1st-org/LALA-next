@@ -35,6 +35,7 @@ def test_check_db_status_requires_canonical_relations(monkeypatch):
     psycopg2_module = types.ModuleType("psycopg2")
     psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
     monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setattr(db_repository, "connect_db", psycopg2_module.connect)
 
     status = db_repository.check_db_status("postgresql://db.example/lala")
 
@@ -71,6 +72,7 @@ def test_check_db_status_degrades_when_canonical_relation_is_missing(monkeypatch
     psycopg2_module = types.ModuleType("psycopg2")
     psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
     monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setattr(db_repository, "connect_db", psycopg2_module.connect)
 
     status = db_repository.check_db_status("postgresql://db.example/lala")
 
@@ -105,6 +107,7 @@ def test_check_identity_schema_status_requires_tombstone_storage_and_unique_keys
     psycopg2_module = types.ModuleType("psycopg2")
     psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
     monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setattr(db_repository, "connect_db", psycopg2_module.connect)
 
     status = db_repository.check_identity_schema_status("postgresql://db.example/lala")
 
@@ -139,6 +142,7 @@ def test_check_identity_schema_status_degrades_without_deleted_users(monkeypatch
     psycopg2_module = types.ModuleType("psycopg2")
     psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
     monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setattr(db_repository, "connect_db", psycopg2_module.connect)
 
     assert db_repository.check_identity_schema_status("postgresql://db.example/lala") == "degraded"
 
@@ -169,6 +173,7 @@ def test_check_postgis_status_requires_extension_and_spatial_index(monkeypatch):
     psycopg2_module = types.ModuleType("psycopg2")
     psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
     monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setattr(db_repository, "connect_db", psycopg2_module.connect)
 
     status = db_repository.check_postgis_status("postgresql://db.example/lala")
 
@@ -202,6 +207,7 @@ def test_check_postgis_status_degrades_without_spatial_index(monkeypatch):
     psycopg2_module = types.ModuleType("psycopg2")
     psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
     monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setattr(db_repository, "connect_db", psycopg2_module.connect)
 
     status = db_repository.check_postgis_status("postgresql://db.example/lala")
 
@@ -269,6 +275,7 @@ def test_fetch_places_uses_radius_bound_ranking_query(monkeypatch):
     extras_module = types.ModuleType("psycopg2.extras")
     extras_module.RealDictCursor = object()
     monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setattr(db_repository, "connect_db", psycopg2_module.connect)
     monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_module)
     monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
 
@@ -330,6 +337,7 @@ def test_fetch_places_raises_when_configured_db_read_fails(monkeypatch):
     extras_module = types.ModuleType("psycopg2.extras")
     extras_module.RealDictCursor = object()
     monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setattr(db_repository, "connect_db", psycopg2_module.connect)
     monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_module)
     monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
 
@@ -390,6 +398,7 @@ def test_fetch_latest_weather_prefers_nearest_region_match(monkeypatch):
     extras_module = types.ModuleType("psycopg2.extras")
     extras_module.RealDictCursor = object()
     monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setattr(db_repository, "connect_db", psycopg2_module.connect)
     monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_module)
     monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
 
@@ -452,6 +461,7 @@ def test_fetch_latest_weather_marks_latest_fallback_without_region_match(monkeyp
     extras_module = types.ModuleType("psycopg2.extras")
     extras_module.RealDictCursor = object()
     monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setattr(db_repository, "connect_db", psycopg2_module.connect)
     monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_module)
     monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
 
@@ -499,6 +509,7 @@ def test_fetch_nearest_region_labels_uses_postgis_distance_order(monkeypatch):
     extras_module = types.ModuleType("psycopg2.extras")
     extras_module.RealDictCursor = object()
     monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setattr(db_repository, "connect_db", psycopg2_module.connect)
     monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_module)
     monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
 
@@ -557,6 +568,7 @@ def test_fetch_docent_knowledge_context_reads_place_rag_chunks(monkeypatch):
     extras_module = types.ModuleType("psycopg2.extras")
     extras_module.RealDictCursor = object()
     monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setattr(db_repository, "connect_db", psycopg2_module.connect)
     monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_module)
     monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
 
@@ -612,6 +624,7 @@ def test_fetch_docent_place_profile_context_reads_public_place_profile(monkeypat
     extras_module = types.ModuleType("psycopg2.extras")
     extras_module.RealDictCursor = object()
     monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setattr(db_repository, "connect_db", psycopg2_module.connect)
     monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_module)
     monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
 
@@ -851,6 +864,7 @@ def _install_fake_places_db(monkeypatch, rows):
     extras_module = types.ModuleType("psycopg2.extras")
     extras_module.RealDictCursor = object()
     monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setattr(db_repository, "connect_db", psycopg2_module.connect)
     monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_module)
     monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
     return captured

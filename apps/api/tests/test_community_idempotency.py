@@ -100,7 +100,7 @@ def test_post_idempotent_created_path_claims_stores_and_returns_payload() -> Non
         [
             {"idempotency_key": "key-1"},  # claim wins
             _inserted_post_row(),  # insert
-            {"id": AUTHOR_USER_ID},  # author resolve
+            {"author_user_id": AUTHOR_USER_ID},  # author resolve
         ]
     )
     request_hash = canonical_request_hash({"body": "body", "tags": ["travel"], "title": "title"})
@@ -189,7 +189,7 @@ def test_post_idempotent_rejects_same_key_different_payload() -> None:
 
 def test_post_idempotent_keys_are_actor_scoped_by_primary_key() -> None:
     repository, executed = _repo(
-        [{"idempotency_key": "key-1"}, _inserted_post_row(), {"id": AUTHOR_USER_ID}]
+        [{"idempotency_key": "key-1"}, _inserted_post_row(), {"author_user_id": AUTHOR_USER_ID}]
     )
 
     repository.create_post_idempotent(
@@ -368,3 +368,11 @@ def test_router_conflict_maps_to_409_envelope(client, api_key) -> None:
     body = response.json()
     assert body["ok"] is False
     assert body["error"]["code"] == "IDEMPOTENCY_KEY_CONFLICT"
+
+
+@pytest.fixture(autouse=True)
+def _isolate_actor_guard_for_sql_doubles(monkeypatch):
+    # Real deletion fencing is covered by PostgreSQL production regressions.
+    monkeypatch.setattr(
+        "apps.api.app.services.community_service.lock_active_actor", lambda *args: None
+    )

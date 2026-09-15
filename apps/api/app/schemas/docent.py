@@ -8,31 +8,31 @@ from apps.api.app.services.normalization import normalize_docent_mode, normalize
 
 
 class DocentScriptRequest(BaseModel):
-    place_id: str = Field(min_length=1)
-    place_name: str | None = None
-    address: str | None = None
-    region_ko: str | None = None
-    region_en: str | None = None
+    place_id: str = Field(min_length=1, max_length=128)
+    place_name: str | None = Field(default=None, max_length=512)
+    address: str | None = Field(default=None, max_length=512)
+    region_ko: str | None = Field(default=None, max_length=512)
+    region_en: str | None = Field(default=None, max_length=512)
     distance_m: int | None = Field(default=None, ge=0)
-    source: str | None = None
-    upstream_source: str | None = None
+    source: str | None = Field(default=None, max_length=512)
+    upstream_source: str | None = Field(default=None, max_length=512)
     final_score: float | None = Field(default=None, ge=0, le=1)
     local_spending_score: float | None = Field(default=None, ge=0, le=1)
     small_merchant_fit_score: float | None = Field(default=None, ge=0, le=1)
     demand_dispersion_score: float | None = Field(default=None, ge=0, le=1)
     weather_fit_score: float | None = Field(default=None, ge=0, le=1)
     culture_relevance_score: float | None = Field(default=None, ge=0, le=1)
-    weather_temp: str | None = None
-    weather_icon: str | None = None
-    weather_outdoor_status: str | None = None
-    dust_grade: str | None = None
-    dust_pm10: str | None = None
-    dust_pm25: str | None = None
-    dust_pm10_grade: str | None = None
-    dust_pm25_grade: str | None = None
+    weather_temp: str | None = Field(default=None, max_length=512)
+    weather_icon: str | None = Field(default=None, max_length=512)
+    weather_outdoor_status: str | None = Field(default=None, max_length=512)
+    dust_grade: str | None = Field(default=None, max_length=512)
+    dust_pm10: str | None = Field(default=None, max_length=512)
+    dust_pm25: str | None = Field(default=None, max_length=512)
+    dust_pm10_grade: str | None = Field(default=None, max_length=512)
+    dust_pm25_grade: str | None = Field(default=None, max_length=512)
     category: Literal["attraction", "restaurant", "event", "culture_venue"]
-    language: str = "ko"
-    mode: str = "brief"
+    language: str = Field(default="ko", max_length=16)
+    mode: str = Field(default="brief", max_length=16)
 
     @field_validator("place_id")
     @classmethod
@@ -77,8 +77,8 @@ class DocentScriptRequest(BaseModel):
 
 
 class DocentAudioRequest(BaseModel):
-    script: str = Field(min_length=1)
-    language: str = "ko"
+    script: str = Field(min_length=1, max_length=12000)
+    language: str = Field(default="ko", max_length=16)
 
     @field_validator("script")
     @classmethod
