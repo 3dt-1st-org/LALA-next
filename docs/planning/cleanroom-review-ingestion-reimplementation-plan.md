@@ -16,9 +16,14 @@
 >
 > Reconciliation note (2026-08-19, corrected 2026-08-22 and 2026-08-24,
 > re-verified 2026-09-08 against PR #60's merged migration + service source,
-> and re-verified 2026-09-11 against PR #60's foundation worktree
+> re-verified 2026-09-11 against PR #60's foundation worktree
 > (`geondongkim/lala-review-ingestion-foundation`) and the current
-> `origin/main` canonical sequence):
+> `origin/main` canonical sequence, and re-verified 2026-09-16 against PR
+> #60's current source in that worktree (`e143c3d6` — its
+> `062_review_ingestion_governance.sql` and
+> `apps/api/app/services/review_ingest_governance.py` are byte-identical to
+> `origin/main`'s) and against `origin/main` (`41468b01`, whose canonical
+> sequence now runs through `071_api_cost_controls.sql`)):
 > this revision aligns the plan with the approved contract decisions and with
 > PR #60's **merged** foundation (`062_review_ingestion_governance.sql` +
 > `apps/api/app/services/review_ingest_governance.py`). Locked facts it
@@ -754,11 +759,16 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
   quarantine → finalize inside one transaction
   (`persist_review_ingest_run`, as PR #60 ships it); source
   registration (`register_review_source`) is a separate admin operation in its
-  own transaction, not part of the batch boundary. (A later, post-#60 change on
-  `main` refactored the same boundary into a cursor-taking
-  `govern_review_ingest_on_cursor` variant for callers that co-locate the
-  aggregate upsert in the same transaction; the one-transaction guarantee this
-  plan relies on holds in both forms.) The aggregate-only receipt/dedupe is
+  own transaction, not part of the batch boundary. PR #60's current source
+  ships this boundary as two equivalent entry points:
+  `persist_review_ingest_run` (owns its own connection and `with conn:`
+  transaction) is a thin wrapper around the cursor-taking
+  `govern_review_ingest_on_cursor` (which runs the same gate → classify →
+  run create/resume → receipt → quarantine → finalize sequence on a
+  caller-supplied cursor, for callers that co-locate the aggregate upsert in
+  the same transaction); the two files are byte-identical between PR #60's
+  branch and `main`, and the one-transaction guarantee this plan relies on
+  holds at both entry points. The aggregate-only receipt/dedupe is
   **implemented by this same migration**, not held for a separate one: receipts
   key cross-batch dedupe on (source, external_key, `content_sha256`), so an
   exact replay (same triple, any run) yields `rowcount 0` and does not re-emit
@@ -776,10 +786,12 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
 
 > **Migration-numbering rule (locked):** `062` is already in use by
 > `062_review_ingestion_governance.sql` on `main`, and the canonical sequence on
-> `main` has since continued past it (as re-verified 2026-09-11 against
-> `origin/main`, through `068_community_chat_durable_controls.sql`; the
-> earlier "through `067_community_post_reports.sql`" anchor in this note was
-> already stale when written, since `068` had landed on `main` beforehand).
+> `main` has since continued past it (as re-verified 2026-09-16 against
+> `origin/main`, through `071_api_cost_controls.sql`; the previous
+> "through `068_community_chat_durable_controls.sql`" anchor — like the
+> "through `067`" one before it — went stale after the fact, as
+> `069_identity_deletion_jobs.sql`, `070_community_durability.sql`, and
+> `071_api_cost_controls.sql` landed on `main` after it was written).
 > The TARGET items above therefore carry
 > **no number — not even a document-list position that could be misread as one**:
 > each takes the next free canonical number at the time it is implemented,
