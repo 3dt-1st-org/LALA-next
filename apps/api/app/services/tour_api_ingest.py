@@ -12,6 +12,7 @@ from apps.api.app.services.official_ingest_validation import (
     validate_official_coordinate,
 )
 from apps.api.app.services.official_media import official_image_url_or_none
+from apps.api.app.services.official_paging import OfficialPage, run_official_paged_fetch
 from apps.api.app.services.official_source_errors import (
     raise_for_official_http_status,
     raise_for_official_result_code,
@@ -159,49 +160,33 @@ def fetch_tour_api_places(
     rejection_counter = OfficialRejectionCounter()
 
     for content_type_id in content_type_ids:
-        remaining = per_type_rows
-        page_no = 1
-        # totalCount is the total matching rows for this (area, content_type)
-        # query and repeats unchanged on every page; capture it once per type so
-        # a complete multi-page pull is not double-counted as partial.
-        type_total: int | None = None
-        while remaining > 0:
-            num_rows = min(page_size, remaining)
-            response = requests.get(
-                f"{TOUR_API_BASE_URL}/{TOUR_API_OPERATION}",
-                params={
-                    "serviceKey": service_key,
-                    "MobileOS": "ETC",
-                    "MobileApp": "LALA-next",
-                    "_type": "json",
-                    "numOfRows": num_rows,
-                    "pageNo": page_no,
-                    "areaCode": area_code,
-                    "contentTypeId": content_type_id,
-                    "arrange": "C",
-                },
-                timeout=timeout,
-            )
-            request_count += 1
-            # Typed, fixed-reason error; the raw upstream URL (which carries
-            # serviceKey=...) is never echoed in the exception message (F2).
-            raise_for_official_http_status(source="tour_api", status_code=response.status_code)
-            payload = response.json()
-            items = _extract_items(payload)
-            page_total = _body_total_count(payload)
-            if page_total and (type_total is None or page_total > type_total):
-                type_total = page_total
-            raw_count += len(items)
-            for item in items:
-                place = parse_tour_api_place(item, counter=rejection_counter)
-                if place is not None:
-                    places.append(place)
-            if len(items) < num_rows:
-                break
-            remaining -= num_rows
-            page_no += 1
-        if type_total:
-            total_count_sum += type_total
+        paged = run_official_paged_fetch(
+            source="tour_api",
+            url=f"{TOUR_API_BASE_URL}/{TOUR_API_OPERATION}",
+            service_key=service_key,
+            rows=per_type_rows,
+            page_size=page_size,
+            timeout=timeout,
+            http_get=requests.get,
+            response_payload=lambda response: response.json(),
+            build_params=lambda page_no, num_rows, key, content_type_id=content_type_id: {
+                "serviceKey": key,
+                "MobileOS": "ETC",
+                "MobileApp": "LALA-next",
+                "_type": "json",
+                "numOfRows": num_rows,
+                "pageNo": page_no,
+                "areaCode": area_code,
+                "contentTypeId": content_type_id,
+                "arrange": "C",
+            },
+            parse_page=lambda payload: _parse_tour_api_page(payload, rejection_counter),
+        )
+        request_count += paged.request_count
+        places.extend(place for place in paged.items if isinstance(place, TourApiPlace))
+        raw_count += paged.raw_count
+        if paged.total_count:
+            total_count_sum += paged.total_count
 
     deduped_places = _dedupe_places(places)
     image_request_count = 0
@@ -342,6 +327,20 @@ def parse_tour_api_place(
         first_image=official_image_url_or_none(item.get("firstimage")),
         modified_time=_optional_text(item.get("modifiedtime")),
     )
+
+
+def _parse_tour_api_page(
+    payload: dict[str, Any],
+    counter: OfficialRejectionCounter,
+) -> OfficialPage:
+    items = _extract_items(payload)
+    places = [
+        place
+        for item in items
+        if (place := parse_tour_api_place(item, counter=counter)) is not None
+    ]
+    total_count = _body_total_count(payload) or None
+    return OfficialPage(items=tuple(places), total_count=total_count, raw_count=len(items))
 
 
 def _fill_missing_official_images(

@@ -7,47 +7,10 @@ from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 
 from apps.api.app.core.config import Settings
+from apps.api.app.core.contract_policy import policy_for_operation
 
 V1_PATH_PREFIX = "/api/v1/"
 DOCENT_AUDIO_PATH = "/api/v1/docents/audio"
-HEALTHZ_PATH = "/healthz"
-METRICS_PATH = "/metrics"
-READYZ_PATH = "/readyz"
-PLACES_PATH = "/api/v1/places"
-WEATHER_PATH = "/api/v1/weather"
-DOCENT_SCRIPT_PATH = "/api/v1/docents/script"
-DAILY_PLAN_PATH = "/api/v1/plans/daily"
-INTERVENTION_PATH = "/api/v1/plans/intervention"
-ME_PATH = "/api/v1/me"
-ME_PATH_PREFIX = "/api/v1/me/"
-LOCAL_SIGNALS_PATH_PREFIX = "/api/v1/community/signals"
-LOCAL_SIGNALS_PLACES_PATH_PREFIX = "/api/v1/community/places/"
-COMMUNITY_MUTATION_PATHS = frozenset(
-    {
-        "/api/v1/community/posts",
-        "/api/v1/community/posts/{post_id}/comments",
-        "/api/v1/community/posts/{post_id}/like",
-        "/api/v1/community/posts/{post_id}/reports",
-        "/api/v1/community/follows",
-        "/api/v1/community/chat/rooms",
-        "/api/v1/community/chat/rooms/{room_id}/messages",
-        "/api/v1/community/chat/rooms/{room_id}/ws-ticket",
-        "/api/v1/community/chat/rooms/{room_id}/members",
-    }
-)
-
-OPERATION_TIMEOUT_SECONDS = {
-    HEALTHZ_PATH: 3,
-    METRICS_PATH: 3,
-    READYZ_PATH: 3,
-    PLACES_PATH: 12,
-    WEATHER_PATH: 12,
-    DOCENT_SCRIPT_PATH: 30,
-    DOCENT_AUDIO_PATH: 30,
-    DAILY_PLAN_PATH: 20,
-    INTERVENTION_PATH: 12,
-    ME_PATH: 12,
-}
 
 
 def configure_openapi(app: FastAPI, settings: Settings) -> None:
@@ -157,34 +120,22 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
             continue
         for method, operation in path_item.items():
             if isinstance(operation, dict):
-                is_local_signals = path.startswith(LOCAL_SIGNALS_PATH_PREFIX) or path.startswith(
-                    LOCAL_SIGNALS_PLACES_PATH_PREFIX
-                )
-                if (
-                    path == ME_PATH
-                    or path.startswith(ME_PATH_PREFIX)
-                    or (is_local_signals and method.lower() != "get")
-                ):
-                    operation["security"] = [{"OAuthBearerAuth": []}]
+                policy = policy_for_operation(path, method)
+                operation["security"] = policy.security
+                if policy.remove_generated_auth_parameters:
                     _remove_generated_auth_parameters(operation)
-                else:
-                    operation["security"] = [
-                        {},
-                        {"BearerAuth": []},
-                        {"MigrationApiKey": []},
-                    ]
                 _add_error_envelope_responses(operation)
-                if is_local_signals:
+                if policy.error_policy in {"local_signal_read", "local_signal_write"}:
                     _add_local_signal_error_responses(
                         operation,
-                        write=method.lower() != "get",
+                        write=policy.error_policy == "local_signal_write",
                     )
-                elif path in COMMUNITY_MUTATION_PATHS and method.lower() == "post":
+                elif policy.error_policy == "community_write":
                     _add_community_write_error_responses(operation)
-                if path == ME_PATH:
+                if policy.error_policy == "account":
                     _add_account_error_responses(
                         operation,
-                        include_conflict=method.lower() == "get",
+                        include_conflict=policy.account_include_conflict,
                     )
 
 
@@ -327,31 +278,16 @@ def _add_success_envelope_responses(schema: dict[str, Any]) -> None:
 
 def _add_operation_contract_extensions(schema: dict[str, Any]) -> None:
     for path, path_item in (schema.get("paths") or {}).items():
-        timeout_seconds = OPERATION_TIMEOUT_SECONDS.get(path)
-        if timeout_seconds is None and path.startswith(ME_PATH_PREFIX):
-            timeout_seconds = 12
-        if timeout_seconds is None and (
-            path.startswith(LOCAL_SIGNALS_PATH_PREFIX)
-            or path.startswith(LOCAL_SIGNALS_PLACES_PATH_PREFIX)
-        ):
-            timeout_seconds = 12
-        if timeout_seconds is None or not isinstance(path_item, Mapping):
+        if not isinstance(path_item, Mapping):
             continue
         for method, operation in path_item.items():
             if not isinstance(operation, dict):
                 continue
-            operation["x-lala-timeout-seconds"] = timeout_seconds
-            operation["x-lala-auth-required"] = (
-                path == ME_PATH
-                or path.startswith(ME_PATH_PREFIX)
-                or (
-                    (
-                        path.startswith(LOCAL_SIGNALS_PATH_PREFIX)
-                        or path.startswith(LOCAL_SIGNALS_PLACES_PATH_PREFIX)
-                    )
-                    and method.lower() != "get"
-                )
-            )
+            policy = policy_for_operation(path, method)
+            if policy.timeout_seconds is None:
+                continue
+            operation["x-lala-timeout-seconds"] = policy.timeout_seconds
+            operation["x-lala-auth-required"] = policy.auth_required
 
 
 def _add_standard_response_headers(schema: dict[str, Any]) -> None:
@@ -472,22 +408,9 @@ def _api_error_envelope_schema() -> dict[str, Any]:
 
 
 def _success_response_ref(path: str) -> dict[str, Any]:
-    if path == HEALTHZ_PATH:
-        return {"$ref": "#/components/schemas/HealthzSuccessEnvelope"}
-    if path == READYZ_PATH:
-        return {"$ref": "#/components/schemas/ReadyzSuccessEnvelope"}
-    if path == PLACES_PATH:
-        return {"$ref": "#/components/schemas/PlacesSuccessEnvelope"}
-    if path == WEATHER_PATH:
-        return {"$ref": "#/components/schemas/WeatherSuccessEnvelope"}
-    if path == DOCENT_SCRIPT_PATH:
-        return {"$ref": "#/components/schemas/DocentScriptSuccessEnvelope"}
-    if path == DAILY_PLAN_PATH:
-        return {"$ref": "#/components/schemas/DailyPlanSuccessEnvelope"}
-    if path == INTERVENTION_PATH:
-        return {"$ref": "#/components/schemas/InterventionSuccessEnvelope"}
-    if path == ME_PATH:
-        return {"$ref": "#/components/schemas/MeSuccessEnvelope"}
+    schema_name = policy_for_operation(path, "get").success_schema
+    if schema_name:
+        return {"$ref": f"#/components/schemas/{schema_name}"}
     return {"$ref": "#/components/schemas/ApiSuccessEnvelope"}
 
 

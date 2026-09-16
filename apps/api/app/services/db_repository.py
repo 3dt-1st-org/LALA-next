@@ -8,7 +8,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from apps.api.app.core.config import get_settings
-from apps.api.app.services import region_catalog
+from apps.api.app.core.database import connect_db
+from apps.api.app.services import place_presentation, region_catalog
 from apps.api.app.services.dust_quality import build_dust_payload
 from apps.api.app.services.official_media import normalize_official_image_url
 
@@ -30,11 +31,7 @@ def check_db_status(dsn: str) -> str:
     if not dsn:
         return "skipped"
     try:
-        import psycopg2
-    except Exception:
-        return "degraded"
-    try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -59,11 +56,7 @@ def check_identity_schema_status(dsn: str) -> str:
     if not dsn:
         return "skipped"
     try:
-        import psycopg2
-    except Exception:
-        return "degraded"
-    try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -120,11 +113,7 @@ def check_postgis_status(dsn: str) -> str:
     if not dsn:
         return "skipped"
     try:
-        import psycopg2
-    except Exception:
-        return "degraded"
-    try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -149,7 +138,6 @@ def check_data_freshness_status(dsn: str, *, weather_max_hours: int = 24) -> str
     if not dsn:
         return "skipped"
     try:
-        import psycopg2
         from psycopg2.extras import RealDictCursor
     except Exception:
         return "degraded"
@@ -161,7 +149,7 @@ def check_data_freshness_status(dsn: str, *, weather_max_hours: int = 24) -> str
             (SELECT max(updated_at) FROM rag.knowledge_chunks) AS rag_updated_at
     """
     try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(sql)
                 row = cur.fetchone()
@@ -200,7 +188,6 @@ def fetch_places(
     if not dsn:
         return []
     try:
-        import psycopg2
         from psycopg2.extras import RealDictCursor
     except Exception:
         raise DatabaseReadError("psycopg2_unavailable") from None
@@ -349,7 +336,7 @@ def fetch_places(
     else:
         params = (*base_params, radius_m, max(1, min(limit, 100)))
     try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(sql, params)
                 rows = list(cur.fetchall())
@@ -505,23 +492,11 @@ def _coordinate_radius_bounds(
 
 
 def _english_display_name(row: dict[str, Any]) -> str:
-    region = _english_region(row)
-    category = str(row.get("category") or "").strip()
-    category_label = {
-        "attraction": "Attraction",
-        "culture_venue": "Culture venue",
-        "event": "Event",
-        "restaurant": "Restaurant",
-    }.get(category, "Local place")
-    return f"{category_label} in {region}" if region else category_label
+    return place_presentation.english_display_name(row)
 
 
 def _english_display_address(row: dict[str, Any]) -> str:
-    region = _english_region(row)
-    province = _english_province(row)
-    if region and province:
-        return f"{region}, {province}"
-    return region or province or ""
+    return place_presentation.english_display_address(row)
 
 
 def _english_province(row: dict[str, Any]) -> str | None:
@@ -530,12 +505,7 @@ def _english_province(row: dict[str, Any]) -> str | None:
     # Prefer a province parsed from the Korean address; fall back to the
     # region→province catalog for rows that only carry region_ko (no province
     # prefix in address_ko), so a Busan/Jeju region still resolves correctly.
-    province_ko = region_catalog.infer_province_name_from_address(
-        row.get("address_ko") or row.get("region_ko")
-    )
-    if province_ko and province_ko in region_catalog.PROVINCE_NAME_EN:
-        return region_catalog.PROVINCE_NAME_EN[province_ko]
-    return region_catalog.province_name_en_for_region(row.get("region_ko"))
+    return place_presentation.english_province(row)
 
 
 def _english_region(row: dict[str, Any]) -> str | None:
@@ -554,7 +524,6 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
     if not dsn:
         return None
     try:
-        import psycopg2
         from psycopg2.extras import RealDictCursor
     except Exception:
         return None
@@ -619,7 +588,7 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
         LIMIT 1
     """
     try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(sql, (lng, lat, min_lat, max_lat, min_lng, max_lng, lat, lng))
                 row = cur.fetchone()
@@ -674,7 +643,6 @@ def fetch_nearest_region_labels(
     if not dsn or limit <= 0:
         return []
     try:
-        import psycopg2
         from psycopg2.extras import RealDictCursor
     except Exception:
         return []
@@ -701,7 +669,7 @@ def fetch_nearest_region_labels(
         LIMIT %s
     """
     try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(sql, (lng, lat, min_lat, max_lat, min_lng, max_lng, limit))
                 rows = list(cur.fetchall())
@@ -734,7 +702,6 @@ def fetch_docent_script_cache(
     if not dsn:
         return None
     try:
-        import psycopg2
         from psycopg2.extras import RealDictCursor
     except Exception:
         return None
@@ -760,7 +727,7 @@ def fetch_docent_script_cache(
     """
     params = (place_id, category, language, mode)
     try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(sql, params)
                 row = cur.fetchone()
@@ -791,7 +758,6 @@ def fetch_docent_knowledge_context(
     if not dsn or not place_id.strip() or limit <= 0:
         return []
     try:
-        import psycopg2
         from psycopg2.extras import RealDictCursor
     except Exception:
         return []
@@ -823,7 +789,7 @@ def fetch_docent_knowledge_context(
         LIMIT %s
     """
     try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(sql, (place_id.strip(), limit))
                 rows = cur.fetchall()
@@ -853,7 +819,6 @@ def fetch_docent_place_profile_context(*, place_id: str) -> list[dict[str, Any]]
     if not dsn or not normalized_place_id:
         return []
     try:
-        import psycopg2
         from psycopg2.extras import RealDictCursor
     except Exception:
         return []
@@ -875,7 +840,7 @@ def fetch_docent_place_profile_context(*, place_id: str) -> list[dict[str, Any]]
         LIMIT 1
     """
     try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(sql, (normalized_place_id,))
                 row = cur.fetchone()
@@ -991,7 +956,6 @@ def fetch_docent_knowledge_context_hybrid_result(
     language: str | None = None,
     top_k: int = 3,
     embedding_method: str | None = None,
-    reranker: str | None = None,
     completion_fn: callable | None = None,
 ) -> dict[str, Any]:
     """Hybrid (ANN + keyword + RRF + optional mini rerank) grounding with result object.
@@ -1008,8 +972,7 @@ def fetch_docent_knowledge_context_hybrid_result(
         language: Optional language filter
         top_k: Number of results to return
         embedding_method: Optional embedding method override
-        reranker: Optional reranker type hint ('mini' or 'rrf')
-        completion_fn: Optional completion function for mini reranking
+        completion_fn: Optional completion function; when absent retrieval stays RRF-only
     """
     settings = get_settings()
     dsn = settings.db_dsn
@@ -1046,19 +1009,6 @@ def fetch_docent_knowledge_context_hybrid_result(
         language=language,
     )
 
-    # Use provided completion function for mini rerank, otherwise determine from settings
-    effective_completion_fn = completion_fn
-    if not effective_completion_fn and reranker == "mini":
-        # Import ai_service only when needed to avoid circular imports
-        from apps.api.app.services import ai_service
-
-        # Require the rerank-specific gate; an explicitly injected offline completion
-        # function remains usable in tests without any live provider call
-        if ai_service.rerank_ai_enabled(settings):
-
-            def effective_completion_fn(prompt: str) -> str:
-                return ai_service.rerank_docent_candidates(prompt)
-
     try:
         candidates, reranker_type, fallback_reason = (
             rag_retrieval.fetch_hybrid_candidates_with_rerank(
@@ -1068,7 +1018,7 @@ def fetch_docent_knowledge_context_hybrid_result(
                 filters=filters,
                 candidate_pool=20,  # Fixed candidate pool: ANN + keyword + RRF -> ~20 -> mini rerank -> top 3
                 connect_timeout=3,
-                completion_fn=effective_completion_fn,
+                completion_fn=completion_fn,
             )
         )
     except psycopg2.Error:
@@ -1108,10 +1058,6 @@ def save_docent_script_cache(
     dsn = get_settings().db_dsn
     if not dsn:
         return False
-    try:
-        import psycopg2
-    except Exception:
-        return False
 
     sql = """
         INSERT INTO travel.docent_scripts (
@@ -1143,7 +1089,7 @@ def save_docent_script_cache(
     """
     params = (place_id, category, language, mode, script, source, ttl_sec)
     try:
-        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
             with conn.cursor() as cur:
                 cur.execute(sql, params)
             conn.commit()

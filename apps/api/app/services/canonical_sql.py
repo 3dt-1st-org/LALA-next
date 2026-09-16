@@ -33,6 +33,9 @@ CANONICAL_MIGRATION_ORDER: tuple[str, ...] = (
     "066_trip_library_and_visit_feedback.sql",
     "067_community_post_reports.sql",
     "068_community_chat_durable_controls.sql",
+    "069_identity_deletion_jobs.sql",
+    "070_community_durability.sql",
+    "071_api_cost_controls.sql",
 )
 CANONICAL_MIGRATION_LATEST = CANONICAL_MIGRATION_ORDER[-1]
 _MIGRATION_FILENAME_PATTERN = re.compile(r"^(?P<number>[0-9]{3})_[a-z0-9][a-z0-9_]*\.sql$")

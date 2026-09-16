@@ -10,16 +10,18 @@ from collections.abc import Callable, Iterator, Mapping
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from threading import Condition, Lock
+from threading import Condition, Lock, local
 from typing import Any
 from uuid import UUID
 
 from apps.api.app.core.config import Settings, get_settings
+from apps.api.app.core.database import connect_db
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.local_signals import (
     LocalSignalCommentCreate,
     LocalSignalReportCreate,
 )
+from apps.api.app.services.identity_repository import lock_active_actor
 from apps.api.app.services.request_identity import request_hash
 
 
@@ -43,6 +45,7 @@ class LocalSignalsRepository:
     ) -> None:
         self._settings = settings
         self._connect = connect or _connect
+        self._transaction = local()
 
     def list_public_signals(
         self,
@@ -375,6 +378,7 @@ class LocalSignalsRepository:
                 commercial_disclosure, observation_date
         """
         with self._cursor() as cur:
+            lock_active_actor(cur, issuer, subject)
             cur.execute(
                 sql,
                 (
@@ -469,6 +473,7 @@ class LocalSignalsRepository:
                 commercial_disclosure, observation_date
         """
         with self._cursor() as cur:
+            lock_active_actor(cur, issuer, subject)
             cur.execute(sql, (str(signal_id), issuer, subject))
             row = cur.fetchone()
             if row is not None:
@@ -498,6 +503,7 @@ class LocalSignalsRepository:
                 commercial_disclosure, observation_date
         """
         with self._cursor() as cur:
+            lock_active_actor(cur, issuer, subject)
             cur.execute(sql, (str(signal_id), issuer, subject))
             row = cur.fetchone()
             return dict(row) if row is not None else None
@@ -512,6 +518,7 @@ class LocalSignalsRepository:
         active: bool,
     ) -> bool:
         with self._cursor() as cur:
+            lock_active_actor(cur, issuer, subject)
             if active:
                 cur.execute(
                     """
@@ -547,6 +554,7 @@ class LocalSignalsRepository:
         active: bool,
     ) -> bool:
         with self._cursor() as cur:
+            lock_active_actor(cur, issuer, subject)
             if active:
                 cur.execute(
                     """
@@ -590,6 +598,7 @@ class LocalSignalsRepository:
             RETURNING id, signal_id, source_language, body, status, created_at
         """
         with self._cursor() as cur:
+            lock_active_actor(cur, issuer, subject)
             cur.execute(
                 sql,
                 (
@@ -631,6 +640,7 @@ class LocalSignalsRepository:
             RETURNING id
         """
         with self._cursor() as cur:
+            lock_active_actor(cur, issuer, subject)
             cur.execute(
                 sql,
                 (str(signal_id), issuer, subject, reason_code, str(signal_id)),
@@ -649,8 +659,86 @@ class LocalSignalsRepository:
                 (str(signal_id), link["place_id"], link["relation"]),
             )
 
+    def run_idempotent(
+        self,
+        *,
+        issuer: str,
+        subject: str,
+        operation: str,
+        idempotency_key: str,
+        payload: Mapping[str, Any],
+        callback: Callable[[], dict[str, Any]],
+        authorize: Callable[[], Any] | None = None,
+    ) -> dict[str, Any]:
+        # Distinct actor columns and a structured operation/key prevent collisions.
+        key = hashlib.sha256(json.dumps([operation, idempotency_key]).encode()).hexdigest()
+        digest = request_hash(dict(payload))
+        scope = "community.local_signals"
+        params = (scope, issuer, subject, key)
+        with self._cursor() as cur:
+            lock_active_actor(cur, issuer, subject)
+            self._transaction.cursor = cur
+            try:
+                cur.execute(
+                    """
+                    DELETE FROM community.idempotency_keys
+                    WHERE scope = %s AND expires_at <= now()
+                """,
+                    (scope,),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO community.idempotency_keys
+                        (scope, actor_issuer, actor_subject, idempotency_key,
+                         request_hash, response_json, expires_at)
+                    VALUES (%s, %s, %s, %s, %s, 'null'::jsonb, now() + interval '24 hours')
+                    ON CONFLICT (scope, actor_issuer, actor_subject, idempotency_key)
+                    DO NOTHING RETURNING idempotency_key
+                """,
+                    (*params, digest),
+                )
+                claimed = cur.fetchone() is not None
+                if authorize is not None:
+                    authorize()
+                if not claimed:
+                    cur.execute(
+                        """
+                        SELECT request_hash, response_json FROM community.idempotency_keys
+                        WHERE scope = %s AND actor_issuer = %s AND actor_subject = %s
+                          AND idempotency_key = %s
+                    """,
+                        params,
+                    )
+                    existing = cur.fetchone()
+                    if existing is None or existing["response_json"] is None:
+                        raise LocalSignalsRepositoryUnavailable()
+                    if existing["request_hash"] != digest:
+                        raise ServiceError(
+                            status_code=409,
+                            code="IDEMPOTENCY_KEY_REUSED",
+                            message="The idempotency key was already used for another request.",
+                            retryable=False,
+                        )
+                    return existing["response_json"]
+                result = _json_safe(callback())
+                cur.execute(
+                    """
+                    UPDATE community.idempotency_keys SET response_json = %s::jsonb
+                    WHERE scope = %s AND actor_issuer = %s AND actor_subject = %s
+                      AND idempotency_key = %s
+                """,
+                    (json.dumps(result), *params),
+                )
+                return result
+            finally:
+                del self._transaction.cursor
+
     @contextmanager
     def _cursor(self) -> Iterator[Any]:
+        existing = getattr(self._transaction, "cursor", None)
+        if existing is not None:
+            yield existing
+            return
         if not self._settings.db_dsn:
             raise LocalSignalsRepositoryUnavailable()
         try:
@@ -662,18 +750,14 @@ class LocalSignalsRepository:
                 with conn:
                     with conn.cursor(cursor_factory=RealDictCursor) as cur:
                         yield cur
-        except LocalSignalsRepositoryUnavailable:
+        except (LocalSignalsRepositoryUnavailable, ServiceError):
             raise
         except Exception as exc:
             raise LocalSignalsRepositoryUnavailable() from exc
 
 
 def _connect(*, dsn: str, connect_timeout: int) -> object:
-    try:
-        import psycopg2
-    except Exception as exc:
-        raise LocalSignalsRepositoryUnavailable() from exc
-    return psycopg2.connect(dsn, connect_timeout=connect_timeout)
+    return connect_db(dsn, connect_timeout=connect_timeout)
 
 
 def _public_filters(
@@ -1023,8 +1107,9 @@ class LocalSignalsService:
             commercial_disclosure=values["commercial_disclosure"],
         )
         self._validate_locality(values)
-        return _IDEMPOTENCY_STORE.run(
-            actor_key=f"{issuer}:{subject}",
+        return self._run_idempotent(
+            issuer=issuer,
+            subject=subject,
             operation="create_draft",
             idempotency_key=idempotency_key,
             payload=_json_safe(values),
@@ -1041,24 +1126,14 @@ class LocalSignalsService:
         idempotency_key: str,
     ) -> dict[str, Any]:
         self.ensure_write_enabled()
-        current = self._owned_signal(signal_id, issuer, subject)
-        if current["status"] != "draft":
-            raise _invalid_transition()
-        merged = dict(current)
-        merged.update({key: value for key, value in values.items() if value is not None})
-        validate_local_signal_policy(
-            title=merged["title"],
-            body=merged["body"],
-            locality_level=merged["locality_level"],
-            commercial_disclosure=merged["commercial_disclosure"],
-        )
-        self._validate_locality(merged)
-        return _IDEMPOTENCY_STORE.run(
-            actor_key=f"{issuer}:{subject}",
+        return self._run_idempotent(
+            issuer=issuer,
+            subject=subject,
             operation=f"update_draft:{signal_id}",
             idempotency_key=idempotency_key,
             payload=_json_safe(values),
-            callback=lambda: self._update_draft(signal_id, values),
+            callback=lambda: self._validated_update(signal_id, issuer, subject, values),
+            authorize=lambda: self._owned_signal(signal_id, issuer, subject),
         )
 
     def submit(
@@ -1070,21 +1145,14 @@ class LocalSignalsService:
         idempotency_key: str,
     ) -> dict[str, Any]:
         self.ensure_write_enabled()
-        current = self._owned_signal(signal_id, issuer, subject)
-        if current["status"] != "draft":
-            raise _invalid_transition()
-        validate_local_signal_policy(
-            title=current["title"],
-            body=current["body"],
-            locality_level=current["locality_level"],
-            commercial_disclosure=current["commercial_disclosure"],
-        )
-        return _IDEMPOTENCY_STORE.run(
-            actor_key=f"{issuer}:{subject}",
+        return self._run_idempotent(
+            issuer=issuer,
+            subject=subject,
             operation=f"submit:{signal_id}",
             idempotency_key=idempotency_key,
             payload={"signal_id": str(signal_id)},
             callback=lambda: self._submit(signal_id, issuer, subject),
+            authorize=lambda: self._owned_signal(signal_id, issuer, subject),
         )
 
     def delete(
@@ -1097,12 +1165,14 @@ class LocalSignalsService:
     ) -> dict[str, Any]:
         self.ensure_write_enabled()
         self._owned_signal(signal_id, issuer, subject)
-        return _IDEMPOTENCY_STORE.run(
-            actor_key=f"{issuer}:{subject}",
+        return self._run_idempotent(
+            issuer=issuer,
+            subject=subject,
             operation=f"delete:{signal_id}",
             idempotency_key=idempotency_key,
             payload={"signal_id": str(signal_id)},
             callback=lambda: self._delete(signal_id, issuer, subject),
+            authorize=lambda: self._owned_signal(signal_id, issuer, subject),
         )
 
     def set_reaction(
@@ -1167,12 +1237,14 @@ class LocalSignalsService:
             locality_level="district",
             commercial_disclosure="none",
         )
-        return _IDEMPOTENCY_STORE.run(
-            actor_key=f"{issuer}:{subject}",
+        return self._run_idempotent(
+            issuer=issuer,
+            subject=subject,
             operation=f"comment:{signal_id}",
             idempotency_key=idempotency_key,
             payload=values.model_dump(mode="json"),
             callback=lambda: self._create_comment(signal_id, issuer, subject, values),
+            authorize=lambda: self._require_public_signal(signal_id),
         )
 
     def create_report(
@@ -1185,13 +1257,26 @@ class LocalSignalsService:
         idempotency_key: str,
     ) -> dict[str, Any]:
         self.ensure_write_enabled()
-        return _IDEMPOTENCY_STORE.run(
-            actor_key=f"{issuer}:{subject}",
+        return self._run_idempotent(
+            issuer=issuer,
+            subject=subject,
             operation=f"report:{signal_id}",
             idempotency_key=idempotency_key,
             payload=body.model_dump(mode="json"),
             callback=lambda: self._create_report(signal_id, issuer, subject, body),
         )
+
+    def _run_idempotent(self, *, issuer: str, subject: str, authorize=None, **kwargs):
+        runner = getattr(self._repository, "run_idempotent", None)
+        if runner is not None:
+            try:
+                return runner(issuer=issuer, subject=subject, authorize=authorize, **kwargs)
+            except LocalSignalsRepositoryUnavailable as exc:
+                raise _database_unavailable() from exc
+        # Offline repository doubles retain their in-memory test contract.
+        if authorize is not None:
+            authorize()
+        return _IDEMPOTENCY_STORE.run(actor_key=json.dumps([issuer, subject]), **kwargs)
 
     def _create_draft(self, issuer: str, subject: str, values: Mapping[str, Any]) -> dict[str, Any]:
         try:
@@ -1199,6 +1284,21 @@ class LocalSignalsService:
         except LocalSignalsRepositoryUnavailable as exc:
             raise _database_unavailable() from exc
         return _mutation_payload(row)
+
+    def _validated_update(self, signal_id, issuer, subject, values):
+        current = self._owned_signal(signal_id, issuer, subject)
+        if current["status"] != "draft":
+            raise _invalid_transition()
+        merged = dict(current)
+        merged.update({key: value for key, value in values.items() if value is not None})
+        validate_local_signal_policy(
+            title=merged["title"],
+            body=merged["body"],
+            locality_level=merged["locality_level"],
+            commercial_disclosure=merged["commercial_disclosure"],
+        )
+        self._validate_locality(merged)
+        return self._update_draft(signal_id, values)
 
     def _update_draft(self, signal_id: UUID, values: Mapping[str, Any]) -> dict[str, Any]:
         try:
@@ -1210,6 +1310,15 @@ class LocalSignalsService:
         return _mutation_payload(row)
 
     def _submit(self, signal_id: UUID, issuer: str, subject: str) -> dict[str, Any]:
+        current = self._owned_signal(signal_id, issuer, subject)
+        if current["status"] != "draft":
+            raise _invalid_transition()
+        validate_local_signal_policy(
+            title=current["title"],
+            body=current["body"],
+            locality_level=current["locality_level"],
+            commercial_disclosure=current["commercial_disclosure"],
+        )
         try:
             row = self._repository.submit_signal(
                 signal_id=signal_id,
@@ -1291,6 +1400,10 @@ class LocalSignalsService:
         if row.get("author_issuer") != issuer or row.get("author_subject") != subject:
             raise _not_owner()
         return row
+
+    def _require_public_signal(self, signal_id: UUID) -> None:
+        if not self._public_signal_exists(signal_id):
+            raise _not_found()
 
     def _public_signal_exists(self, signal_id: UUID) -> bool:
         checker = getattr(self._repository, "public_signal_exists", None)

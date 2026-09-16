@@ -15,6 +15,7 @@ from apps.api.app.core.jwt_auth import (
     is_oauth_jwt_validation_configured,
     validate_oauth_jwt,
 )
+from apps.api.app.services.identity_service import IdentityService, get_identity_service
 
 MAX_CLIENT_AUTH_VALUE_BYTES = 4096
 
@@ -59,10 +60,15 @@ def require_client_auth(
             raise _unauthorized()
 
     if identity is not None:
+        if request is not None:
+            request.state.identity = identity
         return identity
 
     if settings.guest_access_enabled or settings.static_snapshot_fallback:
-        return RequestIdentity(mode="public")
+        identity = RequestIdentity(mode="public")
+        if request is not None:
+            request.state.identity = identity
+        return identity
 
     if not settings.ios_api_key and not settings.api_bearer_token and not jwt_validation_configured:
         raise ApiError(
@@ -112,8 +118,10 @@ def _record_auth_event(request: Request | None, name: str) -> None:
 
 def require_oauth_identity(
     identity: Annotated[RequestIdentity, Depends(require_client_auth)],
+    identity_service: Annotated[IdentityService, Depends(get_identity_service)],
 ) -> RequestIdentity:
     if identity.mode == "oauth" and identity.issuer and identity.subject:
+        identity_service.provision_user(identity.issuer, identity.subject)
         return identity
     raise ApiError(
         status_code=401,
@@ -126,6 +134,8 @@ def require_oauth_identity(
 def require_logto_identity(
     identity: Annotated[RequestIdentity, Depends(require_client_auth)],
     settings: Annotated[Settings, Depends(get_settings)],
+    request: Request,
+    identity_service: Annotated[IdentityService, Depends(get_identity_service)],
 ) -> RequestIdentity:
     expected_issuer, expected_jwks_url = derive_logto_oidc_urls(settings.logto_endpoint)
     if (
@@ -136,6 +146,22 @@ def require_logto_identity(
         and identity.issuer == expected_issuer
         and identity.subject
     ):
+        # Deletion must remain retryable while local writes are already fenced.
+        # Match the registered route, independent of mounts/root_path/trailing slash.
+        route = request.scope.get("route")
+        deleting_account = (
+            request.method == "DELETE"
+            and getattr(getattr(route, "endpoint", None), "__name__", "") == "delete_me"
+        )
+        if not deleting_account:
+            from apps.api.app.core.account_context import (
+                get_request_account_context,
+                set_request_account_context,
+            )
+
+            if get_request_account_context(request) is None:
+                user = identity_service.provision_user(identity.issuer, identity.subject)
+                set_request_account_context(request, identity=identity, user=user)
         return identity
     raise ApiError(
         status_code=401,
@@ -143,6 +169,23 @@ def require_logto_identity(
         message="Logto user authentication is required.",
         retryable=False,
     )
+
+
+def require_current_account_context(
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
+    request: Request,
+    identity_service: Annotated[IdentityService, Depends(get_identity_service)],
+):
+    from apps.api.app.core.account_context import (
+        get_request_account_context,
+        set_request_account_context,
+    )
+
+    context = get_request_account_context(request)
+    if context is not None:
+        return context
+    user = identity_service.provision_user(identity.issuer or "", identity.subject or "")
+    return set_request_account_context(request, identity=identity, user=user)
 
 
 def _unauthorized() -> ApiError:

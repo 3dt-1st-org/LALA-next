@@ -6,23 +6,23 @@
 
 - 팀은 FastAPI ORM에 SQLAlchemy, DB 마이그레이션에 Alembic을 사용하기로 결정했다.
 - 현재 `pyproject.toml`과 lockfile에는 SQLAlchemy·Alembic이 없고, API repository와 작업 도구는 주로 `psycopg2`와 명시적 SQL을 사용한다.
-- 현재 공식 구조 이력은 `sql/canonical/`의 순서가 고정된 18개 SQL이다.
-- 코드 기준과 실제 DB에는 SQL 068의 미적용 구조와 `rag.knowledge_chunks.embedding_generation` 차이가 있다.
+- 현재 공식 구조 이력은 `sql/canonical/`의 순서가 고정된 21개 SQL이다. 기존 운영 DB 대조는 SQL 000~068의 18개만 있던 `765570a2`에서 수행됐다.
+- 기존 대조에서는 SQL 068의 미적용 구조와 `rag.knowledge_chunks.embedding_generation` 차이를 확인했다. 이후 추가된 SQL 069~071의 운영 적용 여부는 아직 대조하지 않았다.
 - 운영 PostgreSQL은 15.18이고 로컬 compose는 PostgreSQL 16이다.
 
 ## 권고안
 
 **기존 canonical SQL을 동결된 기준선으로 보존하고, 검증된 기준선 이후의 새 변경부터 Alembic으로 관리한다. SQLAlchemy repository 전환은 기능 단위로 점진 진행한다.**
 
-이 방식을 권하는 이유는 기존 18개 SQL과 실제 DB의 차이를 숨기지 않으면서도 새 변경 이력을 한 도구로 모을 수 있기 때문이다. 현재 raw SQL repository를 한 번에 바꾸면 API 계약과 동시성 처리가 함께 달라질 위험이 크다.
+이 방식을 권하는 이유는 현재 21개 SQL과 실제 DB의 차이를 숨기지 않으면서도 새 변경 이력을 한 도구로 모을 수 있기 때문이다. 현재 raw SQL repository를 한 번에 바꾸면 API 계약과 동시성 처리가 함께 달라질 위험이 크다.
 
 ## 단계별 적용
 
 | 단계 | 작업 | 산출물·완료 조건 |
 |---|---|---|
-| 0. 기준선 동결 | canonical 18개 파일·hash·기준 SHA와 실제 DB 차이를 기록 | PR #209의 구조 대조표를 팀이 수락 |
+| 0. 기준선 재대조 | 현재 main의 canonical 21개 파일·hash와 실제 DB 차이를 다시 기록 | SQL 069~071 포함 비교 결과를 팀이 수락 |
 | 1. 환경 결정 | PostgreSQL 15 기준 유지 또는 16 승격 선택, 확장 버전 기록 | 로컬·CI·스테이징의 버전 조합 확정 |
-| 2. 차이 판정 | SQL 068과 RAG 추가 컬럼을 적용·보류·운영 전용 중 하나로 결정 | 자동 삭제 없이 각 차이의 처리표 확정 |
+| 2. 차이 판정 | SQL 068~071과 RAG 추가 컬럼을 적용·보류·운영 전용 중 하나로 결정 | 자동 삭제 없이 각 차이의 처리표 확정 |
 | 3. Alembic 도입 | dependency, `alembic.ini`, 환경 설정, baseline revision 추가 | 시크릿을 파일에 넣지 않고 로컬·CI에서 revision 확인 |
 | 4. 기존 DB stamp | 실제 구조가 승인된 기준선과 일치할 때만 baseline revision을 stamp | stamp 전 구조 검증 결과와 담당 승인 기록 |
 | 5. 새 변경 | baseline 이후의 구조 변경을 Alembic revision으로 작성 | 빈 DB upgrade, 기존 DB upgrade, downgrade/복구 판단 통과 |
@@ -33,8 +33,8 @@
 ### 빈 로컬·CI DB
 
 1. PostgreSQL·PostGIS·pgvector 버전을 준비한다.
-2. 동결된 canonical 18개 SQL을 순서대로 적용한다.
-3. 합의한 SQL 068·RAG 차이 처리안을 적용한다.
+2. 동결된 canonical 21개 SQL을 순서대로 적용한다.
+3. 합의한 SQL 068~071·RAG 차이 처리안을 적용한다.
 4. 구조 검증을 통과하면 Alembic baseline revision을 stamp한다.
 5. `alembic upgrade head`를 실행한다.
 6. 필요한 로컬 전용 seed를 적용하고 repository 통합 검사를 실행한다.
@@ -66,8 +66,8 @@
 | 질문 | 권고 | 결정 담당 |
 |---|---|---|
 | 기준 PostgreSQL | 운영과 같은 15 계열로 로컬·CI를 먼저 맞춤 | 김건동·박진희 |
-| canonical 18개 처리 | 삭제·재작성 없이 동결 baseline으로 보존 | 김건동·박진희 |
-| SQL 068 | 보류 기능이지만 구조 적용 여부를 별도 결정. 실제 DB에 없다는 사실을 숨기지 않음 | 세 개발자 |
+| canonical 21개 처리 | 삭제·재작성 없이 동결 baseline으로 보존 | 김건동·박진희 |
+| SQL 068~071 | 기능·운영 전제와 실제 DB 적용 여부를 각각 확인하고 기준선에 반영 | 세 개발자 |
 | RAG 추가 컬럼 | operator-pending 정의의 공식 편입 여부 결정 | 김건동·박진희 |
 | 첫 ORM 전환 | 저장 장소 repository부터 작은 PR로 시작 | 박진희·김건동 |
 | downgrade | 데이터 손실 revision은 자동 downgrade 대신 백업 복구 절차 사용 | 기술 리드 |

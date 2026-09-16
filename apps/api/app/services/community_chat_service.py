@@ -9,8 +9,10 @@ from typing import Any
 from uuid import UUID
 
 from apps.api.app.core.config import Settings, get_settings
+from apps.api.app.core.database import connect_db
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.services.community_idempotency import canonical_request_hash
+from apps.api.app.services.identity_repository import lock_active_actor
 
 # Durable control constants (documented in docs/devlogs P7 runbook).
 IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60
@@ -179,6 +181,28 @@ class CommunityChatRepository:
             cur.execute(sql, params)
             return cur.fetchone()
 
+    def authorized_actors(self, *, room_id: UUID, actors: list[tuple[str, str]]) -> set[str]:
+        if not actors:
+            return set()
+        issuers, subjects = zip(*actors, strict=True)
+        sql = """
+            SELECT a.issuer, a.subject
+            FROM unnest(%s::text[], %s::text[]) AS a(issuer, subject)
+            JOIN identity.users u ON u.issuer = a.issuer AND u.subject = a.subject
+            JOIN community.chat_rooms r ON r.id = %s
+            WHERE u.status = 'active' AND (
+                r.visibility = 'public'
+                OR (r.created_by_issuer = a.issuer AND r.created_by_subject = a.subject)
+                OR EXISTS (
+                    SELECT 1 FROM community.chat_room_members m
+                    WHERE m.room_id = r.id AND m.issuer = a.issuer AND m.subject = a.subject
+                )
+            )
+        """
+        with self._cursor() as cur:
+            cur.execute(sql, (list(issuers), list(subjects), str(room_id)))
+            return {f"{row['issuer']}:{row['subject']}" for row in cur.fetchall()}
+
     def list_messages(
         self,
         *,
@@ -259,6 +283,7 @@ class CommunityChatRepository:
             ON CONFLICT DO NOTHING
         """
         with self._cursor() as cur:
+            lock_active_actor(cur, issuer, subject)
             cur.execute(insert_sql, (name, visibility, issuer, subject))
             row = cur.fetchone()
             assert row is not None  # RETURNING always yields one row on insert.
@@ -295,6 +320,7 @@ class CommunityChatRepository:
             RETURNING room_id
         """
         with self._cursor() as cur:
+            lock_active_actor(cur, owner_issuer, owner_subject)
             cur.execute(room_sql, (str(room_id),))
             room = cur.fetchone()
             if room is None:
@@ -343,6 +369,7 @@ class CommunityChatRepository:
         """
         access = _access_params(issuer, subject)
         with self._cursor() as cur:
+            lock_active_actor(cur, issuer, subject)
             cur.execute(
                 insert_sql,
                 (
@@ -360,6 +387,7 @@ class CommunityChatRepository:
             if row is None:
                 return None
             row["author_user_id"] = self._resolve_author_user_id(cur, issuer, subject)
+            _message_payload(row)
             _emit_fanout_notify(cur, room_id=row["room_id"], message_id=row["id"])
         return row
 
@@ -440,6 +468,7 @@ class CommunityChatRepository:
         """
         access = _access_params(issuer, subject)
         with self._cursor() as cur:
+            lock_active_actor(cur, issuer, subject)
             cur.execute(purge_sql, (IDEMPOTENCY_SCOPE_CHAT_MESSAGE,))
             cur.execute(
                 claim_sql,
@@ -545,6 +574,7 @@ class CommunityChatRepository:
         ticket = secrets.token_urlsafe(32)
         ticket_hash = hashlib.sha256(ticket.encode("utf-8")).hexdigest()
         with self._cursor() as cur:
+            lock_active_actor(cur, issuer, subject)
             cur.execute(purge_sql)
             cur.execute(
                 insert_sql,
@@ -612,7 +642,7 @@ class CommunityChatRepository:
             (issuer, subject),
         )
         identity_row = cur.fetchone()
-        return identity_row["id"] if identity_row else None
+        return identity_row["author_user_id"] if identity_row else None
 
     @contextmanager
     def _cursor(self) -> Iterator[Any]:
@@ -627,7 +657,7 @@ class CommunityChatRepository:
                 with conn:
                     with conn.cursor(cursor_factory=RealDictCursor) as cur:
                         yield cur
-        except CommunityChatRepositoryUnavailable:
+        except (CommunityChatRepositoryUnavailable, ServiceError):
             raise
         except Exception as exc:
             raise CommunityChatRepositoryUnavailable() from exc
@@ -652,11 +682,7 @@ def _emit_fanout_notify(cur: Any, *, room_id: Any, message_id: Any = None) -> No
 
 
 def _connect(*, dsn: str, connect_timeout: int):
-    try:
-        import psycopg2
-    except Exception as exc:
-        raise CommunityChatRepositoryUnavailable() from exc
-    return psycopg2.connect(dsn, connect_timeout=connect_timeout)
+    return connect_db(dsn, connect_timeout=connect_timeout)
 
 
 class CommunityChatService:
@@ -664,6 +690,12 @@ class CommunityChatService:
 
     def __init__(self, repository: CommunityChatRepository) -> None:
         self._repository = repository
+
+    def authorized_actors(self, *, room_id: UUID, actors: list[tuple[str, str]]) -> set[str]:
+        try:
+            return self._repository.authorized_actors(room_id=room_id, actors=actors)
+        except CommunityChatRepositoryUnavailable as exc:
+            raise _database_unavailable() from exc
 
     def list_rooms(
         self,
@@ -907,7 +939,7 @@ class CommunityChatService:
     def fetch_message_for_fanout(self, *, message_id: UUID) -> dict[str, Any] | None:
         try:
             row = self._repository.fetch_message_for_fanout(message_id=message_id)
-        except CommunityChatRepositoryUnavailable:
+        except (CommunityChatRepositoryUnavailable, ServiceError):
             return None
         return _message_payload(row) if row is not None else None
 

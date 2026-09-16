@@ -69,7 +69,7 @@ LALA_POSTGRES_PASSWORD='<local-only password>' \
 | 새 account/planning fixture SQL 적용 | 최소 동등 스키마의 일회용 PostgreSQL 16에서 완료 |
 | fixture 재실행 가능성 | 두 번 적용 후 행 수 `2·2·1·1·1·2` 유지 확인 |
 | 첫 배포 핵심·보조·보류 범위 | 구분 완료 |
-| 전체 canonical 18개 + 전체 seed 적용 | 로컬 이미지의 플랫폼 불일치로 미검증 |
+| 전체 canonical 21개 + 전체 seed 적용 | 로컬 이미지의 플랫폼 불일치로 미검증 |
 | 두 계정 격리·저장·일정·revision API 통합 | 미검증 |
 | 승인된 Logto 개발 계정으로 앱 통합 | 계정·개발 API 인계 대기 |
 

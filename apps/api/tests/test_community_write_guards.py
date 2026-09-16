@@ -27,8 +27,8 @@ from apps.api.app.routers.community_chat import (
     MEMBER_ADD_LIMIT_PER_MINUTE,
     ROOM_CREATE_LIMIT_PER_MINUTE,
     WS_TICKET_LIMIT_PER_MINUTE,
-    manager,
 )
+from apps.api.app.services.community_chat_realtime import manager
 from apps.api.app.services.community_chat_service import get_community_chat_service
 from apps.api.app.services.community_service import get_community_service
 
@@ -406,7 +406,7 @@ def test_actors_are_isolated_from_each_others_windows(client, api_key, monkeypat
     assert service.calls["create_post"] == 2
 
 
-def test_clients_are_isolated_from_each_others_windows(client, api_key, monkeypatch) -> None:
+def test_forwarded_headers_cannot_reset_actor_windows(client, api_key, monkeypatch) -> None:
     community_router = pytest.importorskip("apps.api.app.routers.community")
     monkeypatch.setattr(community_router, "POST_CREATE_LIMIT_PER_MINUTE", 1)
     service = CountingCommunityService()
@@ -416,12 +416,16 @@ def test_clients_are_isolated_from_each_others_windows(client, api_key, monkeypa
     payload = {"title": "t", "body": "b"}
 
     first_ip = {"X-API-Key": api_key, "CF-Connecting-IP": "203.0.113.1"}
-    second_ip = {"X-API-Key": api_key, "CF-Connecting-IP": "203.0.113.2"}
+    second_ip = {
+        "X-API-Key": api_key,
+        "CF-Connecting-IP": "203.0.113.2",
+        "X-Forwarded-For": "198.51.100.1",
+    }
     assert client.post(path, headers=first_ip, json=payload).status_code == 200
     assert client.post(path, headers=first_ip, json=payload).status_code == 429
-    # Same actor behind a different client address keeps its own window.
-    assert client.post(path, headers=second_ip, json=payload).status_code == 200
-    assert service.calls["create_post"] == 2
+    # Untrusted forwarded headers never create a fresh actor budget.
+    assert client.post(path, headers=second_ip, json=payload).status_code == 429
+    assert service.calls["create_post"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -480,13 +484,15 @@ def test_community_write_seam_hashes_keys_and_isolates_windows() -> None:
     assert exc_info.value.retryable is True
     assert exc_info.value.message == "Too many community requests. Please retry shortly."
 
-    # Distinct actor and distinct client each get a fresh window.
+    # Only a distinct actor gets a fresh window; peer changes cannot reset it.
     other_actor = {**kwargs, "actor_key": f"{ISSUER}:{OTHER_SUBJECT}"}
     enforce_community_write_rate_limit(_http_request("198.51.100.1"), **other_actor)
-    enforce_community_write_rate_limit(_http_request("198.51.100.2"), **kwargs)
-    enforce_community_write_rate_limit(
-        _http_request("198.51.100.3", forwarded_for="198.51.100.4"), **kwargs
-    )
+    with pytest.raises(ApiError):
+        enforce_community_write_rate_limit(_http_request("198.51.100.2"), **kwargs)
+    with pytest.raises(ApiError):
+        enforce_community_write_rate_limit(
+            _http_request("198.51.100.3", forwarded_for="198.51.100.4"), **kwargs
+        )
 
     from apps.api.app.core import rate_limit as rl
 
@@ -494,7 +500,7 @@ def test_community_write_seam_hashes_keys_and_isolates_windows() -> None:
     assert ISSUER not in stored and SUBJECT not in stored and "198.51.100.1" not in stored
 
 
-def test_chat_message_seam_is_actor_and_client_scoped() -> None:
+def test_chat_message_seam_is_actor_scoped_independent_of_client() -> None:
     reset_rate_limit_state_for_tests()
     client_a = "seam-client-a"
     client_b = "seam-client-b"
@@ -514,7 +520,8 @@ def test_chat_message_seam_is_actor_and_client_scoped() -> None:
     assert exc_info.value.message == "Too many chat messages. Please retry shortly."
 
     enforce_chat_message_rate_limit(**{**kwargs, "actor_key": f"{ISSUER}:{OTHER_SUBJECT}"})
-    enforce_chat_message_rate_limit(**{**kwargs, "client_key": client_b})
+    with pytest.raises(ApiError):
+        enforce_chat_message_rate_limit(**{**kwargs, "client_key": client_b})
 
     from apps.api.app.core import rate_limit as rl
 

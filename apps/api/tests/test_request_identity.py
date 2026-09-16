@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from unittest.mock import Mock
 
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
+from fastapi import Request
 
 from apps.api.app.core.auth import (
     RequestIdentity,
@@ -188,6 +190,8 @@ def test_logto_identity_requires_current_canonical_endpoint_issuer() -> None:
             subject="logto-user-subject",
         ),
         settings=settings,
+        request=Request({"type": "http", "method": "GET"}),
+        identity_service=Mock(),
     )
 
     assert identity.issuer == LOGTO_ISSUER
@@ -213,6 +217,8 @@ def test_logto_identity_rejects_legacy_or_incomplete_configuration(settings) -> 
                 subject="legacy-subject",
             ),
             settings=settings,
+            request=Request({"type": "http", "method": "GET"}),
+            identity_service=Mock(),
         )
 
     assert exc_info.value.status_code == 401
@@ -265,7 +271,7 @@ def test_readyz_reports_scopes_skipped_on_logto_authoritative_path(client, monke
 
     response = client.get("/readyz")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     checks = response.json()["data"]["checks"]
     assert checks["jwt_validation"] == "configured"
     assert checks["oauth_required_scopes"] == "skipped"

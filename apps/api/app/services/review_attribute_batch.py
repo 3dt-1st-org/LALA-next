@@ -9,6 +9,10 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
+from apps.api.app.services.batch_ai import (
+    create_chat_completion_with_retry,
+    is_retryable_ai_error,
+)
 from apps.api.app.services.model_client import resolve
 from apps.api.app.services.review_ingest_governance import ALLOWED_LICENSE_CLASSES
 
@@ -709,11 +713,11 @@ def apply_review_attribute_enrichments(
     from psycopg2.extras import Json
 
     candidate_by_id = {candidate.mention_id: candidate for candidate in candidates}
-    rows = [
-        _apply_row(candidate_by_id[item.mention_id], item, source_method=source_method)
-        for item in enrichments
-        if item.mention_id in candidate_by_id
-    ]
+    rows = build_review_attribute_apply_rows(
+        candidates=candidates,
+        enrichments=enrichments,
+        source_method=source_method,
+    )
     if not rows:
         return 0
 
@@ -811,6 +815,20 @@ def apply_review_attribute_enrichments(
                 )
         conn.commit()
     return updated
+
+
+def build_review_attribute_apply_rows(
+    *,
+    candidates: Sequence[ReviewAttributeCandidate],
+    enrichments: Sequence[ReviewAttributeEnrichment],
+    source_method: str,
+) -> list[ReviewAttributeApplyRow]:
+    candidate_by_id = {candidate.mention_id: candidate for candidate in candidates}
+    return [
+        _apply_row(candidate_by_id[item.mention_id], item, source_method=source_method)
+        for item in enrichments
+        if item.mention_id in candidate_by_id
+    ]
 
 
 def record_job_run(
@@ -975,43 +993,19 @@ def _create_chat_completion_with_retry(
     retry_attempts: int,
     retry_delay_sec: float,
 ) -> Any:
-    attempts = max(1, retry_attempts)
-    delay = max(0.0, retry_delay_sec)
-    last_exc: Exception | None = None
-    for attempt in range(1, attempts + 1):
-        try:
-            return client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=0.1,
-                max_completion_tokens=4000,
-                response_format={"type": "json_object"},
-            )
-        except Exception as exc:
-            last_exc = exc
-            if attempt >= attempts or not _is_retryable_ai_error(exc):
-                raise
-            time.sleep(delay * attempt)
-    if last_exc:
-        raise last_exc
-    raise RuntimeError("OpenAI completion failed before a request was attempted.")
+    return create_chat_completion_with_retry(
+        client=client,
+        model=model,
+        messages=messages,
+        retry_attempts=retry_attempts,
+        retry_delay_sec=retry_delay_sec,
+        sleep=time.sleep,
+        is_retryable=_is_retryable_ai_error,
+    )
 
 
 def _is_retryable_ai_error(exc: Exception) -> bool:
-    status_code = getattr(exc, "status_code", None)
-    if status_code in {408, 409, 429, 500, 502, 503, 504}:
-        return True
-    text = str(exc).lower()
-    return any(
-        marker in text
-        for marker in (
-            "too many requests",
-            "rate limit",
-            "timeout",
-            "temporarily unavailable",
-            "service unavailable",
-        )
-    )
+    return is_retryable_ai_error(exc)
 
 
 def _attribute_scores(value: Any, allowed: set[str]) -> dict[str, float]:

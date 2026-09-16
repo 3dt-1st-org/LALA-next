@@ -69,6 +69,11 @@ class Settings:
     # the flag only gates the hook. Default off keeps the Haversine estimate standalone.
     enable_live_routing: bool = False
     paid_route_rate_limit_enabled: bool = True
+    paid_daily_request_limit: int = 200
+    paid_daily_unit_limit: int = 200000
+    paid_global_concurrency: int = 4
+    paid_cache_ttl_sec: int = 3600
+    paid_memory_max_entries: int = 256
     docent_script_rate_limit_per_minute: int = 60
     docent_audio_rate_limit_per_minute: int = 30
     weather_freshness_max_hours: int = 24
@@ -244,6 +249,15 @@ class Settings:
             azure_speech_key=_env_or_secret("AZURE_SPEECH_KEY", "azure-speech-key", key_vault_url),
             enable_live_speech=_bool_env("LALA_ENABLE_LIVE_SPEECH", default=False),
             enable_live_routing=_bool_env("LALA_ENABLE_LIVE_ROUTING", default=False),
+            paid_daily_request_limit=_int_env(
+                "LALA_PAID_DAILY_REQUEST_LIMIT", default=200, minimum=1
+            ),
+            paid_daily_unit_limit=_int_env("LALA_PAID_DAILY_UNIT_LIMIT", default=200000, minimum=1),
+            paid_global_concurrency=_int_env("LALA_PAID_GLOBAL_CONCURRENCY", default=4, minimum=1),
+            paid_cache_ttl_sec=_int_env("LALA_PAID_CACHE_TTL_SEC", default=3600, minimum=1),
+            paid_memory_max_entries=_int_env(
+                "LALA_PAID_MEMORY_MAX_ENTRIES", default=256, minimum=1
+            ),
             paid_route_rate_limit_enabled=_bool_env(
                 "LALA_PAID_ROUTE_RATE_LIMIT_ENABLED",
                 default=True,

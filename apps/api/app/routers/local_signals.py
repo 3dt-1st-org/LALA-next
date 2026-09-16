@@ -69,7 +69,9 @@ def _idempotency_key(
     supplied: str | None,
     payload: dict,
 ) -> str:
-    normalized = (supplied or "").strip()
+    from apps.api.app.services.community_idempotency import validate_idempotency_key
+
+    normalized = validate_idempotency_key(supplied)
     if normalized:
         return normalized
     return request_hash({"path": request.url.path, "payload": payload})

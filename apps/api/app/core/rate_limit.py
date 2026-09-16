@@ -23,15 +23,17 @@ _lock = Lock()
 
 
 def _window_allows(key: tuple[str, str], limit: int) -> bool:
-    """Advance the shared fixed window once and report whether it is still open.
-
-    The in-process window is intentionally a development/test seam. Production
-    deployment can replace the ``enforce_*`` seams with the existing
-    edge/distributed limiter without changing route contracts.
-    """
+    """Bounded no-DB fallback; configured databases use shared admission."""
 
     now = monotonic()
     with _lock:
+        for expired_key, item in list(_windows.items()):
+            if now - item.started_at >= _WINDOW_SECONDS:
+                del _windows[expired_key]
+        if key not in _windows and len(_windows) >= min(
+            4096, max(1, get_settings().paid_memory_max_entries)
+        ):
+            return False
         window = _windows.get(key)
         if window is None or now - window.started_at >= _WINDOW_SECONDS:
             _windows[key] = _Window(started_at=now, count=1)
@@ -42,9 +44,17 @@ def _window_allows(key: tuple[str, str], limit: int) -> bool:
 
 def _hashed_key(route_key: str, actor_key: str, client_key: str) -> tuple[str, str]:
     # Hashing keeps the in-process key from becoming an accidental observable
-    # identity record while preserving per-actor and per-client isolation.
-    key_material = f"{route_key}:{actor_key}:{client_key}".encode()
+    # identity record. Authenticated budgets never depend on the peer address.
+    key_material = f"{route_key}:{actor_key}".encode()
     return (route_key, hashlib.sha256(key_material).hexdigest())
+
+
+def _admit(key: tuple[str, str], limit: int) -> bool:
+    if get_settings().db_dsn:
+        from apps.api.app.services.paid_cost_control import enforce_db_window
+
+        return enforce_db_window(":".join(key), max(1, limit))
+    return _window_allows(key, max(1, limit))
 
 
 def enforce_public_contest_paid_route_limit(
@@ -53,15 +63,26 @@ def enforce_public_contest_paid_route_limit(
     route_key: str,
     limit_per_minute: int,
 ) -> None:
-    settings = get_settings()
-    if not settings.guest_access_enabled:
-        return
-    if not settings.paid_route_rate_limit_enabled:
-        return
+    from apps.api.app.core.auth import require_client_auth
+    from apps.api.app.services.paid_cost_control import paid_actor
 
-    limit = max(1, limit_per_minute)
-    key = (route_key, _client_key(request))
-    if _window_allows(key, limit):
+    identity = getattr(request.state, "identity", None)
+    if identity is None:
+        identity = require_client_auth(
+            x_api_key=request.headers.get("X-API-Key"),
+            authorization=request.headers.get("Authorization"),
+            request=request,
+        )
+    actor = (
+        f"oauth:{identity.issuer}:{identity.subject}"
+        if identity.mode == "oauth"
+        else "static"
+        if identity.mode == "static"
+        else f"public:{_client_key(request)}"
+    )
+    paid_actor.set(actor)
+    key = _hashed_key(route_key, actor, "")
+    if _admit(key, limit_per_minute):
         return
 
     raise ApiError(
@@ -81,7 +102,7 @@ def enforce_local_signals_rate_limit(
 ) -> None:
     limit = max(1, limit_per_minute)
     key = _hashed_key(route_key, actor_key, _client_key(request))
-    if _window_allows(key, limit):
+    if _admit(key, limit):
         return
 
     raise ApiError(
@@ -99,16 +120,16 @@ def enforce_community_write_rate_limit(
     actor_key: str,
     limit_per_minute: int,
 ) -> None:
-    """Bounded per-actor/per-client window for authenticated community writes.
+    """Bounded per-actor window for authenticated community writes.
 
-    Same replaceable seam and hashed-key discipline as Local Signals, with a
+    Same shared storage and hashed-key discipline as Local Signals, with a
     community-specific error contract. Call only after OAuth identity
     validation so unauthenticated requests never consume an actor window.
     """
 
     limit = max(1, limit_per_minute)
     key = _hashed_key(route_key, actor_key, _client_key(request))
-    if _window_allows(key, limit):
+    if _admit(key, limit):
         return
 
     raise ApiError(
@@ -126,17 +147,18 @@ def enforce_chat_message_rate_limit(
     client_key: str,
     limit_per_minute: int,
 ) -> None:
-    """Bounded per-actor/per-client window for inbound WebSocket chat frames.
+    """Bounded per-actor window for inbound WebSocket chat frames.
 
     WebSocket frames carry no per-frame ``Request``; callers pass the
-    connection's stable client key (resolved once at handshake). Raises the
+    connection's client key for compatibility; admission keys use only the
+    authenticated actor. Raises the
     same bounded ``ApiError`` contract so the frame handler can emit one
     bounded error frame without echoing message or identity content.
     """
 
     limit = max(1, limit_per_minute)
     key = _hashed_key(route_key, actor_key, client_key)
-    if _window_allows(key, limit):
+    if _admit(key, limit):
         return
 
     raise ApiError(
@@ -148,11 +170,8 @@ def enforce_chat_message_rate_limit(
 
 
 def _client_key(request: Request) -> str:
-    forwarded = (request.headers.get("CF-Connecting-IP") or "").strip()
-    if not forwarded:
-        forwarded = (request.headers.get("X-Forwarded-For") or "").split(",", 1)[0].strip()
-    if forwarded:
-        return forwarded
+    # Only the ASGI peer is trusted. Proxy header trust belongs to a separately
+    # configured ingress, never to arbitrary HTTP CF/XFF header values.
     if request.client and request.client.host:
         return request.client.host
     return "unknown"

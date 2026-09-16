@@ -96,6 +96,7 @@ from apps.api.app.services.review_mention_ingest import (
     insert_review_mention_aggregates_on_cursor,
     record_job_run,
 )
+from apps.api.app.tools.batch_helpers import apply_guard_error
 
 CONFIRM_TEXT = "APPLY_NAVER_REVIEW_COLLECT"
 ALLOW_ENV = "ALLOW_NAVER_REVIEW_COLLECT_APPLY"
@@ -1567,11 +1568,7 @@ def _plan_payload() -> dict[str, Any]:
 
 
 def _apply_guard_error(args: argparse.Namespace) -> str:
-    if args.confirm != CONFIRM_TEXT:
-        return f"--apply requires --confirm {CONFIRM_TEXT}."
-    if os.getenv(ALLOW_ENV) != "1":
-        return f"--apply requires {ALLOW_ENV}=1 in the process environment."
-    return ""
+    return apply_guard_error(args, confirm_text=CONFIRM_TEXT, allow_env=ALLOW_ENV)
 
 
 def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:

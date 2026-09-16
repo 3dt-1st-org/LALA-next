@@ -13,6 +13,19 @@ env:
   LALA_RUNTIME_PROFILE: ci
 
 jobs:
+  postgres-regressions:
+    name: Local PostgreSQL production regressions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev --frozen
+      - name: Run disposable PostgreSQL regressions
+        run: .venv/bin/python -m apps.api.app.tools.test_postgres_regressions
+
   api-tests:
     name: API tests and safety contracts
     runs-on: windows-latest

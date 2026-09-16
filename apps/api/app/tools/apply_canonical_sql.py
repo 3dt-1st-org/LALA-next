@@ -8,6 +8,7 @@ import sys
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.redaction import redact_secret_text
 from apps.api.app.services.canonical_sql import execute_canonical_sql, load_canonical_sql_plan
+from apps.api.app.tools.batch_helpers import apply_guard_error
 
 CONFIRM_TEXT = "APPLY_CANONICAL_SQL"
 ALLOW_ENV = "ALLOW_CANONICAL_SQL_APPLY"
@@ -60,11 +61,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _apply_guard_error(args: argparse.Namespace) -> str:
-    if args.confirm != CONFIRM_TEXT:
-        return f"--apply requires --confirm {CONFIRM_TEXT}."
-    if os.getenv(ALLOW_ENV) != "1":
-        return f"--apply requires {ALLOW_ENV}=1 in the process environment."
-    return ""
+    return apply_guard_error(args, confirm_text=CONFIRM_TEXT, allow_env=ALLOW_ENV)
 
 
 def _write(args: argparse.Namespace, payload: dict) -> None:

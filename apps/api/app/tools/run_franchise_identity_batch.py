@@ -15,6 +15,7 @@ from apps.api.app.services.franchise_identity import (
     upsert_place_business_identities,
 )
 from apps.api.app.services.job_runs import duration_ms, record_job_run
+from apps.api.app.tools.batch_helpers import apply_guard_error
 
 CONFIRM_TEXT = "APPLY_FRANCHISE_IDENTITY_BATCH"
 ALLOW_ENV = "ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY"
@@ -168,11 +169,7 @@ def _plan_payload() -> dict[str, Any]:
 
 
 def _apply_guard_error(args: argparse.Namespace) -> str:
-    if args.confirm != CONFIRM_TEXT:
-        return f"--apply requires --confirm {CONFIRM_TEXT}."
-    if os.getenv(ALLOW_ENV) != "1":
-        return f"--apply requires {ALLOW_ENV}=1 in the process environment."
-    return ""
+    return apply_guard_error(args, confirm_text=CONFIRM_TEXT, allow_env=ALLOW_ENV)
 
 
 def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:

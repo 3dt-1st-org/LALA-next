@@ -7,7 +7,7 @@ from importlib.resources import files
 from math import sqrt
 from typing import Any
 
-from apps.api.app.services import region_catalog
+from apps.api.app.services import place_presentation, region_catalog
 from apps.api.app.services.official_media import normalize_official_image_url
 
 SNAPSHOT_PACKAGE = "apps.api.app.data"
@@ -150,23 +150,11 @@ def _rank_score(place: dict[str, Any], *, radius_m: int) -> float:
 
 
 def _english_display_name(row: dict[str, Any]) -> str:
-    region = _english_region(row)
-    category = str(row.get("category") or "").strip()
-    category_label = {
-        "attraction": "Attraction",
-        "culture_venue": "Culture venue",
-        "event": "Event",
-        "restaurant": "Restaurant",
-    }.get(category, "Local place")
-    return f"{category_label} in {region}" if region else category_label
+    return place_presentation.english_display_name(row)
 
 
 def _english_display_address(row: dict[str, Any]) -> str:
-    region = _english_region(row)
-    province = _english_province(row)
-    if region and province:
-        return f"{region}, {province}"
-    return region or province or ""
+    return place_presentation.english_display_address(row)
 
 
 def _english_province(row: dict[str, Any]) -> str | None:
@@ -174,12 +162,7 @@ def _english_province(row: dict[str, Any]) -> str | None:
     # not assume Gyeonggi for every nationwide row. Prefer a province parsed
     # from the Korean address; fall back to the region→province catalog for
     # rows that only carry region_ko (no province prefix in address_ko).
-    province_ko = region_catalog.infer_province_name_from_address(
-        row.get("address_ko") or row.get("region_ko")
-    )
-    if province_ko and province_ko in region_catalog.PROVINCE_NAME_EN:
-        return region_catalog.PROVINCE_NAME_EN[province_ko]
-    return region_catalog.province_name_en_for_region(row.get("region_ko"))
+    return place_presentation.english_province(row)
 
 
 def _english_region(row: dict[str, Any]) -> str | None:

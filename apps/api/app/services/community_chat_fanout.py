@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # Bounded reconnect backoff for the listener thread (seconds).
 _RECONNECT_BACKOFF_SECONDS = (1, 2, 4, 8, 15, 30, 60)
 _SELECT_TIMEOUT_SECONDS = 15.0
+_MAX_PENDING_DELIVERIES = 64
 
 
 @dataclass
@@ -82,6 +83,7 @@ class ChatFanoutBridge:
         self._channel = channel
         self._generation: _ListenerGeneration | None = None
         self._lifecycle_lock = threading.Lock()
+        self._delivery_slots = threading.BoundedSemaphore(_MAX_PENDING_DELIVERIES)
 
     # -- Lifecycle -----------------------------------------------------------
 
@@ -226,7 +228,24 @@ class ChatFanoutBridge:
         loop = generation.loop
         if loop is None or loop.is_closed():
             return
-        asyncio.run_coroutine_threadsafe(self._deliver(payload), loop)
+        if not self._delivery_slots.acquire(blocking=False):
+            return  # No unbounded event-loop queue; clients recover via history.
+        coroutine = None
+        try:
+            coroutine = self._deliver(payload)
+            future = asyncio.run_coroutine_threadsafe(coroutine, loop)
+        except Exception:
+            if coroutine is not None:
+                coroutine.close()
+            self._delivery_slots.release()
+            return
+
+        def completed(future):
+            self._delivery_slots.release()
+            with contextlib.suppress(Exception):
+                future.result()
+
+        future.add_done_callback(completed)
 
     # -- Listener thread -----------------------------------------------------
 

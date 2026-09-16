@@ -24,6 +24,7 @@ from apps.api.app.services.review_attribute_batch import (
     selected_review_batch_model,
     selected_review_recheck_model,
 )
+from apps.api.app.tools.batch_helpers import apply_guard_error
 
 CONFIRM_TEXT = "APPLY_REVIEW_ATTRIBUTE_BATCH"
 ALLOW_ENV = "ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY"
@@ -354,11 +355,7 @@ def _validation_error(args: argparse.Namespace) -> str:
 
 
 def _apply_guard_error(args: argparse.Namespace) -> str:
-    if args.confirm != CONFIRM_TEXT:
-        return f"--apply requires --confirm {CONFIRM_TEXT}."
-    if os.getenv(ALLOW_ENV) != "1":
-        return f"--apply requires {ALLOW_ENV}=1 in the process environment."
-    return ""
+    return apply_guard_error(args, confirm_text=CONFIRM_TEXT, allow_env=ALLOW_ENV)
 
 
 def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:

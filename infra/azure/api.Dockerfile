@@ -15,8 +15,9 @@ COPY pyproject.toml uv.lock .python-version ./
 COPY apps ./apps
 COPY api ./api
 
-RUN uv pip install --system --no-cache .
+RUN uv sync --frozen --no-dev --no-editable
+ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn apps.api.app.main:app --host 0.0.0.0 --port ${PORT:-8000} --no-access-log"]
+CMD ["sh", "-c", "exec uvicorn apps.api.app.main:app --host 0.0.0.0 --port ${PORT:-8000} --limit-concurrency 64 --ws-max-size 8192 --no-access-log"]

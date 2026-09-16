@@ -58,6 +58,7 @@
 - FastAPI 환경에 맞춰 SQLAlchemy와 Alembic을 사용하기로 확정했다.
 - 코드 기준과 실제 DB에는 SQL 068 및 RAG 구조 차이가 있다.
 - 기존 canonical SQL을 Alembic으로 전환하는 기준선·적용 이력·복구 방법은 구현 전에 합의한다.
+- PR #210에서 추가된 SQL 069~071은 기존 운영 DB 대조 뒤에 생겼으므로 현재 main 기준 재대조가 먼저다.
 
 ## 보류·확인 필요
 
@@ -74,7 +75,7 @@
 <details>
 <summary><strong>준비 단계에서 완료한 검증</strong></summary>
 
-- 고정 SHA와 canonical SQL 18개 파일의 내용·hash를 대조하고 누적 CREATE/ALTER 구조를 추출했다.
+- 고정 SHA `765570a2`와 당시 canonical SQL 18개 파일의 내용·hash를 대조하고 누적 CREATE/ALTER 구조를 추출했다.
 - 실제 AWS DB catalog를 READ ONLY로 조회했다. 사용자 행·취향·위치·토큰은 조회하지 않았다.
 - 테이블·뷰, 공통 컬럼 타입·NULL, PK/UNIQUE/FK, 이름 있는 CHECK, 인덱스 이름을 비교했다.
 - 박진희 API·환경 문서와 이찬혜 디자인·작업 보고를 분석 기준 코드와 대조했다.
@@ -82,6 +83,7 @@
 - 변경 파일 대상 pre-commit과 PR CI 3개가 통과했다.
 
 앱·API·DB 통합, 실제 지도·음성, 기기 상태, 성능·동시접속은 이 준비에서 검증하지 않았다.
+현재 main의 SQL 069~071과 운영 DB의 대조도 아직 실행하지 않았다.
 
 </details>
 
