@@ -14,8 +14,8 @@ from apps.api.app.services.official_ingest_validation import (
     validate_official_coordinate,
 )
 from apps.api.app.services.official_media import official_image_url_or_none
+from apps.api.app.services.official_paging import OfficialPage, run_official_paged_fetch
 from apps.api.app.services.official_source_errors import (
-    raise_for_official_http_status,
     raise_for_official_result_code,
 )
 from apps.api.app.services.official_source_receipts import (
@@ -143,55 +143,32 @@ def fetch_culture_info_events(
 
     import requests
 
-    events: list[CultureInfoEvent] = []
-    request_count = 0
-    raw_count = 0
-    total_count: int | None = None
     rejection_counter = OfficialRejectionCounter()
-    page_no = 1
-    remaining = rows
-
-    while remaining > 0:
-        num_rows = min(page_size, remaining)
-        params = _request_params(
-            service_key=service_key,
+    paged = run_official_paged_fetch(
+        source=DEFAULT_SOURCE_NAME,
+        url=f"{CULTURE_INFO_BASE_URL}/{operation}",
+        service_key=service_key,
+        rows=rows,
+        page_size=page_size,
+        timeout=timeout,
+        http_get=requests.get,
+        response_payload=lambda response: response.text,
+        build_params=lambda page_no, num_rows, key: _request_params(
+            service_key=key,
             operation=operation,
             sido=sido,
             sigungu=sigungu,
             page_no=page_no,
             rows=num_rows,
-        )
-        response = requests.get(
-            f"{CULTURE_INFO_BASE_URL}/{operation}",
-            params=params,
-            timeout=timeout,
-        )
-        request_count += 1
-        # Typed, fixed-reason error; the raw upstream URL (which carries
-        # serviceKey=...) is never echoed in the exception message (F2).
-        raise_for_official_http_status(source=DEFAULT_SOURCE_NAME, status_code=response.status_code)
-        payload = response.text
-        page_events, page_total = parse_culture_info_events(
-            payload,
-            source_name=DEFAULT_SOURCE_NAME,
-            counter=rejection_counter,
-        )
-        if page_total is not None:
-            total_count = page_total
-        raw_count += len(page_events)
-        events.extend(page_events)
-        if len(page_events) < num_rows:
-            break
-        remaining -= num_rows
-        page_no += 1
-
-    partial = reconcile_partial_run(total=total_count, collected=raw_count)
+        ),
+        parse_page=lambda payload: _parse_culture_info_page(payload, rejection_counter),
+    )
     return CultureInfoFetchResult(
-        events=tuple(_dedupe_events(events)),
-        request_count=request_count,
-        raw_count=raw_count,
-        total_count=partial.total,
-        partial_run=partial.partial_run,
+        events=tuple(_dedupe_events(paged.items)),
+        request_count=paged.request_count,
+        raw_count=paged.raw_count,
+        total_count=paged.total_count,
+        partial_run=paged.partial_run,
         rejected_row_count=rejection_counter.total,
         rejection_reason=rejection_counter.summary_reason(),
         operation=operation,
@@ -274,6 +251,18 @@ def parse_culture_info_events(
         is not None
     ]
     return events, total_count
+
+
+def _parse_culture_info_page(
+    payload: str,
+    counter: OfficialRejectionCounter,
+) -> OfficialPage:
+    events, total_count = parse_culture_info_events(
+        payload,
+        source_name=DEFAULT_SOURCE_NAME,
+        counter=counter,
+    )
+    return OfficialPage(items=tuple(events), total_count=total_count)
 
 
 def parse_culture_info_event(

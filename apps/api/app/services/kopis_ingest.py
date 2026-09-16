@@ -11,9 +11,9 @@ from xml.etree import ElementTree
 
 from apps.api.app.services.official_ingest_validation import OfficialRejectionCounter
 from apps.api.app.services.official_media import official_image_url_or_none
+from apps.api.app.services.official_paging import OfficialPage, run_official_paged_fetch
 from apps.api.app.services.official_source_errors import (
     OfficialSourceError,
-    raise_for_official_http_status,
     raise_for_official_result_code,
 )
 from apps.api.app.services.official_source_receipts import record_official_source_receipt
@@ -156,46 +156,36 @@ def fetch_kopis_performances(
 
     import requests
 
-    performances: list[KopisPerformance] = []
-    request_count = 0
-    raw_count = 0
     rejection_counter = OfficialRejectionCounter()
-    page_no = 1
-    remaining = rows
-
-    while remaining > 0:
-        num_rows = min(page_size, remaining)
-        response = requests.get(
-            f"{KOPIS_BASE_URL}/{KOPIS_OPERATION}",
-            params=_request_params(
-                service_key=service_key,
-                stdate=stdate,
-                eddate=eddate,
-                page_no=page_no,
-                rows=num_rows,
-                signgucode=signgucode,
-                signgucodesub=signgucodesub,
-                prfstate=prfstate,
-            ),
-            timeout=timeout,
-        )
-        request_count += 1
-        # Typed, fixed-reason error; the raw upstream URL (which carries
-        # serviceKey=...) is never echoed in the exception message (F2).
-        raise_for_official_http_status(source="kopis", status_code=response.status_code)
-        page_items = parse_kopis_performances(response.text, counter=rejection_counter)
-        raw_count += len(page_items)
-        performances.extend(page_items)
-        if len(page_items) < num_rows:
-            break
-        remaining -= num_rows
-        page_no += 1
+    paged = run_official_paged_fetch(
+        source="kopis",
+        url=f"{KOPIS_BASE_URL}/{KOPIS_OPERATION}",
+        service_key=service_key,
+        rows=rows,
+        page_size=page_size,
+        timeout=timeout,
+        http_get=requests.get,
+        response_payload=lambda response: response.text,
+        build_params=lambda page_no, num_rows, key: _request_params(
+            service_key=key,
+            stdate=stdate,
+            eddate=eddate,
+            page_no=page_no,
+            rows=num_rows,
+            signgucode=signgucode,
+            signgucodesub=signgucodesub,
+            prfstate=prfstate,
+        ),
+        parse_page=lambda payload: OfficialPage(
+            items=tuple(parse_kopis_performances(payload, counter=rejection_counter))
+        ),
+    )
 
     normalized_signgucode = _normalize_signgucode(signgucode)
     return KopisFetchResult(
-        performances=tuple(_dedupe_performances(performances)),
-        request_count=request_count,
-        raw_count=raw_count,
+        performances=tuple(_dedupe_performances(paged.items)),
+        request_count=paged.request_count,
+        raw_count=paged.raw_count,
         stdate=stdate,
         eddate=eddate,
         signgucode=normalized_signgucode,

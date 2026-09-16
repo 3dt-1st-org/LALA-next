@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.services import (
     db_repository,
+    place_presentation,
     public_mvp_data,
 )
 from apps.api.app.services.normalization import normalize_language
@@ -14,24 +16,7 @@ _ALLOWED_CATEGORIES = {"all", "attraction", "restaurant", "event", "culture_venu
 
 _INDOOR_PREFERRED_CATEGORIES = {"restaurant", "culture_venue"}
 
-# D2 — S1 per-source provenance labels. Mirrors the KO branch of the client
-# externalSourceLabel (home_view_helpers.dart); canonical/empty/unknown → omit.
-_UPSTREAM_SOURCE_LABELS: dict[str, str] = {
-    "tour_api": "한국관광공사",
-    "kcisa": "문화정보원",
-    "kopis": "공연예술통합전산망",
-}
-
-# EN S1 phrases, taken verbatim from docent_service._en_source_label so one EN
-# naming exists per source across API surfaces; canonical/empty/unknown → omit.
-_UPSTREAM_SOURCE_PHRASES_EN: dict[str, str] = {
-    "tour_api": "Korea Tourism Organization data",
-    "kcisa": "Korea Culture Information Service data",
-    "kopis": "KOPIS performing arts data",
-}
-
-# Lane-1 internal reason inputs: projected into the place dict for the composer
-# to read, then stripped before the /places response is serialized (§8).
+# Internal reason inputs are consumed by the composer and stripped before serialization.
 _INTERNAL_REASON_KEYS = ("_local_activity_band", "_has_linked_event")
 
 
@@ -127,7 +112,6 @@ def list_places(
         query_echo["ne_lat"] = ne_lat
         query_echo["ne_lng"] = ne_lng
 
-    # Collect current signals for reason/freshness derivation
     # current_time stays a UTC anchor: freshness is elapsed absolute time, so a
     # UTC anchor keeps it correct regardless of venue timezone.
     current_time = datetime.now(UTC)
@@ -136,21 +120,13 @@ def list_places(
     # honestly omitted (current_weather stays {}); never fabricated.
     current_weather = db_repository.fetch_latest_weather(lat=lat, lng=lng) or {}
 
-    # Enrich places with reason and freshness
-    enriched_places = []
-    for place in db_places:
-        enriched_place = dict(place)
-        reason = _derive_place_reason(
-            place=place,
-            current_weather=current_weather,
-            language=language,
-        )
-        freshness = _format_freshness(place.get("updated_at"), current_time, language)
-
-        enriched_place["reason"] = reason
-        enriched_place["freshness"] = freshness
-        _strip_internal_reason_inputs(enriched_place)
-        enriched_places.append(enriched_place)
+    enriched_places = _enrich_places(
+        db_places,
+        current_weather=current_weather,
+        current_time=current_time,
+        language=language,
+        freshness_timestamp=lambda place: place.get("updated_at"),
+    )
 
     if enriched_places:
         return {
@@ -174,23 +150,14 @@ def list_places(
             limit=limit,
         )
         if public_places:
-            # Enrich static places with reason/freshness
-            enriched_public = []
-            for place in public_places:
-                enriched_place = dict(place)
-                reason = _derive_place_reason(
-                    place=place,
-                    current_weather=current_weather,
-                    language=language,
-                )
-                freshness = _format_freshness(
-                    public_mvp_data.snapshot_generated_at(), current_time, language
-                )
-
-                enriched_place["reason"] = reason
-                enriched_place["freshness"] = freshness
-                _strip_internal_reason_inputs(enriched_place)
-                enriched_public.append(enriched_place)
+            snapshot_generated_at = public_mvp_data.snapshot_generated_at()
+            enriched_public = _enrich_places(
+                public_places,
+                current_weather=current_weather,
+                current_time=current_time,
+                language=language,
+                freshness_timestamp=lambda _place: snapshot_generated_at,
+            )
 
             return {
                 "count": len(enriched_public),
@@ -201,7 +168,7 @@ def list_places(
                 "source": public_mvp_data.SOURCE_NAME,
                 "location_engine": "static_snapshot",
                 # Truthful snapshot build timestamp (or honest None if absent).
-                "data_as_of": public_mvp_data.snapshot_generated_at(),
+                "data_as_of": snapshot_generated_at,
             }
 
     return {
@@ -219,6 +186,30 @@ def _places_without_scores(places: list[dict]) -> list[dict]:
     return [{**place, "score": None} for place in places]
 
 
+def _enrich_places(
+    places: list[dict],
+    *,
+    current_weather: dict,
+    current_time: datetime,
+    language: str,
+    freshness_timestamp: Callable[[dict], str | datetime | None],
+) -> list[dict]:
+    enriched_places = []
+    for place in places:
+        enriched_place = dict(place)
+        enriched_place["reason"] = _derive_place_reason(
+            place=place,
+            current_weather=current_weather,
+            language=language,
+        )
+        enriched_place["freshness"] = _format_freshness(
+            freshness_timestamp(place), current_time, language
+        )
+        _strip_internal_reason_inputs(enriched_place)
+        enriched_places.append(enriched_place)
+    return enriched_places
+
+
 def _strip_internal_reason_inputs(place: dict) -> None:
     """Remove Lane-1 internal reason inputs so they never leave the service (§8)."""
     for key in _INTERNAL_REASON_KEYS:
@@ -231,11 +222,7 @@ def _upstream_source_reason_phrase(upstream_source: str, *, language: str = "ko"
     Replaces the old generic "공식 데이터" stamp: a phrase without a real source is
     less honest than silence.
     """
-    key = (upstream_source or "").strip()
-    if language == "en":
-        return _UPSTREAM_SOURCE_PHRASES_EN.get(key)
-    label = _UPSTREAM_SOURCE_LABELS.get(key)
-    return f"{label} 데이터" if label else None
+    return place_presentation.upstream_source_reason_phrase(upstream_source, language=language)
 
 
 def _local_activity_reason_phrase(
@@ -246,10 +233,7 @@ def _local_activity_reason_phrase(
     Derives ONLY from the min-sample-gated band (Lane 1's token) — never from
     final_score or any component score (the number is unreachable from this phrase).
     """
-    # Lane 1 sets 'active' above the min-sample gate; any truthy token = active.
-    if not local_activity_band:
-        return None
-    return "Active local spending" if language == "en" else "로컬 소비 활발"
+    return place_presentation.local_activity_reason_phrase(local_activity_band, language=language)
 
 
 def _weather_band_phrase(
@@ -260,36 +244,18 @@ def _weather_band_phrase(
     Distinct granularity from RC3's publicWeatherSummary (band, not numbers), so it
     cannot diverge. The indoor-fit bit is retained only for indoor-pref ∧ bad weather.
     """
-    if not current_weather:
-        return None
-    if current_weather.get("outdoor_status") == "bad":
-        # A bare "bad weather" stamp on an outdoor attraction is not useful; honest silence.
-        if category not in _INDOOR_PREFERRED_CATEGORIES:
-            return None
-        return "Indoor-friendly" if language == "en" else "실내활동 적합"
-    # Good/other weather → single comfort band from temp; unparseable temp → omit.
-    try:
-        temp_c = float(current_weather.get("temp"))
-    except (TypeError, ValueError):
-        return None
-    if temp_c < 5:
-        return "Cold weather" if language == "en" else "추운 날씨"
-    if temp_c < 18:
-        return "Cool weather" if language == "en" else "선선한 날씨"
-    if temp_c < 27:
-        return "Warm weather" if language == "en" else "따뜻한 날씨"
-    return "Hot weather" if language == "en" else "더운 날씨"
+    return place_presentation.weather_band_phrase(
+        current_weather, category=category, language=language
+    )
 
 
 def _linked_event_reason_phrase(
     has_linked_event: bool | None, *, is_ongoing: bool | None, language: str = "ko"
 ) -> str | None:
     """D4 linked/ongoing event phrase for ANY category (contract D4); None if none."""
-    if not has_linked_event:
-        return None
-    if language == "en":
-        return "Ongoing event" if is_ongoing else "Linked event"
-    return "진행 중인 행사" if is_ongoing else "행사 연계"
+    return place_presentation.linked_event_reason_phrase(
+        has_linked_event, is_ongoing=is_ongoing, language=language
+    )
 
 
 def _derive_place_reason(*, place: dict, current_weather: dict, language: str = "ko") -> str:
@@ -311,46 +277,9 @@ def _derive_place_reason(*, place: dict, current_weather: dict, language: str = 
     not. Comparing a UTC wall-clock slot against those estimates also mistook KST
     midnight for afternoon. Honest silence instead (removed legacy 영업중/Open now).
     """
-    reasons: list[str] = []
-    category = place.get("category", "")
-
-    # 1. Weather band (S3) — coarse phrase, never per-card numbers
-    weather_phrase = _weather_band_phrase(current_weather, category=category, language=language)
-    if weather_phrase:
-        reasons.append(weather_phrase)
-
-    # 2. Activity (S2) — binary hint from the SQL band token; never a number
-    activity_phrase = _local_activity_reason_phrase(
-        place.get("_local_activity_band"), language=language
+    return place_presentation.derive_place_reason(
+        place=place, current_weather=current_weather, language=language
     )
-    if activity_phrase:
-        reasons.append(activity_phrase)
-
-    # 3. Linked/ongoing event (D4) — any category; internal key, stripped pre-serialize.
-    #    is_ongoing comes only from trusted structured event dates (SQL starts/ends_at);
-    #    unknown (None) or expired (False) never claims an ongoing event.
-    event_phrase = _linked_event_reason_phrase(
-        place.get("_has_linked_event"),
-        is_ongoing=place.get("is_ongoing"),
-        language=language,
-    )
-    if event_phrase:
-        reasons.append(event_phrase)
-
-    # 4. Proximity (≤500m) — existing logic
-    distance_m = place.get("distance_m", 0)
-    if isinstance(distance_m, (int, float)) and distance_m <= 500:
-        reasons.append("Nearby" if language == "en" else "근접")
-    # >500m → omit proximity (honest)
-
-    # 5. Source provenance (S1) — per-source phrase; canonical/empty/unknown → omit
-    source_phrase = _upstream_source_reason_phrase(
-        place.get("upstream_source", ""), language=language
-    )
-    if source_phrase:
-        reasons.append(source_phrase)
-
-    return " · ".join(reasons)
 
 
 def _format_freshness(updated_at: str | None, now: datetime, language: str = "ko") -> str | None:
@@ -371,40 +300,4 @@ def _format_freshness(updated_at: str | None, now: datetime, language: str = "ko
     Returns:
         Localized freshness string or None.
     """
-    is_en = language == "en"
-    if not updated_at:
-        return None
-
-    try:
-        if isinstance(updated_at, str):
-            updated_at_dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
-        elif isinstance(updated_at, datetime):
-            updated_at_dt = updated_at
-        else:
-            return None
-
-        # Ensure timezone awareness
-        if updated_at_dt.tzinfo is None:
-            updated_at_dt = updated_at_dt.replace(tzinfo=UTC)
-
-        diff = now - updated_at_dt
-        total_seconds = diff.total_seconds()
-
-        if total_seconds < 0:
-            # Future timestamp (data corruption), treat as now
-            return "just now" if is_en else "방금 전"
-
-        if total_seconds < 60:
-            return "just now" if is_en else "방금 전"
-        elif total_seconds < 3600:
-            minutes = int(total_seconds / 60)
-            return f"{minutes} min ago" if is_en else f"{minutes}분 전"
-        elif total_seconds < 86400:
-            hours = int(total_seconds / 3600)
-            return f"{hours} hr ago" if is_en else f"{hours}시간 전"
-        else:
-            days = int(total_seconds / 86400)
-            return f"{days} days ago" if is_en else f"{days}일 전"
-
-    except (ValueError, AttributeError):
-        return None
+    return place_presentation.format_freshness(updated_at, now, language=language)

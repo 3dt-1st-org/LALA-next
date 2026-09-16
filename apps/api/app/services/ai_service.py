@@ -3,6 +3,7 @@ from __future__ import annotations
 from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.docent import DocentScriptRequest
+from apps.api.app.services import i18n_catalog
 from apps.api.app.services.model_client import resolve
 from apps.api.app.services.normalization import display_language, format_celsius_label
 
@@ -351,48 +352,21 @@ def _weather_context_prompt(request: DocentScriptRequest, *, language: str = "ko
     return "Current weather and air quality: " + "; ".join(weather_parts) + "."
 
 
-# Korean air-quality/outdoor labels (dust_quality.py) reach the prompt verbatim
-# and leak into English scripts (defect N1). Map them at the prompt boundary.
-_AIR_LABEL_EN = {
-    "좋음": "good",
-    "보통": "moderate",
-    "나쁨": "unhealthy",
-    "매우나쁨": "very unhealthy",
-    "실외": "outdoor",
-    "실내": "indoor",
-    "실내외": "indoor and outdoor",
-}
-
-
 def _air_label(value: str, language: str) -> str:
-    if language != "en":
-        return value
-    return _AIR_LABEL_EN.get(value.strip(), value)
+    return i18n_catalog.air_label(value, language=language) or value
 
 
 def _weather_condition_label(icon: str | None) -> str | None:
-    return {
-        "partly-cloudy": "partly cloudy",
-        "partly_cloudy": "partly cloudy",
-        "partly cloudy": "partly cloudy",
-        "cloudy": "cloudy",
-        "clear": "clear",
-        "sunny": "sunny",
-        "rain": "rainy",
-        "sleet": "mixed rain and snow",
-        "snow": "snowy",
-    }.get((icon or "").strip().lower())
+    return i18n_catalog.weather_icon_label(icon, language="en")
 
 
 # Raw internal source ids (e.g. tour_api) surfaced verbatim in grounding
 # snippets leak into user-facing text (defect N7). Map to reader-safe labels
 # before the model ever sees them; the prohibition sentence stays as backup.
 _SOURCE_TYPE_LABELS = {
-    "tour_api": "official tourism data",
-    "place_profile": "verified place profile",
-    "place_mention": "weekly local mention counts",
-    "review": "visitor reviews",
-    "naver_blog": "local blog posts",
+    key: label
+    for key in ("tour_api", "place_profile", "place_mention", "review", "naver_blog")
+    if (label := i18n_catalog.prompt_evidence_type(key))
 }
 
 

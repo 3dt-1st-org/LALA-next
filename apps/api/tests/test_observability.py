@@ -228,6 +228,27 @@ def test_metrics_exports_readiness_gauges(client, monkeypatch):
     assert 'lala_next_runtime_mode{component="speech",mode="live-azure"} 1' in metrics.text
 
 
+def test_metrics_use_parameterized_route_template_for_nested_v1_routes(client):
+    concrete_plan_date = "2026-09-16"
+    concrete_slot_period = "morning"
+
+    response = client.put(
+        f"/api/v1/me/plans/{concrete_plan_date}/visits/{concrete_slot_period}",
+        headers={"X-API-Key": "wrong"},
+        json={"place_id": "place-1", "status": "visited"},
+    )
+    assert response.status_code == 401
+
+    metrics = client.get("/metrics")
+
+    assert (
+        'method="PUT",path="/api/v1/me/plans/{plan_date}/visits/{slot_period}",'
+        'status_code="401",status_class="4xx"'
+    ) in metrics.text
+    assert concrete_plan_date not in metrics.text
+    assert concrete_slot_period not in metrics.text
+
+
 def test_metrics_treats_guest_identity_as_ready(client, monkeypatch):
     monkeypatch.setenv("LALA_GUEST_ACCESS", "true")
 

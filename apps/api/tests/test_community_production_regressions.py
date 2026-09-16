@@ -19,6 +19,7 @@ import pytest
 from apps.api.app.core.config import Settings
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.routers import community_chat as chat
+from apps.api.app.services import community_chat_realtime as realtime
 from apps.api.app.services import community_service as community
 from apps.api.app.services import local_signals_service as signals
 from apps.api.app.services.community_chat_service import CommunityChatRepository
@@ -204,13 +205,13 @@ def test_chat_db_offload_is_responsive_and_cancellation_keeps_capacity(monkeypat
     async def run():
         entered, release = threading.Event(), threading.Event()
         slots = threading.BoundedSemaphore(1)
-        monkeypatch.setattr(chat, "_db_work_slots", slots)
+        monkeypatch.setattr(realtime, "_db_work_slots", slots)
 
         def slow():
             entered.set()
             release.wait(2)
 
-        task = asyncio.create_task(chat._run_db(slow))
+        task = asyncio.create_task(realtime.run_db(slow))
         try:
             while not entered.is_set():
                 await asyncio.sleep(0.001)
@@ -223,7 +224,7 @@ def test_chat_db_offload_is_responsive_and_cancellation_keeps_capacity(monkeypat
             with pytest.raises(asyncio.CancelledError):
                 await task
             with pytest.raises(ServiceError):
-                await chat._run_db(lambda: None)
+                await realtime.run_db(lambda: None)
         finally:
             release.set()
         for _ in range(100):
@@ -254,8 +255,8 @@ def test_chat_slow_receiver_does_not_delay_healthy_socket(monkeypatch):
             self.closed = code
 
     async def run():
-        monkeypatch.setattr(chat, "SEND_TIMEOUT_SECONDS", 0.03)
-        manager = chat.ConnectionManager()
+        monkeypatch.setattr(realtime, "SEND_TIMEOUT_SECONDS", 0.03)
+        manager = realtime.ConnectionManager()
         room = uuid4()
 
         async def verify(room_id, actors):

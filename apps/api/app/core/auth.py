@@ -154,7 +154,14 @@ def require_logto_identity(
             and getattr(getattr(route, "endpoint", None), "__name__", "") == "delete_me"
         )
         if not deleting_account:
-            identity_service.provision_user(identity.issuer, identity.subject)
+            from apps.api.app.core.account_context import (
+                get_request_account_context,
+                set_request_account_context,
+            )
+
+            if get_request_account_context(request) is None:
+                user = identity_service.provision_user(identity.issuer, identity.subject)
+                set_request_account_context(request, identity=identity, user=user)
         return identity
     raise ApiError(
         status_code=401,
@@ -162,6 +169,23 @@ def require_logto_identity(
         message="Logto user authentication is required.",
         retryable=False,
     )
+
+
+def require_current_account_context(
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
+    request: Request,
+    identity_service: Annotated[IdentityService, Depends(get_identity_service)],
+):
+    from apps.api.app.core.account_context import (
+        get_request_account_context,
+        set_request_account_context,
+    )
+
+    context = get_request_account_context(request)
+    if context is not None:
+        return context
+    user = identity_service.provision_user(identity.issuer or "", identity.subject or "")
+    return set_request_account_context(request, identity=identity, user=user)
 
 
 def _unauthorized() -> ApiError:
