@@ -58,6 +58,9 @@
 | [서비스 지표 제안](05-monitoring-proposal.md) | DAU·저장 전환·도슨트 성공률 정의와 최소 이벤트 후보 |
 | [개발 환경 인계](06-environment-handoff.md) | 로컬·CI·스테이징·프로덕션의 현재 상태와 준비 조건 |
 | [기준 코드·실제 DB 대조](01-baseline-and-db-comparison.md) | 코드와 운영 DB 구조 차이 및 검증 한계 |
+| [첫 배포 DB·로컬 시험 데이터](09-first-release-db-and-local-fixtures.md) | 핵심·보조·보류 DB와 seed 적용 범위 |
+| [SQLAlchemy·Alembic 점진 전환안](10-sqlalchemy-alembic-transition.md) | 기존 canonical SQL 기준선과 신규 마이그레이션 도입 순서 |
+| [DAU 정의 카드](11-dau-definition-card.md) | 핵심 행동·KST 일자·사용자·중복·제외 규칙 권고안 |
 | [핵심 ERD](02-erd.md) · [데이터 사전](03-data-dictionary.md) | 핵심 데이터 관계와 업무 의미 |
 | [화면·API·데이터 연결](04-screen-api-data-mapping.md) | 화면 요구와 현재 계약의 연결·미결정 사항 |
 | [전체 스키마 참고표](08-full-schema-reference.md) | 53개 테이블의 전체 컬럼·제약·뷰 |
