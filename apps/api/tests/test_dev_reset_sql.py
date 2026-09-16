@@ -22,6 +22,7 @@ def test_load_dev_reset_sql_plan_is_local_only_and_secret_safe():
     assert "explicit localhost DB_DSN" in payload["apply_requires"]
     assert [item["name"] for item in payload["files"]] == [
         "010_seed_local_fixture_travel.sql",
+        "015_seed_local_fixture_account_planning.sql",
         "020_seed_local_fixture_weather_docent.sql",
         "025_seed_local_fixture_economy_culture.sql",
         "030_seed_local_fixture_worker_ops.sql",
