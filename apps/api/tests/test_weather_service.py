@@ -7,23 +7,23 @@ from types import SimpleNamespace
 
 import pytest
 
-from apps.api.app.services import weather_service
+from apps.api.app.services import weather_provider_adapters, weather_service
 
 
 def test_kma_grid_xy_converts_suwon_coordinate() -> None:
-    assert weather_service._kma_grid_xy(37.2636, 127.0286) == (61, 120)
+    assert weather_provider_adapters.kma_grid_xy(37.2636, 127.0286) == (61, 120)
 
 
 def test_latest_kma_base_time_uses_previous_hour_before_publish_window() -> None:
-    before_publish = datetime(2026, 6, 19, 0, 22, tzinfo=weather_service.KST)
-    after_publish = datetime(2026, 6, 19, 0, 46, tzinfo=weather_service.KST)
+    before_publish = datetime(2026, 6, 19, 0, 22, tzinfo=weather_provider_adapters.KST)
+    after_publish = datetime(2026, 6, 19, 0, 46, tzinfo=weather_provider_adapters.KST)
 
     assert (
-        weather_service._latest_kma_base_time(before_publish).strftime("%Y%m%d%H%M")
+        weather_provider_adapters.latest_kma_base_time(before_publish).strftime("%Y%m%d%H%M")
         == "202606182300"
     )
     assert (
-        weather_service._latest_kma_base_time(after_publish).strftime("%Y%m%d%H%M")
+        weather_provider_adapters.latest_kma_base_time(after_publish).strftime("%Y%m%d%H%M")
         == "202606190000"
     )
 
@@ -55,7 +55,7 @@ def test_sido_name_for_coordinate_covers_supported_provinces(
     lng: float,
     expected: str,
 ) -> None:
-    assert weather_service._sido_name_for_coordinate(lat=lat, lng=lng) == expected
+    assert weather_provider_adapters.sido_name_for_coordinate(lat=lat, lng=lng) == expected
 
 
 def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
@@ -108,7 +108,7 @@ def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
 
     def fake_get(url, *, params, timeout):
         captured.append({"url": url, "params": params, "timeout": timeout})
-        if url == weather_service.KMA_ULTRA_SHORT_NOWCAST_URL:
+        if url == weather_provider_adapters.KMA_ULTRA_SHORT_NOWCAST_URL:
             return FakeKmaResponse()
         return FakeAirKoreaResponse()
 
@@ -119,26 +119,26 @@ def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
         weather_service.db_repository, "fetch_latest_weather", lambda **kwargs: None
     )
     monkeypatch.setattr(
-        weather_service.db_repository,
+        weather_provider_adapters.db_repository,
         "fetch_nearest_region_labels",
         lambda **kwargs: ["수원시", "Suwon"],
     )
     monkeypatch.setattr(
-        weather_service,
+        weather_provider_adapters,
         "get_settings",
         lambda: SimpleNamespace(public_data_service_key="public-data-secret"),
     )
     monkeypatch.setattr(
-        weather_service,
-        "_latest_kma_base_time",
-        lambda: datetime(2026, 6, 18, 23, 0, tzinfo=weather_service.KST),
+        weather_provider_adapters,
+        "latest_kma_base_time",
+        lambda: datetime(2026, 6, 18, 23, 0, tzinfo=weather_provider_adapters.KST),
     )
 
     weather = weather_service.current_weather(lat=37.2636, lng=127.0286)
 
     captured_by_url = {item["url"]: item for item in captured}
-    kma_request = captured_by_url[weather_service.KMA_ULTRA_SHORT_NOWCAST_URL]
-    airkorea_request = captured_by_url[weather_service.AIRKOREA_SIDO_REALTIME_URL]
+    kma_request = captured_by_url[weather_provider_adapters.KMA_ULTRA_SHORT_NOWCAST_URL]
+    airkorea_request = captured_by_url[weather_provider_adapters.AIRKOREA_SIDO_REALTIME_URL]
     assert kma_request["params"] == {
         "serviceKey": "public-data-secret",
         "pageNo": 1,
@@ -149,8 +149,8 @@ def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
         "nx": 61,
         "ny": 120,
     }
-    assert kma_request["timeout"] == weather_service.KMA_REQUEST_TIMEOUT_SECONDS
-    assert airkorea_request["timeout"] == weather_service.AIRKOREA_REQUEST_TIMEOUT_SECONDS
+    assert kma_request["timeout"] == weather_provider_adapters.KMA_REQUEST_TIMEOUT_SECONDS
+    assert airkorea_request["timeout"] == weather_provider_adapters.AIRKOREA_REQUEST_TIMEOUT_SECONDS
     assert airkorea_request["params"]["sidoName"] == "경기"
     assert weather["source"] == f"{weather_service.KMA_SOURCE}+{weather_service.AIRKOREA_SOURCE}"
     assert weather["location"] == "종로구"
@@ -186,12 +186,12 @@ def test_current_weather_reports_unavailable_without_public_data_key(
         weather_service.db_repository, "fetch_latest_weather", lambda **kwargs: None
     )
     monkeypatch.setattr(
-        weather_service.db_repository,
+        weather_provider_adapters.db_repository,
         "fetch_nearest_region_labels",
         lambda **kwargs: [],
     )
     monkeypatch.setattr(
-        weather_service,
+        weather_provider_adapters,
         "get_settings",
         lambda: SimpleNamespace(public_data_service_key=""),
     )
@@ -232,8 +232,8 @@ def test_current_weather_marks_bad_when_air_quality_is_bad(monkeypatch) -> None:
         lambda **kwargs: None,
     )
     monkeypatch.setattr(
-        weather_service,
-        "_fetch_official_weather_pair",
+        weather_service.weather_providers,
+        "fetch_official_weather_pair",
         lambda **kwargs: (official_weather, air_quality),
     )
 
@@ -279,8 +279,8 @@ def test_current_weather_merges_airkorea_into_db_weather(monkeypatch) -> None:
         lambda **kwargs: dict(db_weather),
     )
     monkeypatch.setattr(
-        weather_service,
-        "_fetch_airkorea_sido_air_quality",
+        weather_service.weather_providers,
+        "fetch_airkorea_sido_air_quality",
         lambda **kwargs: dict(air_quality),
     )
 
@@ -335,8 +335,8 @@ def test_current_weather_refreshes_airkorea_even_when_db_has_dust_values(
         lambda **kwargs: dict(db_weather),
     )
     monkeypatch.setattr(
-        weather_service,
-        "_fetch_airkorea_sido_air_quality",
+        weather_service.weather_providers,
+        "fetch_airkorea_sido_air_quality",
         lambda **kwargs: dict(air_quality),
     )
 
@@ -353,7 +353,7 @@ def test_current_weather_refreshes_airkorea_even_when_db_has_dust_values(
 
 
 def test_airkorea_selection_prefers_station_with_pm10_and_pm25() -> None:
-    selected = weather_service._select_airkorea_item(
+    selected = weather_provider_adapters.select_airkorea_item(
         [
             {
                 "stationName": "중구",
@@ -378,7 +378,7 @@ def test_airkorea_selection_prefers_station_with_pm10_and_pm25() -> None:
 
 
 def test_airkorea_selection_prefers_matching_nearby_station_when_complete() -> None:
-    selected = weather_service._select_airkorea_item(
+    selected = weather_provider_adapters.select_airkorea_item(
         [
             {
                 "stationName": "종로구",
@@ -399,7 +399,7 @@ def test_airkorea_selection_prefers_matching_nearby_station_when_complete() -> N
 
 
 def test_airkorea_selection_keeps_split_dust_before_matching_partial() -> None:
-    selected = weather_service._select_airkorea_item(
+    selected = weather_provider_adapters.select_airkorea_item(
         [
             {
                 "stationName": "중랑구",
@@ -475,8 +475,8 @@ def test_current_weather_provenance_separates_air_quality_from_good_weather(
         weather_service.db_repository, "fetch_latest_weather", lambda **kwargs: None
     )
     monkeypatch.setattr(
-        weather_service,
-        "_fetch_official_weather_pair",
+        weather_service.weather_providers,
+        "fetch_official_weather_pair",
         lambda **kwargs: (_kma_official_weather("good"), air_quality),
     )
 
@@ -502,8 +502,8 @@ def test_current_weather_provenance_reports_bad_weather_with_good_air(
         weather_service.db_repository, "fetch_latest_weather", lambda **kwargs: None
     )
     monkeypatch.setattr(
-        weather_service,
-        "_fetch_official_weather_pair",
+        weather_service.weather_providers,
+        "fetch_official_weather_pair",
         lambda **kwargs: (_kma_official_weather("bad"), air_quality),
     )
 
@@ -529,8 +529,8 @@ def test_current_weather_provenance_airkorea_only_keeps_weather_unknown(
         weather_service.db_repository, "fetch_latest_weather", lambda **kwargs: None
     )
     monkeypatch.setattr(
-        weather_service,
-        "_fetch_official_weather_pair",
+        weather_service.weather_providers,
+        "fetch_official_weather_pair",
         lambda **kwargs: (None, air_quality),
     )
 
@@ -557,8 +557,8 @@ def test_current_weather_provenance_unknown_dust_grade_stays_unknown(
         weather_service.db_repository, "fetch_latest_weather", lambda **kwargs: None
     )
     monkeypatch.setattr(
-        weather_service,
-        "_fetch_official_weather_pair",
+        weather_service.weather_providers,
+        "fetch_official_weather_pair",
         lambda **kwargs: (_kma_official_weather("good"), air_quality),
     )
 
@@ -600,8 +600,8 @@ def test_current_weather_provenance_db_row_prefers_weather_only_key(monkeypatch)
         lambda **kwargs: dict(db_weather),
     )
     monkeypatch.setattr(
-        weather_service,
-        "_fetch_airkorea_sido_air_quality",
+        weather_service.weather_providers,
+        "fetch_airkorea_sido_air_quality",
         lambda **kwargs: dict(air_quality),
     )
 
@@ -638,8 +638,8 @@ def test_current_weather_provenance_legacy_db_row_without_key_stays_unknown(
         lambda **kwargs: dict(db_weather),
     )
     monkeypatch.setattr(
-        weather_service,
-        "_fetch_airkorea_sido_air_quality",
+        weather_service.weather_providers,
+        "fetch_airkorea_sido_air_quality",
         lambda **kwargs: None,
     )
 
@@ -681,8 +681,8 @@ def test_current_weather_provenance_legacy_aggregate_bad_with_current_bad_aq(
         lambda **kwargs: dict(db_weather),
     )
     monkeypatch.setattr(
-        weather_service,
-        "_fetch_airkorea_sido_air_quality",
+        weather_service.weather_providers,
+        "fetch_airkorea_sido_air_quality",
         lambda **kwargs: dict(air_quality),
     )
 
@@ -726,8 +726,8 @@ def test_current_weather_provenance_legacy_aggregate_bad_with_current_good_aq(
         lambda **kwargs: dict(db_weather),
     )
     monkeypatch.setattr(
-        weather_service,
-        "_fetch_airkorea_sido_air_quality",
+        weather_service.weather_providers,
+        "fetch_airkorea_sido_air_quality",
         lambda **kwargs: dict(air_quality),
     )
 
@@ -760,8 +760,8 @@ def test_current_weather_provenance_missing_dust_stays_unknown(monkeypatch) -> N
         lambda **kwargs: dict(db_weather),
     )
     monkeypatch.setattr(
-        weather_service,
-        "_fetch_airkorea_sido_air_quality",
+        weather_service.weather_providers,
+        "fetch_airkorea_sido_air_quality",
         lambda **kwargs: None,
     )
 
@@ -778,12 +778,12 @@ def test_current_weather_unavailable_reports_unknown_provenance(monkeypatch) -> 
         weather_service.db_repository, "fetch_latest_weather", lambda **kwargs: None
     )
     monkeypatch.setattr(
-        weather_service.db_repository,
+        weather_provider_adapters.db_repository,
         "fetch_nearest_region_labels",
         lambda **kwargs: [],
     )
     monkeypatch.setattr(
-        weather_service,
+        weather_provider_adapters,
         "get_settings",
         lambda: SimpleNamespace(public_data_service_key=""),
     )

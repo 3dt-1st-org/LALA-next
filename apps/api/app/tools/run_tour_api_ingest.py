@@ -3,13 +3,11 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
-from datetime import UTC, datetime
 from typing import Any
 
-from apps.api.app.core.redaction import redact_secret_text
 from apps.api.app.core.runtime_secrets import load_runtime_environment
 from apps.api.app.services import region_catalog
-from apps.api.app.services.job_runs import duration_ms, record_job_run
+from apps.api.app.services.job_runs import record_job_run
 from apps.api.app.services.tour_api_ingest import (
     CONTENT_TYPE_CATEGORY,
     DEFAULT_AREA_CODE,
@@ -21,7 +19,16 @@ from apps.api.app.services.tour_api_ingest import (
     fetch_tour_api_places_for_area_codes,
     upsert_tour_api_places,
 )
-from apps.api.app.tools.batch_helpers import apply_guard_error, env_or_secret
+from apps.api.app.tools.batch_helpers import (
+    apply_guard_error,
+    cli_mode,
+    cli_start,
+    env_or_secret,
+    mutually_exclusive_mode_error,
+    record_apply_job_failure,
+    record_apply_job_success,
+    redact_cli_error,
+)
 
 CONFIRM_TEXT = "APPLY_TOUR_API_INGEST"
 ALLOW_ENV = "ALLOW_TOUR_API_INGEST_APPLY"
@@ -67,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.page_size <= 0:
         _write(args, {"ok": False, "mode": _mode(args), "error": "--page-size must be positive."})
         return 2
-    if args.apply and args.preview:
+    if mutually_exclusive_mode_error(args):
         _write(args, {"ok": False, "mode": "plan", "error": "Use either --apply or --preview."})
         return 2
 
@@ -102,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
             _write(args, {"ok": False, "mode": "apply", "error": guard_error})
             return 2
 
-    started_at = datetime.now(UTC)
+    run_context = cli_start(args)
     try:
         if len(area_codes) == 1:
             result = fetch_tour_api_places(
@@ -132,47 +139,34 @@ def main(argv: list[str] | None = None) -> int:
                 connect_timeout=args.connect_timeout,
             )
     except Exception as exc:
-        if args.apply:
-            finished_at = datetime.now(UTC)
-            with contextlib.suppress(Exception):
-                record_job_run(
-                    dsn=dsn,
-                    job_name=JOB_NAME,
-                    status="failed",
-                    started_at=started_at,
-                    finished_at=finished_at,
-                    duration_ms=duration_ms(started_at, finished_at),
-                    error_message=redact_secret_text(
-                        str(exc) or exc.__class__.__name__,
-                        (service_key, dsn),
-                    ),
-                    connect_timeout=args.connect_timeout,
-                )
+        error_message = redact_cli_error(exc, service_key, dsn)
+        record_apply_job_failure(
+            args=args,
+            dsn=dsn,
+            job_name=JOB_NAME,
+            started_at=run_context.started_at,
+            error_message=error_message,
+            connect_timeout=args.connect_timeout,
+            record_job_run=record_job_run,
+        )
         _write(
             args,
             {
                 "ok": False,
                 "mode": _mode(args),
-                "error": redact_secret_text(
-                    str(exc) or exc.__class__.__name__,
-                    (service_key, dsn),
-                ),
+                "error": error_message,
             },
         )
         return 2
 
     if args.apply:
-        finished_at = datetime.now(UTC)
         with contextlib.suppress(Exception):
-            record_job_run(
+            record_apply_job_success(
                 dsn=dsn,
                 job_name=JOB_NAME,
-                status="succeeded",
-                started_at=started_at,
-                finished_at=finished_at,
-                duration_ms=duration_ms(started_at, finished_at),
-                error_message=None,
+                started_at=run_context.started_at,
                 connect_timeout=args.connect_timeout,
+                record_job_run=record_job_run,
             )
 
     payload = {
@@ -292,7 +286,7 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
 
 
 def _mode(args: argparse.Namespace) -> str:
-    return "apply" if args.apply else "preview"
+    return cli_mode(args)
 
 
 if __name__ == "__main__":

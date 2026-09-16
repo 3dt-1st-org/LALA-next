@@ -13,11 +13,8 @@ from fastapi import WebSocketDisconnect
 from apps.api.app.core.auth import RequestIdentity, require_client_auth, require_oauth_identity
 from apps.api.app.core.config import Settings
 from apps.api.app.core.errors import ServiceError
-from apps.api.app.routers.community_chat import (
-    ConnectionManager,
-    manager,
-)
 from apps.api.app.services.community_chat_fanout import ChatFanoutBridge
+from apps.api.app.services.community_chat_realtime import ConnectionManager, manager
 from apps.api.app.services.community_chat_service import (
     FANOUT_CHANNEL,
     WS_TICKET_TTL_SECONDS,

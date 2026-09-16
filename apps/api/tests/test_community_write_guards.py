@@ -27,8 +27,8 @@ from apps.api.app.routers.community_chat import (
     MEMBER_ADD_LIMIT_PER_MINUTE,
     ROOM_CREATE_LIMIT_PER_MINUTE,
     WS_TICKET_LIMIT_PER_MINUTE,
-    manager,
 )
+from apps.api.app.services.community_chat_realtime import manager
 from apps.api.app.services.community_chat_service import get_community_chat_service
 from apps.api.app.services.community_service import get_community_service
 

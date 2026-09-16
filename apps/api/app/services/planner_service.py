@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.planner import DailyPlanRequest, PlanPreferenceContext
+from apps.api.app.services import i18n_catalog, intervention_decision
 from apps.api.app.services.normalization import normalize_language
 from apps.api.app.services.opening_hours_service import (
     estimated_opening_hours,
@@ -421,9 +422,7 @@ def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en")
     # unknown stays unknown.
     weather_cause_status = _weather_cause_status(weather)
     air_quality_status = _air_quality_cause_status(weather)
-    is_bad_weather = weather_cause_status == "bad"
     is_bad_air_quality = air_quality_status == "bad"
-    is_adverse_outdoor = is_bad_weather or is_bad_air_quality
     air_quality_grade = str(((weather.get("dust") or {}).get("grade")) or "").strip() or None
     full_slots = _full_slots_enabled()
     unavailable_reason = (
@@ -466,14 +465,19 @@ def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en")
                 "period": "afternoon",
             }
         ]
-    # P4 truth: the reason/action copy must name the estimated-hours cause (never
-    # permanent/temporary/holiday closure claims) and, when combined with bad
-    # weather/air, must name every actual cause.
-    closing_cause = "closed" if is_closure else "closing_soon" if is_closing_soon_trigger else None
-    estimated_hours = original_slot.get("estimated_opening_hours") if closing_cause else None
-    # P5B §12.4: observable trigger classification + honest-unavailable fields.
-    # authority(travel-time/indoor-outdoor)가 없으면 값을 차단할 뿐 contract 는 유지.
-    if is_adverse_outdoor and closing_cause:
+    decision = intervention_decision.build_decision(
+        weather_status=weather_cause_status,
+        air_quality_status=air_quality_status,
+        air_quality_grade=air_quality_grade if is_bad_air_quality else None,
+        is_closure=is_closure,
+        is_closing_soon=is_closing_soon_trigger,
+        closure_factors=closure_factors,
+        closing_soon_factors=closing_soon_factors,
+    )
+    estimated_hours = (
+        original_slot.get("estimated_opening_hours") if decision.closing_cause else None
+    )
+    if decision.is_adverse_outdoor and decision.closing_cause:
         # Combined causes: the alternative must satisfy both — indoor (weather/AQ)
         # AND estimated hours that cover the slot without the closing-soon window.
         alternative_slot = _find_open_hours_alternative(
@@ -486,7 +490,7 @@ def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en")
             full_slots=full_slots,
             require_indoor=True,
         )
-    elif is_adverse_outdoor:
+    elif decision.is_adverse_outdoor:
         alternative_slot = _find_indoor_alternative(
             place_candidates=places.get("places") or [],
             exclude_place_id=(candidate or {}).get("place_id"),
@@ -496,7 +500,7 @@ def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en")
             weather=weather,
             full_slots=full_slots,
         )
-    elif closing_cause:
+    elif decision.closing_cause:
         # Estimated-hours cause: a real existing candidate whose estimated hours
         # cover the slot outside the closing-soon window. Honest null when none.
         alternative_slot = _find_open_hours_alternative(
@@ -514,21 +518,21 @@ def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en")
     return {
         "center": {"lat": lat, "lng": lng},
         "radius_m": radius_m,
-        "should_intervene": is_adverse_outdoor or is_closure or is_closing_soon_trigger,
+        "should_intervene": decision.should_intervene,
         "reason": _intervention_reason(
-            weather_status=weather_cause_status,
+            weather_status=decision.weather_status,
             candidate_name=candidate_name,
             language=normalized,
-            air_quality_status=air_quality_status,
-            closing_cause=closing_cause,
+            air_quality_status=decision.air_quality_status,
+            closing_cause=decision.closing_cause,
             estimated_hours=estimated_hours,
         ),
         "recommended_action": _recommended_action(
-            weather_status=weather_cause_status,
+            weather_status=decision.weather_status,
             candidate_name=candidate_name,
             language=normalized,
-            air_quality_status=air_quality_status,
-            closing_cause=closing_cause,
+            air_quality_status=decision.air_quality_status,
+            closing_cause=decision.closing_cause,
         ),
         "place": candidate,
         "source": source,
@@ -538,18 +542,8 @@ def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en")
         # No suitable candidate → honest null (no fixture/demo place).
         "alternative_slot": alternative_slot,
         # observable trigger 만. good/unknown + closure 없음 → null. 발명 금지.
-        "trigger_type": _intervention_trigger_type(
-            is_bad_weather=is_bad_weather,
-            is_closure=is_closure,
-            is_bad_air_quality=is_bad_air_quality,
-            is_closing_soon=is_closing_soon_trigger,
-        ),
-        "trigger_factors": _intervention_trigger_factors(
-            is_bad_weather=is_bad_weather,
-            air_quality_grade=air_quality_grade if is_bad_air_quality else None,
-            closure_factors=closure_factors,
-            closing_soon_factors=closing_soon_factors,
-        ),
+        "trigger_type": decision.trigger_type,
+        "trigger_factors": decision.trigger_factors,
         # travel-time authority 부재 → 거리/이동시간 비교 불가(honest null).
         "distance_comparison": None,
         # contract boundary: API 는 항상 default. 실제 상태 관리는 P5C UI/persistence.
@@ -600,38 +594,14 @@ def _intervention_trigger_type(
     is_bad_air_quality: bool = False,
     is_closing_soon: bool = False,
 ) -> str | None:
-    # D5: additive enum widening on a nullable string. Flag-off ⇒ is_closure False ⇒
-    # the pre-V3 "bad_weather"/None result is preserved exactly.
-    # P4: bad_air_quality / combinations are additive widenings with a fixed
-    # deterministic order (weather → air quality → closure); the pre-P4
-    # bad_weather / closure_detected / bad_weather_and_closure payloads are
-    # unchanged for weather/closure-only causes.
-    # P4 closing-soon: closing_soon is a distinct estimated-hours trigger, mutually
-    # exclusive with closure (closing-soon implies within-hours). If a degenerate
-    # input ever set both, closure deterministically dominates.
-    if is_closure:
-        if is_bad_weather and is_bad_air_quality:
-            return "bad_weather_and_air_quality_and_closure"
-        if is_bad_air_quality:
-            return "bad_air_quality_and_closure"
-        if is_bad_weather:
-            return "bad_weather_and_closure"
-        return "closure_detected"
-    if is_closing_soon:
-        if is_bad_weather and is_bad_air_quality:
-            return "bad_weather_and_air_quality_and_closing_soon"
-        if is_bad_air_quality:
-            return "bad_air_quality_and_closing_soon"
-        if is_bad_weather:
-            return "bad_weather_and_closing_soon"
-        return "closing_soon"
-    if is_bad_weather and is_bad_air_quality:
-        return "bad_weather_and_air_quality"
-    if is_bad_weather:
-        return "bad_weather"
-    if is_bad_air_quality:
-        return "bad_air_quality"
-    return None
+    decision = intervention_decision.build_decision(
+        weather_status="bad" if is_bad_weather else "unknown",
+        air_quality_status="bad" if is_bad_air_quality else "unknown",
+        air_quality_grade="bad" if is_bad_air_quality else None,
+        is_closure=is_closure,
+        is_closing_soon=is_closing_soon,
+    )
+    return decision.trigger_type
 
 
 def _intervention_trigger_factors(
@@ -648,16 +618,16 @@ def _intervention_trigger_factors(
     collapsed into the weather factor. Deterministic order: weather → air
     quality → closure → closing-soon.
     """
-    factors: list[dict] = []
-    if is_bad_weather:
-        factors.append({"factor": "weather_outdoor_status", "value": "bad"})
-    if air_quality_grade in _BAD_DUST_GRADES:
-        factors.append({"factor": "air_quality_dust_grade", "value": air_quality_grade})
-    if closure_factors:
-        factors.extend(closure_factors)
-    if closing_soon_factors:
-        factors.extend(closing_soon_factors)
-    return factors
+    decision = intervention_decision.build_decision(
+        weather_status="bad" if is_bad_weather else "unknown",
+        air_quality_status="bad" if air_quality_grade in _BAD_DUST_GRADES else "unknown",
+        air_quality_grade=air_quality_grade,
+        is_closure=bool(closure_factors),
+        is_closing_soon=bool(closing_soon_factors),
+        closure_factors=closure_factors,
+        closing_soon_factors=closing_soon_factors,
+    )
+    return decision.trigger_factors
 
 
 def _find_indoor_alternative(
@@ -674,21 +644,21 @@ def _find_indoor_alternative(
 
     provenance 없거나 실내 장소가 없으면 None(honest). 발명된 대체 금지.
     """
-    for place in place_candidates:
-        if place.get("place_id") == exclude_place_id:
-            continue
-        if place.get("is_indoor") is True:
-            return _plan_slot(
-                period="afternoon",
-                title="오후" if language == "ko" else "Afternoon",
-                place=place,
-                weather_hint=weather_hint,
-                unavailable_reason=unavailable_reason,
-                language=language,
-                weather=weather,
-                full_slots=full_slots,
-            )
-    return None
+    return intervention_decision.select_first_candidate(
+        place_candidates=place_candidates,
+        exclude_place_id=exclude_place_id,
+        predicates=[intervention_decision.is_indoor],
+        build_slot=lambda place: _plan_slot(
+            period="afternoon",
+            title="오후" if language == "ko" else "Afternoon",
+            place=place,
+            weather_hint=weather_hint,
+            unavailable_reason=unavailable_reason,
+            language=language,
+            weather=weather,
+            full_slots=full_slots,
+        ),
+    )
 
 
 def _find_open_hours_alternative(
@@ -710,17 +680,22 @@ def _find_open_hours_alternative(
     fixture/demo 장소를 일반 경로에 넣지 않는다.
     """
     start_t = period_start_time("afternoon")
-    for place in place_candidates:
-        if place.get("place_id") == exclude_place_id:
-            continue
-        if require_indoor and place.get("is_indoor") is not True:
-            continue
+    predicates = []
+    if require_indoor:
+        predicates.append(intervention_decision.is_indoor)
+
+    def covers_estimated_slot(place: dict) -> bool:
         open_t, close_t = estimated_opening_hours(place.get("category", ""))
         if is_within_hours(start_t, open_t, close_t) is not True:
-            continue
-        if is_closing_soon(start_t, open_t, close_t) is True:
-            continue
-        return _plan_slot(
+            return False
+        return is_closing_soon(start_t, open_t, close_t) is not True
+
+    predicates.append(covers_estimated_slot)
+    return intervention_decision.select_first_candidate(
+        place_candidates=place_candidates,
+        exclude_place_id=exclude_place_id,
+        predicates=predicates,
+        build_slot=lambda place: _plan_slot(
             period="afternoon",
             title="오후" if language == "ko" else "Afternoon",
             place=place,
@@ -729,8 +704,8 @@ def _find_open_hours_alternative(
             language=language,
             weather=weather,
             full_slots=full_slots,
-        )
-    return None
+        ),
+    )
 
 
 def _combined_source(place_source: str | None, weather_source: str | None) -> str:
@@ -1105,84 +1080,14 @@ def _intervention_reason(
     closing_cause: str | None = None,
     estimated_hours: str | None = None,
 ) -> str:
-    ko = language == "ko"
-    # P4: cause-correct copy. Air-quality adversity is never described as
-    # weather; both-bad states both causes explicitly.
-    # P4 closing-soon/closure: the estimated-hours cause is always named as an
-    # estimate with a check-needed caveat — never observed/confirmed/permanent/
-    # temporary/holiday closure. Combined causes name every actual cause.
-    if closing_cause is not None:
-        hours = estimated_hours or ""
-        ko_clause = (
-            f"이번 일정 시간은 {candidate_name}의 추정 운영시간({hours}) 마감에 가까워요."
-            if closing_cause == "closing_soon"
-            else f"이번 일정 시간은 {candidate_name}의 추정 운영시간({hours}) 밖이에요."
-        )
-        en_clause = (
-            f"This slot is near the estimated closing time for {candidate_name} "
-            f"(estimated hours {hours})"
-            if closing_cause == "closing_soon"
-            else f"This slot is outside the estimated hours ({hours}) for {candidate_name}"
-        )
-        ko_suffix = "실제 영업 여부는 확인이 필요해요."
-        en_suffix = "; the actual opening status needs a check."
-        if air_quality_status == "bad" and weather_status == "bad":
-            return (
-                f"날씨와 미세먼지가 모두 좋지 않아요. {ko_clause} {ko_suffix}"
-                if ko
-                else f"Weather and air quality are both poor. {en_clause}{en_suffix}"
-            )
-        if air_quality_status == "bad":
-            return (
-                f"미세먼지가 나빠요. {ko_clause} {ko_suffix}"
-                if ko
-                else f"Air quality is poor. {en_clause}{en_suffix}"
-            )
-        if weather_status == "bad":
-            return (
-                f"날씨가 좋지 않아요. {ko_clause} {ko_suffix}"
-                if ko
-                else f"Weather is not ideal. {en_clause}{en_suffix}"
-            )
-        return f"{ko_clause} {ko_suffix}" if ko else f"{en_clause}{en_suffix}"
-    if air_quality_status == "bad" and weather_status == "bad":
-        return (
-            f"날씨와 미세먼지가 모두 좋지 않아요. {candidate_name} 근처의 가까운 실내 동선을 우선해요."
-            if ko
-            else (
-                "Weather and air quality are both poor; prioritize short-walk or "
-                f"indoor-friendly options near {candidate_name}."
-            )
-        )
-    if air_quality_status == "bad":
-        return (
-            f"미세먼지가 나빠요. {candidate_name} 근처의 가까운 실내 동선을 우선해요."
-            if ko
-            else (
-                "Air quality is poor; prioritize short-walk or indoor-friendly "
-                f"options near {candidate_name}."
-            )
-        )
-    if weather_status == "good":
-        return (
-            f"날씨가 좋아 {candidate_name} 방향으로 일정을 유지해요."
-            if ko
-            else f"Weather is suitable, so keep the current route toward {candidate_name}."
-        )
-    if weather_status == "unknown":
-        return (
-            f"날씨 정보를 확인 중이에요. {candidate_name}을(를) 우선 유지해요."
-            if ko
-            else f"Weather data is still pending, so keep {candidate_name} as the current option."
-        )
-    return (
-        f"날씨가 좋지 않아요. {candidate_name} 근처의 가까운 실내 동선을 우선해요."
-        if ko
-        else (
-            "Weather is not ideal; prioritize short-walk or indoor-friendly "
-            f"options near {candidate_name}."
-        )
+    key, values = intervention_decision.intervention_reason_spec(
+        weather_status=weather_status,
+        candidate_name=candidate_name,
+        air_quality_status=air_quality_status,
+        closing_cause=closing_cause,
+        estimated_hours=estimated_hours,
     )
+    return i18n_catalog.format_intervention_template(key, language=language, values=values)
 
 
 def _recommended_action(
@@ -1193,64 +1098,13 @@ def _recommended_action(
     air_quality_status: str = "unknown",
     closing_cause: str | None = None,
 ) -> str:
-    ko = language == "ko"
-    # P4 closing-soon/closure: the action names the estimated-hours cause (and
-    # each combined weather/air cause) without claiming any closure authority.
-    if closing_cause is not None:
-        if air_quality_status == "bad" and weather_status == "bad":
-            return (
-                f"날씨, 미세먼지와 추정 운영시간을 함께 고려해 {candidate_name} 근처의 실내 옵션을 확인해 보세요."
-                if ko
-                else f"Weigh weather, air quality and the estimated hours together: check indoor options near {candidate_name}."
-            )
-        if air_quality_status == "bad":
-            return (
-                f"미세먼지와 추정 운영시간을 함께 고려해 {candidate_name} 근처의 실내 옵션을 확인해 보세요."
-                if ko
-                else f"Weigh air quality and the estimated hours together: check indoor options near {candidate_name}."
-            )
-        if weather_status == "bad":
-            return (
-                f"날씨와 추정 운영시간을 함께 고려해 {candidate_name} 근처의 실내 옵션을 확인해 보세요."
-                if ko
-                else f"Weigh the weather and the estimated hours together: check indoor options near {candidate_name}."
-            )
-        if closing_cause == "closing_soon":
-            return (
-                f"{candidate_name}의 추정 마감 시간을 확인하고 근처 다른 옵션도 함께 검토해 보세요."
-                if ko
-                else f"Check the estimated closing time for {candidate_name} and review other nearby options too."
-            )
-        return (
-            f"{candidate_name} 대신 추정 운영시간이 이번 일정을 커버하는 근처 옵션을 확인해 보세요."
-            if ko
-            else f"Check nearby options covered by the estimated hours instead of {candidate_name}."
-        )
-    if air_quality_status == "bad" or weather_status == "bad":
-        # Weather-neutral adverse-outdoor action: indoor/short-walk alternatives
-        # help for bad weather and bad air quality alike.
-        return (
-            f"{candidate_name} 주변의 실내 또는 가까운 동선을 보여줘요."
-            if ko
-            else f"Show indoor or short-walk alternatives around {candidate_name}."
-        )
-    if weather_status == "good":
-        return (
-            f"{candidate_name}을(를) 우선 추천해요."
-            if ko
-            else f"Keep {candidate_name} as the primary local stop."
-        )
-    if weather_status == "unknown":
-        return (
-            f"날씨 확인까지 {candidate_name}을(를) 유지해요."
-            if ko
-            else f"Keep {candidate_name} while weather data is pending."
-        )
-    return (
-        f"{candidate_name} 주변의 실내 또는 가까운 동선을 보여줘요."
-        if ko
-        else f"Show indoor or short-walk alternatives around {candidate_name}."
+    key, values = intervention_decision.intervention_action_spec(
+        weather_status=weather_status,
+        candidate_name=candidate_name,
+        air_quality_status=air_quality_status,
+        closing_cause=closing_cause,
     )
+    return i18n_catalog.format_intervention_template(key, language=language, values=values)
 
 
 def daily_plan_identity(

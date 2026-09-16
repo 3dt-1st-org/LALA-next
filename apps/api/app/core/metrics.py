@@ -184,6 +184,15 @@ STATIC_ROUTE_PATHS = frozenset(
 
 
 def route_path_from_scope(scope: dict, fallback_path: str = UNMATCHED_ROUTE_PATH) -> str:
+    fastapi_scope = scope.get("fastapi")
+    if isinstance(fastapi_scope, Mapping):
+        effective_route_context = fastapi_scope.get("effective_route_context")
+        effective_path = getattr(effective_route_context, "path_format", "") or getattr(
+            effective_route_context, "path", ""
+        )
+        if effective_path:
+            return effective_path
+
     route = scope.get("route")
     route_path = getattr(route, "path", "")
     if route_path:

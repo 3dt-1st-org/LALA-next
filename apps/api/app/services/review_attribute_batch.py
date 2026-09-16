@@ -713,11 +713,11 @@ def apply_review_attribute_enrichments(
     from psycopg2.extras import Json
 
     candidate_by_id = {candidate.mention_id: candidate for candidate in candidates}
-    rows = [
-        _apply_row(candidate_by_id[item.mention_id], item, source_method=source_method)
-        for item in enrichments
-        if item.mention_id in candidate_by_id
-    ]
+    rows = build_review_attribute_apply_rows(
+        candidates=candidates,
+        enrichments=enrichments,
+        source_method=source_method,
+    )
     if not rows:
         return 0
 
@@ -815,6 +815,20 @@ def apply_review_attribute_enrichments(
                 )
         conn.commit()
     return updated
+
+
+def build_review_attribute_apply_rows(
+    *,
+    candidates: Sequence[ReviewAttributeCandidate],
+    enrichments: Sequence[ReviewAttributeEnrichment],
+    source_method: str,
+) -> list[ReviewAttributeApplyRow]:
+    candidate_by_id = {candidate.mention_id: candidate for candidate in candidates}
+    return [
+        _apply_row(candidate_by_id[item.mention_id], item, source_method=source_method)
+        for item in enrichments
+        if item.mention_id in candidate_by_id
+    ]
 
 
 def record_job_run(

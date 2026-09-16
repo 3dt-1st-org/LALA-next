@@ -8,6 +8,7 @@ from typing import Any
 from apps.api.app.services import weather_service
 from apps.api.app.services.dust_quality import clean_air_quality_value
 from apps.api.app.services.job_runs import record_job_run as _record_job_run
+from apps.api.app.services.weather_provider_adapters import fetch_official_weather_pair
 
 KST = timezone(timedelta(hours=9), "Asia/Seoul")
 
@@ -109,7 +110,7 @@ def fetch_weather_observations(
     observations: list[WeatherObservation] = []
     weather_service.clear_official_weather_cache()
     for target in targets:
-        official_weather, air_quality = weather_service._fetch_official_weather_pair(
+        official_weather, air_quality = fetch_official_weather_pair(
             lat=target.lat,
             lng=target.lng,
             force=True,

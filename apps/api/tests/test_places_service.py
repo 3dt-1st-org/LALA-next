@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from apps.api.app.core.errors import ServiceError
-from apps.api.app.services import places_service, weather_service
+from apps.api.app.services import places_service, weather_provider_adapters, weather_service
 
 
 def _fake_settings(
@@ -1002,10 +1002,10 @@ def test_list_places_db_path_does_not_invoke_live_weather_provider(monkeypatch) 
     # on this path the sentinel raises, proving search stays offline.
     monkeypatch.setattr(weather_service, "current_weather", _fail_if_live_weather_invoked)
     monkeypatch.setattr(
-        weather_service, "_fetch_kma_ultra_short_nowcast", _fail_if_live_weather_invoked
+        weather_provider_adapters, "fetch_kma_ultra_short_nowcast", _fail_if_live_weather_invoked
     )
     monkeypatch.setattr(
-        weather_service, "_fetch_airkorea_sido_air_quality", _fail_if_live_weather_invoked
+        weather_provider_adapters, "fetch_airkorea_sido_air_quality", _fail_if_live_weather_invoked
     )
     monkeypatch.setattr(places_service, "get_settings", lambda: _fake_settings())
     # No cached local weather → indoor-fit reason is honestly omitted, still no provider call.
@@ -1030,10 +1030,10 @@ def test_list_places_snapshot_path_does_not_invoke_live_weather_provider(monkeyp
     # Regression: the static-snapshot fallback path must likewise stay offline.
     monkeypatch.setattr(weather_service, "current_weather", _fail_if_live_weather_invoked)
     monkeypatch.setattr(
-        weather_service, "_fetch_kma_ultra_short_nowcast", _fail_if_live_weather_invoked
+        weather_provider_adapters, "fetch_kma_ultra_short_nowcast", _fail_if_live_weather_invoked
     )
     monkeypatch.setattr(
-        weather_service, "_fetch_airkorea_sido_air_quality", _fail_if_live_weather_invoked
+        weather_provider_adapters, "fetch_airkorea_sido_air_quality", _fail_if_live_weather_invoked
     )
     monkeypatch.setattr(
         places_service,

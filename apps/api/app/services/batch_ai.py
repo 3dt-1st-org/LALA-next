@@ -4,6 +4,11 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from apps.api.app.services.ai_completion import (
+    DEFAULT_JSON_GENERATION_PARAMS,
+    ChatCompletionGenerationParams,
+)
+
 
 def create_chat_completion_with_retry(
     *,
@@ -12,6 +17,7 @@ def create_chat_completion_with_retry(
     messages: list[dict[str, str]],
     retry_attempts: int,
     retry_delay_sec: float,
+    generation: ChatCompletionGenerationParams = DEFAULT_JSON_GENERATION_PARAMS,
     sleep: Callable[[float], None] = time.sleep,
     is_retryable: Callable[[Exception], bool] | None = None,
 ) -> Any:
@@ -24,9 +30,7 @@ def create_chat_completion_with_retry(
             return client.chat.completions.create(
                 model=model,
                 messages=messages,
-                temperature=0.1,
-                max_completion_tokens=4000,
-                response_format={"type": "json_object"},
+                **generation.to_request_kwargs(),
             )
         except Exception as exc:
             last_exc = exc

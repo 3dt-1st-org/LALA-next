@@ -3,10 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from datetime import UTC, datetime
 from typing import Any
 
-from apps.api.app.core.redaction import redact_secret_text
 from apps.api.app.core.runtime_secrets import load_runtime_environment
 from apps.api.app.services.weather_observation_refresh import (
     WeatherRefreshResult,
@@ -15,7 +13,16 @@ from apps.api.app.services.weather_observation_refresh import (
     insert_weather_observations,
     record_job_run,
 )
-from apps.api.app.tools.batch_helpers import apply_guard_error, env_or_secret
+from apps.api.app.tools.batch_helpers import (
+    apply_guard_error,
+    cli_mode,
+    cli_start,
+    env_or_secret,
+    mutually_exclusive_mode_error,
+    record_apply_job_failure,
+    record_apply_job_success,
+    redact_cli_error,
+)
 
 CONFIRM_TEXT = "APPLY_WEATHER_OBSERVATION_REFRESH"
 ALLOW_ENV = "ALLOW_WEATHER_OBSERVATION_REFRESH_APPLY"
@@ -47,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.limit <= 0:
         _write(args, {"ok": False, "mode": _mode(args), "error": "--limit must be positive."})
         return 2
-    if args.apply and args.preview:
+    if mutually_exclusive_mode_error(args):
         _write(args, {"ok": False, "mode": "plan", "error": "Use either --apply or --preview."})
         return 2
 
@@ -80,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
             _write(args, {"ok": False, "mode": "apply", "error": guard_error})
             return 2
 
-    started_at = datetime.now(UTC)
+    run_context = cli_start(args)
     try:
         targets = fetch_weather_targets(
             dsn=dsn,
@@ -97,24 +104,16 @@ def main(argv: list[str] | None = None) -> int:
                 observations=observations,
                 connect_timeout=args.connect_timeout,
             )
-            finished_at = datetime.now(UTC)
             try:
-                record_job_run(
+                job_run_recorded = record_apply_job_success(
                     dsn=dsn,
                     job_name=JOB_NAME,
-                    status="succeeded",
-                    started_at=started_at,
-                    finished_at=finished_at,
-                    duration_ms=_duration_ms(started_at, finished_at),
-                    error_message=None,
+                    started_at=run_context.started_at,
                     connect_timeout=args.connect_timeout,
+                    record_job_run=record_job_run,
                 )
-                job_run_recorded = True
             except Exception as exc:
-                job_run_warning = redact_secret_text(
-                    str(exc) or exc.__class__.__name__,
-                    (service_key, dsn),
-                )
+                job_run_warning = redact_cli_error(exc, service_key, dsn)
         result = WeatherRefreshResult(
             target_count=len(targets),
             observation_count=len(observations),
@@ -122,27 +121,22 @@ def main(argv: list[str] | None = None) -> int:
             observations=observations,
         )
     except Exception as exc:
-        finished_at = datetime.now(UTC)
-        if args.apply:
-            _record_failed_job_run(
-                dsn=dsn,
-                started_at=started_at,
-                finished_at=finished_at,
-                error_message=redact_secret_text(
-                    str(exc) or exc.__class__.__name__,
-                    (service_key, dsn),
-                ),
-                connect_timeout=args.connect_timeout,
-            )
+        error_message = redact_cli_error(exc, service_key, dsn)
+        record_apply_job_failure(
+            args=args,
+            dsn=dsn,
+            job_name=JOB_NAME,
+            started_at=run_context.started_at,
+            error_message=error_message,
+            connect_timeout=args.connect_timeout,
+            record_job_run=record_job_run,
+        )
         _write(
             args,
             {
                 "ok": False,
                 "mode": _mode(args),
-                "error": redact_secret_text(
-                    str(exc) or exc.__class__.__name__,
-                    (service_key, dsn),
-                ),
+                "error": error_message,
             },
         )
         return 2
@@ -185,29 +179,6 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
 
 def _apply_guard_error(args: argparse.Namespace) -> str:
     return apply_guard_error(args, confirm_text=CONFIRM_TEXT, allow_env=ALLOW_ENV)
-
-
-def _record_failed_job_run(
-    *,
-    dsn: str,
-    started_at: datetime,
-    finished_at: datetime,
-    error_message: str,
-    connect_timeout: int,
-) -> None:
-    try:
-        record_job_run(
-            dsn=dsn,
-            job_name=JOB_NAME,
-            status="failed",
-            started_at=started_at,
-            finished_at=finished_at,
-            duration_ms=_duration_ms(started_at, finished_at),
-            error_message=error_message,
-            connect_timeout=connect_timeout,
-        )
-    except Exception:
-        return
 
 
 def _env_or_secret(env_name: str, secret_name: str) -> str:
@@ -265,11 +236,7 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
 
 
 def _mode(args: argparse.Namespace) -> str:
-    return "apply" if args.apply else "preview"
-
-
-def _duration_ms(started_at: datetime, finished_at: datetime) -> int:
-    return int((finished_at - started_at).total_seconds() * 1000)
+    return cli_mode(args)
 
 
 if __name__ == "__main__":

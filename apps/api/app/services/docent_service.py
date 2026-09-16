@@ -8,13 +8,15 @@ from typing import Any
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
-from apps.api.app.services import ai_service, db_repository, speech_service
+from apps.api.app.services import (
+    ai_service,
+    db_repository,
+    docent_retrieval_service,
+    i18n_catalog,
+    speech_service,
+)
 from apps.api.app.services.normalization import display_language, format_celsius_label
 from apps.api.app.services.request_identity import generation_identity
-from apps.api.app.services.source_labels import (
-    UPSTREAM_SOURCE_LABELS_EN,
-    UPSTREAM_SOURCE_LABELS_KO,
-)
 
 _DOCENT_PROMPT_VERSION = "docent-v1"
 
@@ -64,6 +66,7 @@ _ATTRACTION_PLACE_HINTS_KO = (
 )
 _REVIEW_SOURCE_HINTS = ("review", "blog", "naver", "mention", "community")
 _ATTRACTION_REVIEW_GUARD_CATEGORIES = {"attraction", "culture_venue"}
+_DOCENT_VISIBLE_SOURCES = {"tour_api", "kcisa", "kopis", "db", "public_mvp_snapshot"}
 
 
 def generate_script(request: DocentScriptRequest) -> dict:
@@ -107,27 +110,16 @@ def generate_script(request: DocentScriptRequest) -> dict:
 
 def _generate_script(request: DocentScriptRequest) -> dict:
     settings = get_settings()
-    retrieval_mode = (settings.rag_retrieval_mode or "legacy").strip().lower()
-    if retrieval_mode == "hybrid":
-        hybrid_result = db_repository.fetch_docent_knowledge_context_hybrid_result(
-            place_id=request.place_id,
-            query=_retrieval_query(request),
-            category=request.category,
-            language=request.language,
-            top_k=3,
-            reranker="mini" if ai_service.rerank_ai_enabled() else "rrf",
-            completion_fn=ai_service.rerank_docent_candidates
-            if ai_service.rerank_ai_enabled()
-            else None,
-        )
-        grounding_context = hybrid_result["rows"]
-        retrieval_meta = hybrid_result["retrieval"]
-    else:
-        grounding_context = db_repository.fetch_docent_knowledge_context(
-            place_id=request.place_id,
-            limit=3,
-        )
-        retrieval_meta = None
+    retrieval_result = docent_retrieval_service.fetch_grounding_context(
+        place_id=request.place_id,
+        query=_retrieval_query(request),
+        category=request.category,
+        language=request.language,
+        top_k=3,
+    )
+    grounding_context = retrieval_result["rows"]
+    retrieval_meta = retrieval_result["retrieval"]
+    retrieval_mode = retrieval_result["mode"]
     if not grounding_context:
         grounding_context = db_repository.fetch_docent_place_profile_context(
             place_id=request.place_id,
@@ -167,36 +159,18 @@ def _generate_script(request: DocentScriptRequest) -> dict:
         )
 
     generated_at = datetime.now(UTC).isoformat()
-    if ai_service.live_ai_enabled():
-        try:
-            script = ai_service.generate_docent_script_text(
-                request,
-                grounding_context=grounding_context,
-            )
-            source = "openai"
-        except ServiceError as exc:
-            if not exc.retryable:
-                raise
-            script = _rule_based_script(request, grounding_context=grounding_context)
-            source = "rule_based_curation"
-    else:
-        script = _rule_based_script(request, grounding_context=grounding_context)
-        source = "rule_based_curation"
-    script = _sanitize_docent_output(script, language=request.language)
-    script = _ensure_docent_quality_context(script, request)
-    if source == "openai" and _docent_output_needs_rule_fallback(script):
-        script = _rule_based_script(request, grounding_context=grounding_context)
-        script = _sanitize_docent_output(script, language=request.language)
-        script = _ensure_docent_quality_context(script, request)
-        source = "rule_based_curation"
+    script_result = _generate_docent_script_body(
+        request,
+        grounding_context=grounding_context,
+    )
     ttl_sec = settings.docent_script_ttl_sec
     response = {
         "place_id": request.place_id,
         "category": request.category,
         "language": request.language,
         "mode": request.mode,
-        "script": script,
-        "source": source,
+        "script": script_result["script"],
+        "source": script_result["source"],
         "generated_at": generated_at,
         "ttl_sec": ttl_sec,
         **_grounding_meta(grounding_context),
@@ -217,6 +191,38 @@ def _generate_script(request: DocentScriptRequest) -> dict:
     return response
 
 
+def _generate_docent_script_body(
+    request: DocentScriptRequest,
+    *,
+    grounding_context: list[dict[str, Any]],
+) -> dict[str, str]:
+    source = "rule_based_curation"
+    if ai_service.live_ai_enabled():
+        try:
+            script = ai_service.generate_docent_script_text(
+                request,
+                grounding_context=grounding_context,
+            )
+            source = "openai"
+        except ServiceError as exc:
+            if not exc.retryable:
+                raise
+            script = _rule_based_script(request, grounding_context=grounding_context)
+    else:
+        script = _rule_based_script(request, grounding_context=grounding_context)
+    script = _sanitize_and_complete_docent_script(script, request)
+    if source == "openai" and _docent_output_needs_rule_fallback(script):
+        script = _rule_based_script(request, grounding_context=grounding_context)
+        script = _sanitize_and_complete_docent_script(script, request)
+        source = "rule_based_curation"
+    return {"script": script, "source": source}
+
+
+def _sanitize_and_complete_docent_script(script: str, request: DocentScriptRequest) -> str:
+    cleaned = _sanitize_docent_output(script, language=request.language)
+    return _ensure_docent_quality_context(cleaned, request)
+
+
 def _rule_based_script(
     request: DocentScriptRequest,
     *,
@@ -231,21 +237,13 @@ def _rule_based_script(
         language=request.language,
     )
     if request.language == "ko":
-        category_label = {
-            "attraction": "명소",
-            "restaurant": "맛집",
-            "event": "행사",
-            "culture_venue": "문화공간",
-        }.get(request.category, "장소")
-        category_context = {
-            "attraction": "주변 산책 동선과 생활권 상권을 함께 보면, 대표 명소가 지역 안에서 어떤 역할을 하는지 더 또렷해집니다.",
-            "restaurant": "상호와 주변 소비 흐름을 함께 보며, 프랜차이즈보다 지역 식당의 개성과 골목의 분위기를 우선 살핍니다.",
-            "event": "행사 자체뿐 아니라 방문 전후에 머무를 수 있는 근처 문화공간과 소상공인 상권까지 이어서 보는 코스입니다.",
-            "culture_venue": "전시나 공연 관람 전후의 짧은 이동 반경 안에서 로컬 카페, 식당, 골목 경험을 함께 연결합니다.",
-        }.get(
-            request.category,
-            "공식 데이터와 주변 장소를 함께 살펴볼 수 있는 로컬 경험입니다.",
+        category_key = i18n_catalog.category_label_key(request.category, language="ko")
+        category_label = (
+            i18n_catalog.category_label(request.category, language="ko")
+            if category_key != "default"
+            else "장소"
         )
+        category_context = i18n_catalog.docent_category_context(request.category, language="ko")
         context = _ko_context_sentence(request)
         score_context = _ko_score_sentence(request)
         weather_context = _ko_weather_sentence(request)
@@ -275,12 +273,7 @@ def _rule_based_script(
         )
 
     language_label = display_language(request.language)
-    category_context = {
-        "attraction": "Read it together with nearby walking routes and small local businesses to understand its role in the neighborhood.",
-        "restaurant": "LALA looks for local character and neighborhood spending signals instead of treating every food stop as a generic listing.",
-        "event": "The route is designed to connect the event with nearby culture spaces and small local businesses before or after the visit.",
-        "culture_venue": "Use it as an anchor for a short route that connects exhibitions, performances, cafes, restaurants, and nearby streets.",
-    }.get(request.category, "LALA reads official data together with nearby local context.")
+    category_context = i18n_catalog.docent_category_context(request.category, language="en")
     context = _en_context_sentence(request)
     score_context = _en_score_sentence(request)
     weather_context = _en_weather_sentence(request)
@@ -900,31 +893,11 @@ def _en_weather_icon_sentence(request: DocentScriptRequest) -> str:
 
 
 def _ko_weather_icon_label(icon: str | None) -> str | None:
-    return {
-        "partly-cloudy": "구름 조금",
-        "partly_cloudy": "구름 조금",
-        "partly cloudy": "구름 조금",
-        "cloudy": "흐림",
-        "clear": "맑음",
-        "sunny": "맑음",
-        "rain": "비",
-        "sleet": "비 또는 눈",
-        "snow": "눈",
-    }.get((icon or "").strip().lower())
+    return i18n_catalog.weather_icon_label(icon, language="ko")
 
 
 def _en_weather_icon_label(icon: str | None) -> str | None:
-    return {
-        "partly-cloudy": "partly cloudy",
-        "partly_cloudy": "partly cloudy",
-        "partly cloudy": "partly cloudy",
-        "cloudy": "cloudy",
-        "clear": "clear",
-        "sunny": "sunny",
-        "rain": "rainy",
-        "sleet": "mixed rain and snow",
-        "snow": "snowy",
-    }.get((icon or "").strip().lower())
+    return i18n_catalog.weather_icon_label(icon, language="en")
 
 
 def _docent_output_needs_rule_fallback(script: str) -> bool:
@@ -945,21 +918,11 @@ def _docent_output_needs_rule_fallback(script: str) -> bool:
 
 
 def _ko_route_action_sentence(category: str) -> str:
-    return {
-        "restaurant": "식사 전후에는 가까운 문화공간이나 골목 산책으로 다음 장소를 이어가 보세요.",
-        "event": "행사 방문 전후에는 주변 상권과 가까운 문화공간을 하나의 동선으로 함께 연결해 보세요.",
-        "culture_venue": "관람 전후에는 가까운 카페, 식당, 골목 산책을 하나의 동선으로 이어가 보세요.",
-        "attraction": "방문 전후에는 주변 산책길과 로컬 상권을 함께 묶어 다음 장소로 이어가 보세요.",
-    }.get(category, "방문 전후에는 가까운 다음 장소와 로컬 상권을 함께 이어가 보세요.")
+    return i18n_catalog.docent_route_action(category, language="ko")
 
 
 def _en_route_action_sentence(category: str) -> str:
-    return {
-        "restaurant": "Before or after eating, continue to a nearby culture space or short neighborhood walk.",
-        "event": "Before or after the event, connect it with nearby local businesses and culture spaces.",
-        "culture_venue": "Before or after the visit, continue through nearby cafes, restaurants, and walkable streets.",
-        "attraction": "Before or after the stop, connect it with nearby walking paths and local businesses.",
-    }.get(category, "Before or after the stop, continue to a nearby place and local business area.")
+    return i18n_catalog.docent_route_action(category, language="en")
 
 
 def _contains_any(text: str, terms: tuple[str, ...]) -> bool:
@@ -1005,20 +968,17 @@ def _looks_like_orphan_score_sentence(text: str) -> bool:
 def _localize_internal_terms(text: str, *, language: str) -> str:
     if language == "en":
         replacements = {
-            "culture_venue": "culture venue",
-            "attraction": "attraction",
-            "restaurant": "restaurant",
-            "event": "event",
-            **UPSTREAM_SOURCE_LABELS_EN,
+            key: i18n_catalog.category_label(key, language="en")
+            for key in ("culture_venue", "attraction", "restaurant", "event")
         }
     else:
         replacements = {
-            "culture_venue": "문화공간",
-            "attraction": "명소",
-            "restaurant": "맛집",
-            "event": "행사",
-            **{key: f"{value} 데이터" for key, value in UPSTREAM_SOURCE_LABELS_KO.items()},
+            key: i18n_catalog.category_label(key, language="ko")
+            for key in ("culture_venue", "attraction", "restaurant", "event")
         }
+    for key in ("tour_api", "kcisa", "kopis"):
+        if label := i18n_catalog.source_label(key, language=language, namespace="evidence"):
+            replacements[key] = label
     for source, replacement in replacements.items():
         text = re.sub(
             rf"(?<![A-Za-z0-9_-]){re.escape(source)}(?![A-Za-z0-9_-])",
@@ -1056,20 +1016,15 @@ def _format_distance(distance_m: int) -> str:
 
 
 def _ko_source_label(source: str | None) -> str | None:
-    labels = {
-        **{key: f"{value} 데이터" for key, value in UPSTREAM_SOURCE_LABELS_KO.items()},
-        "db": "운영 DB",
-        "public_mvp_snapshot": "제한적 오프라인 데이터",
-    }
-    return labels.get((source or "").strip())
+    if (source or "").strip() not in _DOCENT_VISIBLE_SOURCES:
+        return None
+    return i18n_catalog.source_label(source, language="ko", namespace="evidence")
 
 
 def _en_source_label(source: str | None) -> str | None:
-    return {
-        **UPSTREAM_SOURCE_LABELS_EN,
-        "db": "the live LALA database",
-        "public_mvp_snapshot": "limited offline data",
-    }.get((source or "").strip())
+    if (source or "").strip() not in _DOCENT_VISIBLE_SOURCES:
+        return None
+    return i18n_catalog.source_label(source, language="en", namespace="evidence")
 
 
 def _is_limited_offline_source(source: str | None) -> bool:
