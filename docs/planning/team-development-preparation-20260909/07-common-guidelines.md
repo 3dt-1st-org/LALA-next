@@ -1,6 +1,8 @@
 # 공통 지침 수정안과 문서 우선순위
 
-상태: **적용 패키지·검증 절차 준비 / 팀 채택과 활성 반영 대기**. 사용자가 선택한 개발 방향과 2026-09-10 독립 조사·추천을 반영한 준비 산출물이다. 루트의 개인 AGENTS, 공유 템플릿, Copilot 지침, 개인 전역 설정은 덮어쓰지 않았다. 실제 적용은 팀이 공통 지침을 채택한 뒤 별도 문서 변경으로 진행한다.
+상태: **공통 지침 활성 반영 / 도구별 새 세션 검증 대기**. 2026-09-20에 루트 `AGENTS.md`와 `CLAUDE.md`를 추적 대상으로 전환하고 Copilot 진입점을 같은 기준에 연결했다. 기존 개인 사본의 내용은 공통 파일에 옮기지 않았으며, 개인 메모는 Git에서 제외되는 `AGENTS.local.md`·`CLAUDE.local.md` 또는 사용자 전역 설정에 둔다.
+
+활성 `AGENTS.md`는 시점 의존적인 SHA와 준비 상태를 고정하지 않고 현재 코드·계약을 확인하도록 정리했다. 비밀·API 작업은 `docs/operations/aws-secrets-manager-runtime-contract.md`와 `docs/operations/aws-secrets-manager-team-handoff.md`를 단일 기준으로 직접 연결한다. 아래 내용은 2026-09-10에 준비한 적용 배경과 검증 절차로 보존한다.
 
 ## 1. 공통으로 전달할 현재 결정
 
@@ -37,19 +39,19 @@
 
 main을 개발 기준으로 고르면 혼합 지도 관련 후보 변경을 선별·통합할 작업이 생긴다. 지도 방향 선택이 후보 전체의 병합 승인은 아니다. 지도 제공사 요금·서비스 수준·자체 호스팅 조건은 이번 코드 조사로 검증하지 않았다.
 
-## 4. 적용 가능한 초안
+## 4. 적용된 공통 지침과 보존된 초안
 
-| 초안 | 적용할 위치 | 역할 |
+| 초안 | 적용된 위치 | 역할 |
 |---|---|---|
 | [공통 AGENTS 초안](proposals/AGENTS.root.md) | 저장소 루트 AGENTS.md | 공통 규칙의 기준 |
 | [Claude 진입점 초안](proposals/CLAUDE.root.md) | 저장소 루트 CLAUDE.md | AGENTS와 준비 문서 읽기를 명시 |
 | [Copilot 진입점 초안](proposals/copilot-instructions.md) | .github/copilot-instructions.md | 같은 규칙을 참조 |
 
-초안 내부 경로는 **적용 후 저장소 루트 기준**이다. 현재 proposals 디렉터리에 둔 사실만으로 활성화되지 않는다. 각 도구가 모든 파일을 동일하게 자동 탐색한다고 가정하지 않는다. Codex의 AGENTS 탐색·새 세션 검증은 [공식 문서](https://learn.chatgpt.com/docs/agent-configuration/agents-md)를 기준으로 한다.
+`proposals/`의 파일은 준비 당시 초안으로 보존하며 활성 기준은 루트 `AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md`다. 각 도구가 모든 파일을 동일하게 자동 탐색한다고 가정하지 않는다. Codex의 AGENTS 탐색·새 세션 검증은 [공식 문서](https://learn.chatgpt.com/docs/agent-configuration/agents-md)를 기준으로 한다.
 
 Codex 공식 지침에 따르면 새 실행·세션을 시작할 때 저장소 루트부터 현재 디렉터리까지 `AGENTS.override.md`, `AGENTS.md`, 설정한 대체 이름 순으로 디렉터리마다 최대 한 파일을 결합한다. 가까운 디렉터리 지침이 뒤에 놓여 우선하며 기본 결합 한도는 32 KiB다. 현재 공통 AGENTS 초안은 이 한도보다 작다. 적용 결과는 기존 세션이 아니라 **새 세션**에서 확인한다.
 
-채택 후 적용 순서:
+적용에 사용한 순서:
 
 1. 적용 대상의 기존 로컬 파일을 Git 제외 위치에 복사하고 원본 해시를 확인한다. 개인 내용은 공통 초안에 섞지 않는다.
 2. 초안을 각 대상에 반영한다. .gitignore의 루트 AGENTS.md·CLAUDE.md 제외 규칙을 정리해 공통 파일을 추적한다.

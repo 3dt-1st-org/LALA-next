@@ -76,7 +76,7 @@ SQL 068은 additive·idempotent지만 EC2 자동 코드 배포가 적용하지 �
 - 최종 선별 PDF·온보딩 질문안 대조: 자료 수령 전.
 - 실제 앱·브라우저·기기·지도·음성·Logto 로그인 검증: 미실행.
 - 실제 개발 API·DB 연결·분리·시험 계정 인수: GitHub 구성만 확인, Azure 배포 구독 접근 불일치로 runtime은 미확인.
-- 활성 루트 AGENTS·Claude·Copilot 적용: 미수행. 공통 지침 초안만 작성.
+- 활성 루트 AGENTS·Claude·Copilot 적용: 2026-09-20 파일 반영 완료. 도구별 새 세션 적용 검증은 별도 기록이 필요하다.
 - 개발 API·Logto·실 DB의 전체 사용자 흐름 검증: 미수행.
 - Flutter 앱 배포·실기기 검증: 미수행.
 - SQL 068 적용·비밀 값 조회: 미수행.
