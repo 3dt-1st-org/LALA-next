@@ -1,6 +1,9 @@
 # LALA-next — Copilot 커스텀 지시 (자동 로드)
 
 이 파일은 GitHub Copilot이 이 repo에서 작업할 때 자동으로 읽는다.
+먼저 저장소 루트의 `AGENTS.md`를 읽고 공통 규칙을 따른다. 비밀·환경·API를
+다룰 때는 `docs/operations/aws-secrets-manager-runtime-contract.md`와
+`docs/operations/aws-secrets-manager-team-handoff.md`를 함께 확인한다.
 상세한 운영 플레이북은 `docs/operations/copilot-cli-operations.md` 와
 `docs/operations/onprem-runbook-docker-macos.md` 를 본다.
 
@@ -14,6 +17,8 @@ LALA-next = Flutter Web 클라이언트 + FastAPI(API) + Docker PostgreSQL(postg
 3. **상태 변경은 plan → apply 2단계.** 모든 운영 스크립트는 plan(읽기 전용) 우선 출력 → 사용자 확인 후 `--apply --confirm <TOKEN>`.
 4. **`runtime/` 은 절대 git 커밋 금지** (전체 gitignore: env / 백업 덤프 / 로그 / cloudflared 자격증명). `git add` 전 `git check-ignore` 확인.
 5. **시크릿 노출 금지.** DSN·비밀번호·API 토큰·webhook URL·tunnel 자격증명을 출력/로그/커밋/PR/이슈에 노출하지 않는다. 항상 env-var **이름**으로만.
+   서버 런타임 비밀, SSM 공개 빌드 설정, Flutter 공개값과 로컬 dotenv를 서로
+   대체하지 않는다. 값이 없으면 논리 이름만 보고하고 중단한다.
 6. **정상 데이터 경로는 항상 DB-backed.** mock/demo/snapshot 폴백으로 대체하지 않는다.
 7. **외부 포트 노출 금지.** `127.0.0.1` 바인딩을 유지한다.
 8. **변경 후 반드시 검증:** `scripts/unix/check_onprem_runtime.sh` + local·public `/readyz`.
