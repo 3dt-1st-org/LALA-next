@@ -38,9 +38,11 @@ $env:ALLOW_DEV_RESET_APPLY = "1"
   -Confirm APPLY_DEV_RESET_SQL
 ```
 
-The current files seed public or synthetic Suwon fixture place, weather, docent-cache,
-economy/card-spending, culture event, community, and ops rows for local DB
-experiments after the canonical schema exists. They use `ON CONFLICT` or
-`WHERE NOT EXISTS` guards where the schema has a suitable key. Live DB rollout
-still requires explicit approval and must start from
+The current files seed public or synthetic Suwon fixture place, account-owned
+save/plan/preference/visit state, weather, docent-cache, economy/card-spending,
+culture event, community, and ops rows for local DB experiments after the
+canonical schema exists. The account fixtures use the non-routable issuer
+`https://local-fixture.invalid`; they are database fixtures and cannot sign in
+through Logto. The files use `ON CONFLICT` or `WHERE NOT EXISTS` guards where
+the schema has a suitable key. Live DB rollout still requires explicit approval and must start from
 `scripts/unix/verify_db_resources.sh`, not this folder.
