@@ -169,6 +169,70 @@ def check_data_freshness_status(dsn: str, *, weather_max_hours: int = 24) -> str
     return "configured"
 
 
+def _place_enrichment_projection(place_alias: str) -> str:
+    return f"""
+            {place_alias}.*,
+            CASE
+                WHEN {place_alias}.category = 'event' AND linked_event.place_id IS NOT NULL
+                THEN to_char(linked_event.starts_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')
+                ELSE NULL
+            END AS event_start_date,
+            CASE
+                WHEN {place_alias}.category = 'event' AND linked_event.place_id IS NOT NULL
+                THEN to_char(linked_event.ends_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')
+                ELSE NULL
+            END AS event_end_date,
+            CASE
+                WHEN {place_alias}.category = 'event' AND linked_event.place_id IS NOT NULL
+                THEN linked_event.url
+                ELSE NULL
+            END AS event_url,
+            CASE
+                WHEN {place_alias}.category = 'event' AND linked_event.place_id IS NOT NULL
+                THEN linked_event.ends_at IS NULL OR linked_event.ends_at >= now()
+                ELSE NULL
+            END AS is_ongoing,
+            false AS is_approximate_location,
+            enrichment.is_indoor AS is_indoor,
+            latest_scores.local_spending_score,
+            latest_scores.small_merchant_fit_score,
+            latest_scores.demand_dispersion_score,
+            latest_scores.culture_relevance_score,
+            latest_scores.weather_fit_score,
+            latest_scores.review_quality_score,
+            latest_scores.accessibility_fit_score,
+            latest_scores.final_score,
+            latest_scores.formula_version,
+            latest_scores.features AS score_features,
+            latest_scores.local_activity_band AS _local_activity_band,
+            (linked_event.place_id IS NOT NULL) AS _has_linked_event
+    """
+
+
+def _place_enrichment_joins(place_alias: str) -> str:
+    return f"""
+        LEFT JOIN latest_scores ON latest_scores.place_id = {place_alias}.place_id
+        LEFT JOIN LATERAL (
+            SELECT place_id, starts_at, ends_at, url
+            FROM travel.place_events
+            WHERE place_id = {place_alias}.place_id
+            ORDER BY
+                CASE WHEN ends_at IS NULL OR ends_at >= now() THEN 0 ELSE 1 END,
+                starts_at DESC NULLS LAST,
+                updated_at DESC
+            LIMIT 1
+        ) linked_event ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT is_indoor
+            FROM travel.place_enrichments
+            WHERE place_id = {place_alias}.place_id
+              AND is_indoor IS NOT NULL
+            ORDER BY generated_at DESC
+            LIMIT 1
+        ) enrichment ON TRUE
+    """
+
+
 def fetch_places(
     *,
     lat: float,
@@ -257,65 +321,9 @@ def fetch_places(
             ORDER BY score_snapshot.place_id, scored_at DESC
         )
         SELECT
-            ranked_places.*,
-            CASE
-                WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
-                THEN to_char(linked_event.starts_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')
-                ELSE NULL
-            END AS event_start_date,
-            CASE
-                WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
-                THEN to_char(linked_event.ends_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')
-                ELSE NULL
-            END AS event_end_date,
-            CASE
-                WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
-                THEN linked_event.url
-                ELSE NULL
-            END AS event_url,
-            CASE
-                WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
-                THEN linked_event.ends_at IS NULL OR linked_event.ends_at >= now()
-                ELSE NULL
-            END AS is_ongoing,
-            false AS is_approximate_location,
-            enrichment.is_indoor AS is_indoor,
-            latest_scores.local_spending_score,
-            latest_scores.small_merchant_fit_score,
-            latest_scores.demand_dispersion_score,
-            latest_scores.culture_relevance_score,
-            latest_scores.weather_fit_score,
-            latest_scores.review_quality_score,
-            latest_scores.accessibility_fit_score,
-            latest_scores.final_score,
-            latest_scores.formula_version,
-            latest_scores.features AS score_features,
-            latest_scores.local_activity_band AS _local_activity_band,
-            (linked_event.place_id IS NOT NULL) AS _has_linked_event
+            {_place_enrichment_projection("ranked_places")}
         FROM ranked_places
-        LEFT JOIN latest_scores ON latest_scores.place_id = ranked_places.place_id
-        LEFT JOIN LATERAL (
-            SELECT
-                place_id,
-                starts_at,
-                ends_at,
-                url
-            FROM travel.place_events
-            WHERE place_id = ranked_places.place_id
-            ORDER BY
-                CASE WHEN ends_at IS NULL OR ends_at >= now() THEN 0 ELSE 1 END,
-                starts_at DESC NULLS LAST,
-                updated_at DESC
-            LIMIT 1
-        ) linked_event ON TRUE
-        LEFT JOIN LATERAL (
-            SELECT is_indoor
-            FROM travel.place_enrichments
-            WHERE place_id = ranked_places.place_id
-            AND is_indoor IS NOT NULL
-            ORDER BY generated_at DESC
-            LIMIT 1
-        ) enrichment ON TRUE
+        {_place_enrichment_joins("ranked_places")}
         ORDER BY FLOOR(distance_m / 500.0) ASC, COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC, updated_at DESC
         LIMIT %s
     """
@@ -350,50 +358,136 @@ def fetch_places(
         # would wrongly drop viewport-edge places, so it runs only on the circle path.
         if not use_bounds and distance_m > radius_m:
             continue
-        name = (
-            row.get("name_en")
-            if language == "en" and row.get("name_en")
-            else _english_display_name(row)
-            if language == "en"
-            else row.get("name_ko")
-        )
-        address = (
-            row.get("address_en")
-            if language == "en" and row.get("address_en")
-            else _english_display_address(row)
-            if language == "en"
-            else row.get("address_ko")
-        )
         places.append(
-            {
-                "place_id": row["place_id"],
-                "name": name,
-                "name_ko": row.get("name_ko"),
-                "name_en": row.get("name_en"),
-                "category": row["category"],
-                "lat": float(row["lat"]),
-                "lng": float(row["lng"]),
-                "address": address,
-                "image_url": normalize_official_image_url(row.get("image_url")),
-                "region_ko": row.get("region_ko"),
-                "region_en": row.get("region_en"),
-                "event_start_date": row.get("event_start_date"),
-                "event_end_date": row.get("event_end_date"),
-                "event_url": row.get("event_url"),
-                "is_ongoing": row.get("is_ongoing"),
-                "is_approximate_location": row.get("is_approximate_location"),
-                "is_indoor": row.get("is_indoor"),
-                "distance_m": int(round(distance_m)),
-                "source": "db",
-                "upstream_source": row.get("source") or "canonical",
-                # Internal three-signals reason-composer inputs (contract §1): underscore-prefixed,
-                # consumed by places_service and stripped before serialization. Not public/OpenAPI.
-                "_local_activity_band": row.get("_local_activity_band"),
-                "_has_linked_event": row.get("_has_linked_event"),
-                "score": _place_score_from_row(row) if include_scores else None,
-            }
+            _place_payload_from_row(
+                row,
+                language=language,
+                include_scores=include_scores,
+                distance_m=distance_m,
+            )
         )
     return places
+
+
+def fetch_places_by_ids(
+    *,
+    place_ids: list[str],
+    language: str,
+    include_scores: bool = False,
+) -> list[dict[str, Any]]:
+    dsn = get_settings().db_dsn
+    if not dsn:
+        raise DatabaseReadError("db_not_configured")
+    try:
+        from psycopg2.extras import RealDictCursor
+    except Exception:
+        raise DatabaseReadError("psycopg2_unavailable") from None
+
+    score_projection = _place_score_projection(include_scores=include_scores)
+    sql = f"""
+        WITH requested(place_id, input_order) AS (
+            SELECT place_id, input_order
+            FROM unnest(%s::text[]) WITH ORDINALITY AS input(place_id, input_order)
+        )
+        , matched_places AS (
+            SELECT
+                public_place.place_id,
+                public_place.name_ko,
+                public_place.name_en,
+                public_place.category,
+                public_place.address_ko,
+                public_place.address_en,
+                public_place.image_url,
+                public_place.region_ko,
+                public_place.region_en,
+                public_place.lat,
+                public_place.lng,
+                public_place.source,
+                public_place.updated_at,
+                requested.input_order
+            FROM requested
+            JOIN travel.public_places public_place
+              ON public_place.place_id = requested.place_id
+        )
+        , latest_scores AS (
+            SELECT DISTINCT ON (score_snapshot.place_id)
+                score_snapshot.place_id,
+                {score_projection}
+            FROM analytics.place_score_snapshots score_snapshot
+            JOIN matched_places ON matched_places.place_id = score_snapshot.place_id
+            ORDER BY score_snapshot.place_id, scored_at DESC
+        )
+        SELECT
+            {_place_enrichment_projection("matched_places")}
+        FROM matched_places
+        {_place_enrichment_joins("matched_places")}
+        ORDER BY matched_places.input_order
+    """
+    try:
+        with closing(connect_db(dsn, connect_timeout=3)) as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(sql, (place_ids,))
+                rows = list(cur.fetchall())
+    except Exception:
+        raise DatabaseReadError("place_lookup_query_failed") from None
+
+    return [
+        _place_payload_from_row(
+            row,
+            language=language,
+            include_scores=include_scores,
+            distance_m=None,
+        )
+        for row in rows
+    ]
+
+
+def _place_payload_from_row(
+    row: dict[str, Any],
+    *,
+    language: str,
+    include_scores: bool,
+    distance_m: float | None,
+) -> dict[str, Any]:
+    name = (
+        row.get("name_en")
+        if language == "en" and row.get("name_en")
+        else _english_display_name(row)
+        if language == "en"
+        else row.get("name_ko")
+    )
+    address = (
+        row.get("address_en")
+        if language == "en" and row.get("address_en")
+        else _english_display_address(row)
+        if language == "en"
+        else row.get("address_ko")
+    )
+    return {
+        "place_id": row["place_id"],
+        "name": name,
+        "name_ko": row.get("name_ko"),
+        "name_en": row.get("name_en"),
+        "category": row["category"],
+        "lat": float(row["lat"]),
+        "lng": float(row["lng"]),
+        "address": address,
+        "image_url": normalize_official_image_url(row.get("image_url")),
+        "region_ko": row.get("region_ko"),
+        "region_en": row.get("region_en"),
+        "event_start_date": row.get("event_start_date"),
+        "event_end_date": row.get("event_end_date"),
+        "event_url": row.get("event_url"),
+        "is_ongoing": row.get("is_ongoing"),
+        "is_approximate_location": row.get("is_approximate_location"),
+        "is_indoor": row.get("is_indoor"),
+        "distance_m": int(round(distance_m)) if distance_m is not None else None,
+        "source": "db",
+        "upstream_source": row.get("source") or "canonical",
+        "_local_activity_band": row.get("_local_activity_band"),
+        "_has_linked_event": row.get("_has_linked_event"),
+        "score": _place_score_from_row(row) if include_scores else None,
+    }
 
 
 # S2 local-activity band gate (three-signals contract §4). Controller-tunable MIN_SAMPLE; the gate

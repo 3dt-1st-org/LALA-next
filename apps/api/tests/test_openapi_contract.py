@@ -1,5 +1,160 @@
 from __future__ import annotations
 
+BASELINE_OPERATIONS = {
+    line.strip()
+    for line in """
+DELETE /api/v1/community/signals/{signal_id}
+DELETE /api/v1/community/signals/{signal_id}/reactions/{reaction_type}
+DELETE /api/v1/community/signals/{signal_id}/save
+DELETE /api/v1/me
+DELETE /api/v1/me/plans/{plan_date}
+DELETE /api/v1/me/plans/{plan_date}/preferences
+DELETE /api/v1/me/saved-places/{place_id}
+GET /api/v1/community/chat/rooms
+GET /api/v1/community/chat/rooms/{room_id}/messages
+GET /api/v1/community/follows
+GET /api/v1/community/places/{place_id}/signals
+GET /api/v1/community/posts
+GET /api/v1/community/posts/{post_id}
+GET /api/v1/community/posts/{post_id}/comments
+GET /api/v1/community/signals
+GET /api/v1/community/signals/aggregates
+GET /api/v1/community/signals/{signal_id}
+GET /api/v1/community/signals/{signal_id}/comments
+GET /api/v1/me
+GET /api/v1/me/plans
+GET /api/v1/me/plans/{plan_date}
+GET /api/v1/me/plans/{plan_date}/preferences
+GET /api/v1/me/plans/{plan_date}/visits
+GET /api/v1/me/preferences
+GET /api/v1/me/saved-places
+GET /api/v1/places
+GET /api/v1/plans/intervention
+GET /api/v1/weather
+GET /healthz
+GET /metrics
+GET /readyz
+PATCH /api/v1/community/signals/{signal_id}
+POST /api/v1/community/chat/rooms
+POST /api/v1/community/chat/rooms/{room_id}/members
+POST /api/v1/community/chat/rooms/{room_id}/messages
+POST /api/v1/community/chat/rooms/{room_id}/ws-ticket
+POST /api/v1/community/follows
+POST /api/v1/community/posts
+POST /api/v1/community/posts/{post_id}/comments
+POST /api/v1/community/posts/{post_id}/like
+POST /api/v1/community/posts/{post_id}/reports
+POST /api/v1/community/signals
+POST /api/v1/community/signals/{signal_id}/comments
+POST /api/v1/community/signals/{signal_id}/reports
+POST /api/v1/community/signals/{signal_id}/submit
+POST /api/v1/docents/audio
+POST /api/v1/docents/script
+POST /api/v1/plans/daily
+PUT /api/v1/community/signals/{signal_id}/reactions/{reaction_type}
+PUT /api/v1/community/signals/{signal_id}/save
+PUT /api/v1/me/plans/{plan_date}
+PUT /api/v1/me/plans/{plan_date}/preferences
+PUT /api/v1/me/plans/{plan_date}/visits/{slot_period}
+PUT /api/v1/me/preferences
+PUT /api/v1/me/saved-places/{place_id}
+""".splitlines()
+    if line.strip()
+}
+
+BASELINE_SCHEMAS = set(
+    [
+        "AccountDeletionRequest",
+        "ApiError",
+        "ApiErrorEnvelope",
+        "ApiMeta",
+        "ApiSuccessEnvelope",
+        "ChatMessageCreate",
+        "ChatRoomCreate",
+        "ChatRoomMemberAdd",
+        "CommunityCommentCreate",
+        "CommunityFollowCreate",
+        "CommunityPostCreate",
+        "CommunityReportCreate",
+        "Coordinate",
+        "DailyPlanData",
+        "DailyPlanRequest",
+        "DailyPlanSlot",
+        "DailyPlanSuccessEnvelope",
+        "DocentAudioRequest",
+        "DocentScriptData",
+        "DocentScriptRequest",
+        "DocentScriptSuccessEnvelope",
+        "Dust",
+        "ForecastItem",
+        "HTTPValidationError",
+        "HealthzData",
+        "HealthzSuccessEnvelope",
+        "InterventionData",
+        "InterventionSuccessEnvelope",
+        "LocalSignalCommentCreate",
+        "LocalSignalDraftCreate",
+        "LocalSignalPatch",
+        "LocalSignalPlaceAggregate",
+        "LocalSignalPlaceAggregatesData",
+        "LocalSignalPlaceAggregatesSuccessEnvelope",
+        "LocalSignalPlaceLink",
+        "LocalSignalReportCreate",
+        "MeData",
+        "MeSuccessEnvelope",
+        "PersistedPlan",
+        "PersistedPlanSuccessEnvelope",
+        "PersistedPlanSummary",
+        "PersistedPlansData",
+        "Place",
+        "PlaceScore",
+        "PlaceScoreComponents",
+        "PlacesData",
+        "PlacesQuery",
+        "PlacesSuccessEnvelope",
+        "PlanPreferenceContext",
+        "PreferenceEffect",
+        "ReadinessChecks",
+        "ReadyzData",
+        "ReadyzSuccessEnvelope",
+        "RuntimeMode",
+        "SavePlaceRequest",
+        "SavePlanRequest",
+        "SaveToggleResult",
+        "SaveTravelPreferencesRequest",
+        "SaveTripPreferenceOverrideRequest",
+        "SavedPlace",
+        "SavedPlacesData",
+        "SavedPlacesSuccessEnvelope",
+        "SlotVisit",
+        "SlotVisitRequest",
+        "SlotVisitsData",
+        "SlotVisitsSuccessEnvelope",
+        "TravelPreferenceHard",
+        "TravelPreferenceLocale",
+        "TravelPreferenceSoft",
+        "TravelPreferencesPayload",
+        "TripPreferenceOverride",
+        "TripPreferenceOverridePayload",
+        "ValidationError",
+        "WeatherData",
+        "WeatherSuccessEnvelope",
+    ]
+)
+
+
+def test_openapi_changes_are_additive_to_complete_pre_lookup_surface(client):
+    schema = client.get("/openapi.json").json()
+    current_operations = {
+        f"{method.upper()} {path}"
+        for path, path_item in schema["paths"].items()
+        for method in path_item
+        if method.lower() in {"get", "post", "put", "patch", "delete", "options", "head"}
+    }
+
+    assert current_operations >= BASELINE_OPERATIONS
+    assert set(schema["components"]["schemas"]) >= BASELINE_SCHEMAS
+
 
 def test_openapi_schema_is_public_and_lists_wave1_routes(client):
     response = client.get("/openapi.json")
@@ -20,6 +175,58 @@ def test_openapi_schema_is_public_and_lists_wave1_routes(client):
         "/api/v1/me",
     ):
         assert route in paths
+
+
+def test_openapi_documents_place_id_lookup_contracts(client):
+    schema = client.get("/openapi.json").json()
+    paths = schema["paths"]
+    schemas = schema["components"]["schemas"]
+
+    single = paths["/api/v1/places/{place_id}"]["get"]
+    batch = paths["/api/v1/places/lookup"]["post"]
+    assert single["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/PlaceLookupSuccessEnvelope"
+    }
+    assert batch["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/PlaceBatchLookupSuccessEnvelope"
+    }
+    assert single["responses"]["404"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ApiErrorEnvelope"
+    }
+    assert single["responses"]["503"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ApiErrorEnvelope"
+    }
+    assert batch["responses"]["503"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ApiErrorEnvelope"
+    }
+    assert single["security"] == [{}, {"BearerAuth": []}, {"MigrationApiKey": []}]
+    assert batch["security"] == [{}, {"BearerAuth": []}, {"MigrationApiKey": []}]
+    assert single["x-lala-timeout-seconds"] == 12
+    assert batch["x-lala-timeout-seconds"] == 12
+    nullable_string = {"anyOf": [{"type": "string"}, {"type": "null"}]}
+    assert schemas["PlaceLookupItem"]["properties"]["distance_m"]["anyOf"] == [
+        {"type": "integer"},
+        {"type": "null"},
+    ]
+    assert schemas["PlaceLookupItem"]["properties"]["address"] == nullable_string
+    assert schemas["PlaceLookupItem"]["properties"]["reason"]["anyOf"] == nullable_string["anyOf"]
+    assert (
+        schemas["PlaceLookupItem"]["properties"]["freshness"]["anyOf"] == nullable_string["anyOf"]
+    )
+    assert schemas["PlaceLookupItem"]["properties"]["is_indoor"]["nullable"] is True
+    assert "reason" in schemas["PlaceLookupItem"]["required"]
+    assert "freshness" in schemas["PlaceLookupItem"]["required"]
+    assert schemas["PlaceLookupQuery"]["properties"]["place_ids"]["maxItems"] == 100
+    request_items = schemas["PlaceLookupRequest"]["properties"]["place_ids"]["items"]
+    assert request_items["minLength"] == 1
+    assert request_items["maxLength"] == 128
+    assert schemas["PlaceBatchLookupData"]["properties"]["data_as_of"]["anyOf"] == [
+        {"type": "string"},
+        {"type": "null"},
+    ]
+    assert schemas["PlaceBatchLookupData"]["properties"]["missing_place_ids"][
+        "description"
+    ].startswith("IDs unknown within")
 
 
 def test_openapi_documents_client_auth_headers_on_v1_routes(client):
