@@ -56,6 +56,14 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
     schemas.setdefault("PlacesQuery", _places_query_schema())
     schemas.setdefault("PlacesData", _places_data_schema())
     schemas.setdefault("PlacesSuccessEnvelope", _success_envelope_schema("PlacesData"))
+    schemas.setdefault("PlaceLookupItem", _place_lookup_item_schema())
+    schemas.setdefault("PlaceLookupQuery", _place_lookup_query_schema())
+    schemas.setdefault("PlaceBatchLookupData", _place_batch_lookup_data_schema())
+    schemas.setdefault("PlaceLookupSuccessEnvelope", _success_envelope_schema("PlaceLookupItem"))
+    schemas.setdefault(
+        "PlaceBatchLookupSuccessEnvelope",
+        _success_envelope_schema("PlaceBatchLookupData"),
+    )
     schemas.setdefault("Dust", _dust_schema())
     schemas.setdefault("ForecastItem", _forecast_item_schema())
     schemas.setdefault("WeatherData", _weather_data_schema())
@@ -137,6 +145,11 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
                         operation,
                         include_conflict=policy.account_include_conflict,
                     )
+                if path in {"/api/v1/places/lookup", "/api/v1/places/{place_id}"}:
+                    _add_place_lookup_error_responses(
+                        operation,
+                        include_not_found=path.endswith("{place_id}"),
+                    )
 
 
 def _remove_generated_auth_parameters(operation: dict[str, Any]) -> None:
@@ -200,6 +213,24 @@ def _add_account_error_responses(
                 },
             },
         )
+
+
+def _add_place_lookup_error_responses(
+    operation: dict[str, Any],
+    *,
+    include_not_found: bool,
+) -> None:
+    responses = operation.setdefault("responses", {})
+    errors = [("503", "The configured public place source is temporarily unavailable.")]
+    if include_not_found:
+        errors.insert(0, ("404", "The place ID is unknown in the selected public data source."))
+    for status_code, description in errors:
+        responses[status_code] = {
+            "description": description,
+            "content": {
+                "application/json": {"schema": {"$ref": "#/components/schemas/ApiErrorEnvelope"}}
+            },
+        }
 
 
 def _add_local_signal_error_responses(
@@ -688,6 +719,7 @@ def _place_schema() -> dict[str, Any]:
             "event_url": {"type": "string", "format": "uri", "nullable": True},
             "is_ongoing": {"type": "boolean", "nullable": True},
             "is_approximate_location": {"type": "boolean", "nullable": True},
+            "is_indoor": {"type": "boolean", "nullable": True},
             "distance_m": {"type": "integer"},
             "source": {"type": "string", "enum": ["public_mvp_snapshot", "db"]},
             "upstream_source": {"type": "string", "nullable": True},
@@ -748,6 +780,76 @@ def _places_data_schema() -> dict[str, Any]:
             "data_as_of": {
                 "anyOf": [{"type": "string"}, {"type": "null"}],
                 "description": "Honest data-as-of (snapshot build timestamp) or null.",
+            },
+        },
+        "additionalProperties": False,
+    }
+
+
+def _place_lookup_item_schema() -> dict[str, Any]:
+    schema = _place_schema()
+    schema["required"].extend(["reason", "freshness"])
+    schema["properties"]["address"] = {"anyOf": [{"type": "string"}, {"type": "null"}]}
+    schema["properties"]["distance_m"] = {
+        "anyOf": [{"type": "integer"}, {"type": "null"}],
+        "description": "Always null because ID lookup has no caller location.",
+    }
+    schema["properties"]["reason"] = {
+        "anyOf": [{"type": "string"}, {"type": "null"}],
+        "description": "Always null because ID lookup has no recommendation context.",
+    }
+    schema["properties"]["freshness"] = {
+        "anyOf": [{"type": "string"}, {"type": "null"}],
+        "description": "Always null; use response data_as_of metadata when available.",
+    }
+    return schema
+
+
+def _place_lookup_query_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["place_ids", "language", "include_scores"],
+        "properties": {
+            "place_ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 100,
+                "items": {"type": "string", "minLength": 1, "maxLength": 128},
+                "description": "Validated IDs deduplicated in first-occurrence order.",
+            },
+            "language": {"type": "string", "enum": ["ko", "en"]},
+            "include_scores": {"type": "boolean"},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _place_batch_lookup_data_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": [
+            "places",
+            "missing_place_ids",
+            "query",
+            "source",
+            "data_as_of",
+        ],
+        "properties": {
+            "places": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/PlaceLookupItem"},
+                "description": "Matches in first-occurrence input order.",
+            },
+            "missing_place_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "IDs unknown within the selected source, not deletion evidence.",
+            },
+            "query": {"$ref": "#/components/schemas/PlaceLookupQuery"},
+            "source": {"type": "string", "enum": ["public_mvp_snapshot", "db"]},
+            "data_as_of": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "Snapshot build timestamp or null when unavailable.",
             },
         },
         "additionalProperties": False,
