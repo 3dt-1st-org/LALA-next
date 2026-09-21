@@ -23,7 +23,12 @@
 > `062_review_ingestion_governance.sql` and
 > `apps/api/app/services/review_ingest_governance.py` are byte-identical to
 > `origin/main`'s) and against `origin/main` (`41468b01`, whose canonical
-> sequence now runs through `071_api_cost_controls.sql`)):
+> sequence now runs through `071_api_cost_controls.sql`), and re-verified
+> 2026-09-21 against the same worktree (still `e143c3d6`; its `062` + service
+> files remain byte-identical to `origin/main`'s) and against `origin/main`
+> (`fa5db49b`; the canonical sequence still ends at `071_api_cost_controls.sql`,
+> and PR #60 remains merged there as `970922c5`, whose merge diff's only
+> `sql/canonical` change is the addition of `062_review_ingestion_governance.sql`)):
 > this revision aligns the plan with the approved contract decisions and with
 > PR #60's **merged** foundation (`062_review_ingestion_governance.sql` +
 > `apps/api/app/services/review_ingest_governance.py`). Locked facts it
@@ -743,7 +748,9 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
 **Landed by PR #60 (governance foundation, merged to `main`):**
 
 - **`062_review_ingestion_governance.sql`** — **the only migration PR #60 ships,
-  and the only numbered item in this section.** It is IMPLEMENTED, merged to
+  and the only numbered item in this section.** (Verified against the merge on
+  `main`: PR #60's merge commit `970922c5` touches `sql/canonical/` exactly
+  once — adding this file.) It is IMPLEMENTED, merged to
   `main`, additive, and re-runnable
   (`CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` /
   `CREATE INDEX IF NOT EXISTS`). It creates `ingest.review_sources` (§9.3) +
@@ -786,8 +793,8 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
 
 > **Migration-numbering rule (locked):** `062` is already in use by
 > `062_review_ingestion_governance.sql` on `main`, and the canonical sequence on
-> `main` has since continued past it (as re-verified 2026-09-16 against
-> `origin/main`, through `071_api_cost_controls.sql`; the previous
+> `main` has since continued past it (as re-verified 2026-09-21 against
+> `origin/main` (`fa5db49b`), still through `071_api_cost_controls.sql`; the previous
 > "through `068_community_chat_durable_controls.sql`" anchor — like the
 > "through `067`" one before it — went stale after the fact, as
 > `069_identity_deletion_jobs.sql`, `070_community_durability.sql`, and
