@@ -29,12 +29,15 @@
 > (`fa5db49b`; the canonical sequence still ends at `071_api_cost_controls.sql`,
 > and PR #60 remains merged there as `970922c5`, whose merge diff's only
 > `sql/canonical` change is the addition of `062_review_ingestion_governance.sql`),
-> and re-verified 2026-09-26 against the same worktree (still `e143c3d6`; its
-> `062`, governance service, and governance tests remain byte-identical to
-> `origin/main`'s) and against `origin/main` (still `fa5db49b`; the canonical
-> sequence still ends at `071_api_cost_controls.sql`, and PR #60 remains merged
-> there as `970922c5`, whose merge diff's only `sql/canonical` change is still
-> the addition of `062_review_ingestion_governance.sql`)):
+> and re-verified 2026-09-26 against the same worktree (now at `fc76f3bb` —
+> re-based onto `origin/main`'s tip `fa5db49b` with one comment-only commit
+> ahead, a docstring clarification of quarantine-count accounting; its `062`
+> and governance tests remain byte-identical to `origin/main`'s, and the
+> governance service differs from `origin/main`'s only by that docstring,
+> with no behavioral change) and against `origin/main` (still `fa5db49b`; the
+> canonical sequence still ends at `071_api_cost_controls.sql`, and PR #60
+> remains merged there as `970922c5`, whose merge diff's only `sql/canonical`
+> change is still the addition of `062_review_ingestion_governance.sql`)):
 > this revision aligns the plan with the approved contract decisions and with
 > PR #60's **merged** foundation (`062_review_ingestion_governance.sql` +
 > `apps/api/app/services/review_ingest_governance.py`). Locked facts it
@@ -779,9 +782,14 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
   `govern_review_ingest_on_cursor` (which runs the same gate → classify →
   run create/resume → receipt → quarantine → finalize sequence on a
   caller-supplied cursor, for callers that co-locate the aggregate upsert in
-  the same transaction); the two files are byte-identical between PR #60's
-  branch and `main`, and the one-transaction guarantee this plan relies on
-  holds at both entry points. The aggregate-only receipt/dedupe is
+  the same transaction); verified in PR #60 branch's current source
+  (`fc76f3bb`, re-verified 2026-09-26), where `062` and the governance tests
+  are byte-identical to `main`'s and the governance service differs from
+  `main`'s only by a comment-only docstring clarifying that
+  `quarantined_count` counts records *classified* into quarantine
+  (`len(quarantined)`), not rows inserted — no behavioral change — and the
+  one-transaction guarantee this plan relies on holds at both entry points.
+  The aggregate-only receipt/dedupe is
   **implemented by this same migration**, not held for a separate one: receipts
   key cross-batch dedupe on (source, external_key, `content_sha256`), so an
   exact replay (same triple, any run) yields `rowcount 0` and does not re-emit
