@@ -19,10 +19,12 @@
 The five clean-room plans were authored in sibling worktrees as separate draft
 PR documents (#55–#59). This program does **not** assume any of them is merged:
 snapshot copies of the five plan files (and of the two legacy-evidence docs,
-PR #54) have landed on `main` behind later merges — after this branch forked —
-but the owning draft PRs continue to iterate ahead of those snapshots (e.g. the
-#59 plan was re-verified in its own worktree on 2026-09-26, ahead of `main`'s
-snapshot), so the snapshots are **not** treated as the plans' current text.
+PR #54) have landed on `main` behind later merges — after this branch forked
+`main` at merge-base `2eb9c064`, so none of those snapshots is present in this
+branch's tree — but the owning branches continue to iterate ahead of those
+snapshots (e.g. the #59 plan was re-verified in its own worktree on 2026-09-26
+at tip `03821a60`, ahead of `main`'s snapshot), so the snapshots are **not**
+treated as the plans' current text.
 Each plan is cited by name only — **do not add relative links to them from this
 branch**, since the files are not present in this branch's tree (a relative
 link would resolve to nothing here). Wherever a plan's text and the approved
@@ -70,7 +72,7 @@ row from TARGET to CURRENT.**
 
 | Tag | Meaning | Evidence required to assert |
 | --- | --- | --- |
-| **CURRENT** | Implemented and live on `main` behind a real DB/API path (or an explicit, honest fallback). | Path + symbol cited; confirmed by direct read of this worktree **or of `main`** (this branch forked `main` before the review-governance foundation and the later canonical lanes landed, so `062`–`071` and the later W0/W2–W5 progress are absent from this tree and are cited as "on `main`" with their symbols named). |
+| **CURRENT** | Implemented and live on `main` behind a real DB/API path (or an explicit, honest fallback). | Path + symbol cited; confirmed by direct read of this worktree **or of `main`** (this branch forked `main` at merge-base `2eb9c064`, before the review-governance foundation and the later canonical lanes landed, so `062`–`071` and the later W0/W2–W5 progress are absent from this tree and are cited as "on `main`" with their symbols named). |
 | **TARGET** | Net-new design proposed by a plan and adopted by this program. Not yet implemented. | Wave + owning PR slice in §5. |
 | **BLOCKED_EXTERNAL** | Cannot proceed until an external or human gate clears (legal sign-off, ToS decision, data-access approval, cost ceiling). | Decision-gate ID in §10; no work assumed solved. |
 | **GATE** | A presentation-derived or clean-room product rule that is mandatory and blocks "done." | Section in §6 / §8; acceptance evidence in §5 per slice. |
@@ -171,7 +173,7 @@ eval fixtures.
 | **Place identity / geo / category** | `010_travel_core_tables.sql` (`travel.places`, GIST `idx_places_geog_expr`, category CHECK) | `places_service.list_places` / `db_repository.fetch_places` (`/api/v1/places`) | `place_score_batch` (score snapshots) | `features/map/map_helpers.dart`, `features/home/home_page.dart` | `test_places_service.py`, `generated_client_places_poc_test.dart` |
 | **Localized content (KO/EN exclusive)** | (`place_enrichments` attributes jsonb, `010`) | `normalization.display_language` + docent `language` enum | (bulk lane translation of summary lines) | `shared/l10n/lala_copy.dart`, `features/docent/docent_helpers.dart` (`singleLanguageText`) | `test_i18n`-style + inline language-lock test |
 | **Weather / air snapshot** | `020_travel_domain_tables.sql` (`travel.weather_observations`) + `074` wind_speed/threshold_config (TARGET) | `weather_service.current_weather` (`/api/v1/weather`) | `weather-refresh` job (`weather_observation_refresh`) | `features/weather/widgets/*` | `test_weather_observation_refresh.py`, `weather_map_pill_test.dart` |
-| **Review provenance / raw retention** | `030_community_core_tables.sql` + `062` `ingest.review_sources`, `community.ingest_runs` run-accounting ext. (+ `review_source_name` FK), aggregate-only `ingest.review_ingest_receipts` + DB-backed source gate (service-side), `community.ingest_quarantine` (current foundation, all shipped by the one `062` migration; carried by Draft PR #60, identical on `main`); `072` `travel.place_enrichments` replay-audit uniqueness (TARGET); raw retention **BLOCKED_EXTERNAL** (§4.4/DG-11) | `review_ingest_governance` boundary (no raw-text endpoint — forbidden, §4.4); governed Naver collector staged behind DG-1 (`naver_search_service.py`) | guarded tool `run_review_mention_ingest` (`review_mention_ingest`, `JOB_NAME="review-mention-ingest"`; not yet a `WorkerJobDefinition` in `apps/workers/app/contracts.py`) | (none — aggregate only) | `test_safety_contracts.py` (no-raw-text), `test_review_ingest_governance.py` |
+| **Review provenance / raw retention** | `030_community_core_tables.sql` + `062` `ingest.review_sources`, `community.ingest_runs` run-accounting ext. (+ `review_source_name` FK), aggregate-only `ingest.review_ingest_receipts` + DB-backed source gate (service-side), `community.ingest_quarantine` (current foundation, all shipped by the one `062` migration; carried by PR #60, merged as `970922c5`, identical on `main`); `072` `travel.place_enrichments` replay-audit uniqueness (TARGET); raw retention **BLOCKED_EXTERNAL** (§4.4/DG-11) | `review_ingest_governance` boundary (no raw-text endpoint — forbidden, §4.4); governed Naver collector staged behind DG-1 (`naver_search_service.py`) | guarded tool `run_review_mention_ingest` (`review_mention_ingest`, `JOB_NAME="review-mention-ingest"`; not yet a `WorkerJobDefinition` in `apps/workers/app/contracts.py`) | (none — aggregate only) | `test_safety_contracts.py` (no-raw-text), `test_review_ingest_governance.py` |
 | **Review normalized attributes** | `030` `community.place_mentions_weekly.attributes` + `010` `travel.place_enrichments` mirror (mirror write on `main`; G8 replay-audit unique constraint `072` TARGET) | `review_attribute_batch` (internal; surfaced as aggregate fields on `/places`) | `review-attribute-batch` job (`run_review_attribute_batch`) | (aggregate fields only) | `test_review_attribute_batch.py` |
 | **Franchise / small-merchant classification** | `035_data_pipeline_tables.sql` (`economy.franchise_brands`, `analytics.place_business_identity`) | `franchise_identity.classify_place_business` (surfaced via `place_score_snapshots`) | `franchise-reference-ingest` + `place-score-batch` jobs | (confidence surfacing in W5) | `test_franchise_identity.py` |
 | **Local-value score + optional reason** | `035` `analytics.place_score_snapshots` (`formula_version=local-value-v2`) | `recommendation_scoring.build_place_score` (score) + `docent_service` reason (`/docents/reason`, TARGET) | `place-score-batch` job | `features/place/widgets/*` (`점수/근거` action, on demand) | `test_recommendation_scoring.py`, reason eval subset |
@@ -190,13 +192,14 @@ pinned by `CANONICAL_MIGRATION_ORDER`; `require_baseline` fails on drift) and
 rejects unsafe statements.
 
 **Migration-numbering rule (locked):** `062_review_ingestion_governance.sql`
-is the current review-governance foundation and is on `main` (carried by Draft
-PR #60 — `lala-review-ingestion-foundation`, head `e143c3d6`, based on `main`
-through #207 — whose `062`, governance service, and governance tests are
-blob-equal to `origin/main`'s, verified 2026-09-26; PR #60's merge on `main`
-is `970922c5`, whose merge diff's only `sql/canonical` change is the addition
-of `062`, and the draft head adds only test hardening — the same coverage
-`main` already carries as #208);
+is the current review-governance foundation and is on `main` (carried by PR
+#60 — `lala-review-ingestion-foundation`, merged to `main` as `970922c5` on
+2026-07-25, whose merge diff's only `sql/canonical` change is the addition of
+`062`; the branch head has since advanced to `fc76f3bb`, rebased on `main`
+through #214 and re-verified 2026-09-26 — its `062` and its governance tests
+are blob-equal to `origin/main`'s, and its governance service differs from
+`origin/main`'s only by a docstring clarification of quarantine-count
+accounting, with no contract change);
 `063_local_signals_contract.sql` and `064_planning_action_tables.sql` are
 **already taken** by unrelated merged work, and the canonical sequence on
 `main` has since continued past them (`065_user_travel_preferences.sql`,
@@ -211,10 +214,11 @@ so **no slice in this program may
 claim `063`–`071`**. The aggregate-only persistent receipt/dedupe and the
 DB-backed source gate are **already shipped inside `062` + the governance
 service on `main`** — implemented by that same migration, *not* held for a
-separate numbered slice (see below; verified against Draft PR #60's bytes and
-the #59 plan's re-anchored verification). The **next review-data migration is
-therefore the `travel.place_enrichments` replay-audit uniqueness** (W2-c
-below). It takes the **first free number after `062`, which is `072`** (every
+separate numbered slice (see below; verified against PR #60's bytes at head
+`fc76f3bb` and the #59 plan's re-anchored verification). The **next
+review-data migration is therefore the `travel.place_enrichments`
+replay-audit uniqueness** (W2-c below). It takes the **first free number
+after `062`, which is `072`** (every
 number in `063`–`071` is already in use), and the subsequent RAG, planner, and
 facet migrations below carry `073`–`075` so every
 number in this program stays unique and ordered. Every TARGET migration is
@@ -225,9 +229,11 @@ numbered *proposals* — `063_official_source_provenance`,
 `064_rag_knowledge_retrieval_metadata` — which are outside the canonical runner
 and do not consume these numbers.)
 
-- `062_review_ingestion_governance.sql` (current foundation; carried by Draft
-  PR #60, identical bytes on `main` — migration, service, and tests verified
-  blob-equal against `origin/main` on 2026-09-26) — additive, re-runnable. Owns
+- `062_review_ingestion_governance.sql` (current foundation; carried by PR
+  #60, merged to `main` as `970922c5` — at the re-verified branch head
+  `fc76f3bb` (2026-09-26) the migration and governance tests are blob-equal to
+  `origin/main`'s and the service differs only by a docstring clarification of
+  quarantine-count accounting) — additive, re-runnable. Owns
   the migration's full governance surface (four concepts, per the file header):
   `ingest.review_sources` (the **canonical registry name — no
   `ingest.source_registry` table exists or is proposed**; source_name PK,
@@ -414,7 +420,7 @@ reviewed against them.
   exist and no slice populates it (the only `community.posts` rows anywhere in
   the tree are the deterministic `sql/dev_reset/` local fixtures, §1 hard
   rule); `062` (current foundation, carried by
-  Draft PR #60) ships no raw-body column and its receipt/dedupe + DB-backed
+  PR #60, merged) ships no raw-body column and its receipt/dedupe + DB-backed
   gate are aggregate-only; the next review migration (`072`) adds only
   `travel.place_enrichments` replay-audit uniqueness (no external-provider
   calls).
@@ -461,8 +467,8 @@ possible). All migrations are listed in §3.2.
 
 | Slice | Scope | Tests | Live-data acceptance | Rollback / flag | Risk / dependency |
 | --- | --- | --- | --- | --- | --- |
-| **W2-a Review-ingest governance foundation (`062`)** | **Current foundation** — `062_review_ingestion_governance.sql` + the typed boundary `review_ingest_governance.py` (carried by Draft PR #60; identical bytes on `main`, later hardening merged there — organic-status quarantine codes, retry-safe `received_count` on run resume, `register_review_source` connection close, PR #141). Scope is the migration's full governance surface: `ingest.review_sources` provenance registry, the `community.ingest_runs` run-accounting extension (`review_source_name` FK → registered source, `run_key` idempotency, counters, `failure_category`), the aggregate-only `ingest.review_ingest_receipts` persistent receipt/dedupe, and `community.ingest_quarantine` dead-letter. `register_review_source` stays a separate idempotent admin-only transaction, deliberately exposed by no public endpoint. **Not an immutable ledger; no raw-body column; stores no raw review text.** Emits an aggregate-only `ApprovedReviewAggregate` (`extra="forbid"`, `enforce_no_raw_review_text`). The receipt/dedupe + DB-backed source gate ship inside this foundation — their contract is recorded in W2-b; they are **not** a pending migration. | Governance tests (registry/accounting/receipt dedupe/quarantine routing, no-raw-text, resume edge cases) — on `main`, blob-equal with Draft PR #60's head (its hardening coverage landed on `main` as #208; verified 2026-09-26). | A governed batch produces a counted ledger row + quarantine routing without storing raw text. | None (additive schema). | High (privacy/legal). Foundation for W2-c–W2-f. |
-| **W2-b Aggregate-only persistent receipt/dedupe + DB-backed source gate (CURRENT — inside `062`, no separate migration)** | **Shipped with `062` + the governance service on `main`** (Draft PR #60 carries the same bytes; earlier drafts of this program restored this as a pending `072` migration — superseded, see §3.2). Contract as shipped: `ingest.review_ingest_receipts` persistent cross-batch dedupe on source + external_key + `content_sha256` (no raw text; exact replay is a no-op, a new hash is a revision; atomic receipt writes, full-digest `aggregate_key`), plus the DB-authoritative source gate: the boundary loads the source row from `ingest.review_sources` (`load_active_review_source`) and **aborts** a `rejected`/disabled/absent/mismatched source with distinct governance codes (`source_license_rejected`/`source_disabled`/`source_not_registered`/`source_provider_mismatch`/`source_terms_mismatch`; an abort, not a quarantine) before any record is accepted; source-gate → run → receipt → quarantine → finalize runs in one transaction (`persist_review_ingest_run` / `govern_review_ingest_on_cursor`). **No flag** — the gate/receipt enforcement is the mandatory governance boundary (the W0-c registry exposes no opt-out for it). **No raw-body retention (BLOCKED_EXTERNAL); no external-provider calls.** | License-gate rejection test; cross-run dedupe test; transaction-rollback test; no-raw-text test; resume edge cases — on `main`, blob-equal with Draft PR #60's head (resume idempotency, retry-safe `received_count`, replay-skip across runs, rollback-on-receipt-failure, no-raw-text model fields; landed on `main` as #208). | Met on `main`: a governed batch produces a receipted, counted ledger row without storing raw text; a `rejected` source aborts and is never processed. | None (additive schema, shipped). | High (privacy/legal). Live acquisition stays BLOCKED_EXTERNAL (DG-1). |
+| **W2-a Review-ingest governance foundation (`062`)** | **Current foundation** — `062_review_ingestion_governance.sql` + the typed boundary `review_ingest_governance.py` (carried by PR #60, merged as `970922c5`; identical migration bytes on `main`, later hardening merged there — organic-status quarantine codes, retry-safe `received_count` on run resume, `register_review_source` connection close, PR #141). Scope is the migration's full governance surface: `ingest.review_sources` provenance registry, the `community.ingest_runs` run-accounting extension (`review_source_name` FK → registered source, `run_key` idempotency, counters, `failure_category`), the aggregate-only `ingest.review_ingest_receipts` persistent receipt/dedupe, and `community.ingest_quarantine` dead-letter. `register_review_source` stays a separate idempotent admin-only transaction, deliberately exposed by no public endpoint. **Not an immutable ledger; no raw-body column; stores no raw review text.** Emits an aggregate-only `ApprovedReviewAggregate` (`extra="forbid"`, `enforce_no_raw_review_text`). The receipt/dedupe + DB-backed source gate ship inside this foundation — their contract is recorded in W2-b; they are **not** a pending migration. | Governance tests (registry/accounting/receipt dedupe/quarantine routing, no-raw-text, resume edge cases) — on `main`; blob-equal with the PR #60 branch head's migration + tests (`fc76f3bb`, re-verified 2026-09-26; the head's service delta vs `main` is the docstring-only quarantine-count clarification, and its hardening coverage landed on `main` as #208). | A governed batch produces a counted ledger row + quarantine routing without storing raw text. | None (additive schema). | High (privacy/legal). Foundation for W2-c–W2-f. |
+| **W2-b Aggregate-only persistent receipt/dedupe + DB-backed source gate (CURRENT — inside `062`, no separate migration)** | **Shipped with `062` + the governance service on `main`** (PR #60's branch head `fc76f3bb` carries the same migration + tests — its service differs from `main` only by the docstring clarification; earlier drafts of this program restored this as a pending `072` migration — superseded, see §3.2). Contract as shipped: `ingest.review_ingest_receipts` persistent cross-batch dedupe on source + external_key + `content_sha256` (no raw text; exact replay is a no-op, a new hash is a revision; atomic receipt writes, full-digest `aggregate_key`), plus the DB-authoritative source gate: the boundary loads the source row from `ingest.review_sources` (`load_active_review_source`) and **aborts** a `rejected`/disabled/absent/mismatched source with distinct governance codes (`source_license_rejected`/`source_disabled`/`source_not_registered`/`source_provider_mismatch`/`source_terms_mismatch`; an abort, not a quarantine) before any record is accepted; source-gate → run → receipt → quarantine → finalize runs in one transaction (`persist_review_ingest_run` / `govern_review_ingest_on_cursor`). **No flag** — the gate/receipt enforcement is the mandatory governance boundary (the W0-c registry exposes no opt-out for it). **No raw-body retention (BLOCKED_EXTERNAL); no external-provider calls.** | License-gate rejection test; cross-run dedupe test; transaction-rollback test; no-raw-text test; resume edge cases — on `main`, blob-equal with the PR #60 head's tests (`fc76f3bb`; resume idempotency, retry-safe `received_count`, replay-skip across runs, rollback-on-receipt-failure, no-raw-text model fields; landed on `main` as #208). | Met on `main`: a governed batch produces a receipted, counted ledger row without storing raw text; a `rejected` source aborts and is never processed. | None (additive schema, shipped). | High (privacy/legal). Live acquisition stays BLOCKED_EXTERNAL (DG-1). |
 | **W2-c `travel.place_enrichments` replay-audit uniqueness (`072`)** | **The next review-data migration** — additive unique `(place_id, enrichment_type, prompt_version)` on `travel.place_enrichments` (G8 mirror auditing). **No raw-body retention (BLOCKED_EXTERNAL); no external-provider calls.** | Uniqueness + mirror-audit test. | An aggregate resolves to a `source_run_id` + `license_class` on replay audit. | None (additive constraint). | Medium. Depends W2-a/W2-b (current). |
 | **W2-d Quarantine / dead-letter (current in `062`) + replay** | `062` ships `community.ingest_quarantine` (typed metadata only — no body column; idempotent dead-letter dedupe via partial unique `(provider, external_key, reason_category) WHERE resolved_at IS NULL`); `review_ingest_governance.py::_insert_quarantine_entries` persists. Replay is TARGET: `--since/--window/--provider/--place-id` on the guarded tools, re-reading normalized `community.posts` + the 062 run ledger (**never a raw store** — BLOCKED_EXTERNAL). | Quarantine-routing test (062); replay idempotency test. | A low-confidence/ambiguous signal is quarantined, not scored. | Flag `REVIEW_QUARANTINE`. | Medium. DG-4 review-queue UI owner. |
 | **W2-e Bulk-lane AI ad classifier + attribute mirror** | Second-pass nano classifier (`review_ai_classifier.py` — contract `{decision, is_ad, is_relevant, ad_confidence, relevance_confidence, reason_code}`, low-confidence → `recheck_required`/not retained; contract + tests on `main`, batch-lane wiring remaining) after deterministic `AD_MARKERS`; mirror attributes to `travel.place_enrichments` (G8; the idempotent mirror insert is on `main` in `review_attribute_batch.py`). `review_quality_score` null when <3 organic (honest absence). | Ad-classifier test; <3-organic-null test; mirror test. | `place_mentions_weekly` + `place_enrichments` carry aligned attributes. | Flag `REVIEW_AI_CLASSIFIER`; `LALA_ENABLE_LIVE_AI`. | Medium. Cost/quota (DG-10). |
@@ -604,7 +610,7 @@ misconfigured environment cannot spend or mutate.
 
 | Gate | Requirement | Owner / enforcement |
 | --- | --- | --- |
-| **Licensed data provenance** | Each source recorded in `ingest.review_sources` (062) with `license_class ∈ {licensed, public_processed, approved_export, rejected}`; the DB-backed source gate (shipped with `062` in `review_ingest_governance.py`) aborts `rejected`/disabled/absent/mismatched sources up front with distinct governance codes (`source_license_rejected`/`source_disabled`/`source_not_registered`/`source_provider_mismatch`/`source_terms_mismatch`, before any record is accepted). Card data = public aggregates only (region×industry×month×demographic); community = mention aggregation only; weather = KMA/AirKorea public APIs. | W2-a/W2-b (`062` registry + aggregate-only receipts + DB-backed gate, current; Draft PR #60); `review_ingest_governance.py` boundary; code-review gate (§4.5); the staged Naver lane keys its gate on `naver_search` DG-1 registration. |
+| **Licensed data provenance** | Each source recorded in `ingest.review_sources` (062) with `license_class ∈ {licensed, public_processed, approved_export, rejected}`; the DB-backed source gate (shipped with `062` in `review_ingest_governance.py`) aborts `rejected`/disabled/absent/mismatched sources up front with distinct governance codes (`source_license_rejected`/`source_disabled`/`source_not_registered`/`source_provider_mismatch`/`source_terms_mismatch`, before any record is accepted). Card data = public aggregates only (region×industry×month×demographic); community = mention aggregation only; weather = KMA/AirKorea public APIs. | W2-a/W2-b (`062` registry + aggregate-only receipts + DB-backed gate, current; PR #60, merged `970922c5`); `review_ingest_governance.py` boundary; code-review gate (§4.5); the staged Naver lane keys its gate on `naver_search` DG-1 registration. |
 | **Retention / deletion** | **Raw review bodies are not stored at all** (BLOCKED_EXTERNAL, §4.4/DG-11) — no raw review-body table is created by any current slice; the serve path sees counts/sentiment/attribute scores (plus whitelisted code-vocabulary evidence terms, never free-form review text) only. Should a future legal/retention/access decision (DG-11) permit retention, a separate purge schedule applies. | W2-a/W2-b (`062` incl. aggregate-only receipt/dedupe + gate, current); DG-11. |
 | **Secret injection, not docs** | Secrets via Key Vault + env (`DB_DSN`, `KEY_VAULT_URL`, model deployment keys); OIDC secret-zero deploy. No connection strings, keys, vault/registry/resource-group/subscription/tenant/client IDs, queue/event-hub names, DSNs, tokens, or private URLs in docs or code. ONMU vault isolation; `int-cors-origins` is the only mirrored value. | `test_aws_secrets.py` / `test_runtime_secrets.py`; `test_safety_contracts.py`. |
 | **Idempotency / dedupe** | Every write keyed and replay-safe: governance run `run_key = source_name + window + schema_version` (062); persistent receipt `(source_name, external_key, content_sha256)` in `ingest.review_ingest_receipts` (062, current — exact replay is a no-op, a new hash is a revision); collected posts `(provider, external_key)`; aggregates `(week, place, provider, category)`; enrichments `(place_id, enrichment_type, prompt_version)`; chunks `(source_type, source_id)`; scores `(place_id, formula_version)`; weather `(location, observed_at)`; feedback `(place_id, day)`. No raw layer is keyed because no raw layer exists (BLOCKED_EXTERNAL). | Per-wave upsert tests (§5). |
@@ -688,7 +694,7 @@ a single PR may carry slices from one owner only (coordinate via §3 pins).
 
 | # | Slice | Owner subsystem | Dependency / decision gate |
 | --- | --- | --- | --- |
-| P1-1 | W2-a review-ingest governance foundation (`062`, current; carried by Draft PR #60) | Ingest / DB | **DG-1** for any live acquisition (**BLOCKED_EXTERNAL**). |
+| P1-1 | W2-a review-ingest governance foundation (`062`, current; carried by PR #60, merged) | Ingest / DB | **DG-1** for any live acquisition (**BLOCKED_EXTERNAL**). |
 | P1-2 | W2-b aggregate-only persistent receipt/dedupe + DB-backed source gate — **current: shipped inside `062` + the governance service on `main`; no separate migration** | Ingest / DB | **Shipped** (W2-a, current); **DG-1** for any live acquisition (**BLOCKED_EXTERNAL**); **DG-11** only if raw retention ever reopens. |
 | P1-3 | W2-c `travel.place_enrichments` replay-audit uniqueness (`072`) — **the next review-data migration** | Ingest / DB | W2-a/W2-b (current); no external gate. |
 | P1-4 | W2-d quarantine/dead-letter (`062`, current) + replay | Ingest / QA | **DG-4** manual-review-queue UI owner. |
@@ -725,7 +731,7 @@ a single PR may carry slices from one owner only (coordinate via §3 pins).
 
 | ID | Decision | Why it blocks | Default if unresolved |
 | --- | --- | --- | --- |
-| **DG-1** | First **licensed review/mention source** + legal sign-off on retention/summarization (e.g. Naver Search API discovery within terms, or an approved export). | No source may be marked `licensed` without it and W6-d ingest rollout cannot call external providers. **BLOCKED_EXTERNAL.** | The `062` foundation (source registry + run accounting + aggregate-only receipts + DB-backed source gate + quarantine) is current (carried by Draft PR #60, identical on `main`); the next review-data migration is `072` `travel.place_enrichments` replay-audit uniqueness (TARGET). A governed Naver Search Open API collector is staged on `main` behind this gate (it refuses to run until the operator registers an active `naver_search` source with an allowed `license_class`; PR #117 lane); until sign-off, no live acquisition runs — `062`/`072` accept already-normalized records only, and the only `community.posts` rows in the tree are the deterministic `sql/dev_reset/` local fixtures (never shipped as live data, §1 hard rule). |
+| **DG-1** | First **licensed review/mention source** + legal sign-off on retention/summarization (e.g. Naver Search API discovery within terms, or an approved export). | No source may be marked `licensed` without it and W6-d ingest rollout cannot call external providers. **BLOCKED_EXTERNAL.** | The `062` foundation (source registry + run accounting + aggregate-only receipts + DB-backed source gate + quarantine) is current (carried by PR #60, merged, identical on `main`); the next review-data migration is `072` `travel.place_enrichments` replay-audit uniqueness (TARGET). A governed Naver Search Open API collector is staged on `main` behind this gate (it refuses to run until the operator registers an active `naver_search` source with an allowed `license_class`; PR #117 lane); until sign-off, no live acquisition runs — `062`/`072` accept already-normalized records only, and the only `community.posts` rows in the tree are the deterministic `sql/dev_reset/` local fixtures (never shipped as live data, §1 hard rule). |
 | **DG-2** | Travel-time provider: Kakao Mobility vs OSRM (self-hosted). ToS/cost differ. | W4-d travel-time cache + provider. **BLOCKED_EXTERNAL** (vendor/ToS). | Haversine straight-line fallback (legacy parity). |
 | **DG-3** | Wind-threshold two-tier defaults (`discomfort_wind_ms`, `advisory_wind_ms`). | W1-b emits flags using them. | Config values documented as deliberate; flag off. |
 | **DG-4** | Manual-review-queue UI owner for quarantine/ambiguous matches (operator console vs CLI). | W2-d closure. | CLI report; no UI. |
@@ -754,13 +760,13 @@ a single PR may carry slices from one owner only (coordinate via §3 pins).
 - Safety contracts: [`apps/api/tests/test_safety_contracts.py`](../../apps/api/tests/test_safety_contracts.py),
   [`test_aws_secrets.py`](../../apps/api/tests/test_aws_secrets.py).
 
-> The five domain plans (draft PR docs #55–#59) and the two legacy-evidence docs
-> (draft PR doc #54) are **not assumed merged**. They are cited by name here
-> rather than linked — do not add relative links to them from this branch
-> (snapshot copies exist on `main`, landed after this branch forked, but the
-> owning draft PRs iterate ahead of those snapshots; the snapshot is never the
-> resolution target while its PR is still an open draft). A plan becomes citable
-> as CURRENT only when its owning PR lands **with text consistent with §3.2
-> (migration numbering) and §4.4/§4.5 (review-data policy)** — any conflicting
-> statement must be fixed in that
-> plan's own PR first.
+> The five domain plans (authored as draft plan documents #55–#59) and the two
+> legacy-evidence docs (draft plan document #54) are **not assumed merged**.
+> They are cited by name here rather than linked — do not add relative links
+> to them from this branch (snapshot copies exist on `main`, landed after this
+> branch forked at `2eb9c064`, but the owning branches iterate ahead of those
+> snapshots — e.g. the #59 plan's worktree tip `03821a60` — so a `main`
+> snapshot is never the resolution target for a plan's current text). A plan
+> is citable as CURRENT only where its current text is consistent with §3.2
+> (migration numbering) and §4.4/§4.5 (review-data policy) — any conflicting
+> statement must be fixed in that plan's own PR first.
