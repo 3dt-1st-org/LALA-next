@@ -51,10 +51,12 @@
 > transaction boundary, and typed safe quarantine metadata, with **no
 > external-provider calls**; and the bulk (`gpt-5.4-nano`) vs
 > recheck/docent (`gpt-5.4-mini`) model roles are unchanged. Reconciliation edits
-> are confined to this note, the §1 glossary row, §4.5, §7, §9, §10, §11, §19,
-> §20, §24, §25, the §29 milestone markers, §30, and the §32 related-links list;
-> the remaining clean-room evidence and history sections (§0, §2–§3, §5–§6, §8,
-> §12–§18, §21–§23, §26–§28, §31) are retained unchanged in substance.
+> are confined to this note, the §1 glossary row, §4.5, §7, the §8 job-writes
+> row, §9, §10, §11, the §12 cross-run-dedupe bullet, the §18 receipts row,
+> §19, §20, §24, §25, the §29 milestone markers, §30, the §31
+> BLOCKED_EXTERNAL acceptance row, and the §32 related-links list; the remaining
+> clean-room evidence and history sections (§0, §2–§3, §5–§6, §13–§17, §21–§23,
+> §26–§28) are retained unchanged in substance.
 > §25.1 is additionally corrected so that no canonical migration number — and no
 > list position that could be read as one — is reserved for any
 > not-yet-implemented item.
@@ -154,7 +156,10 @@ write** into `community.place_mentions_weekly`, `travel.place_enrichments`,
 
 ## 4. Current LALA-next State (implemented evidence)
 
-All paths below exist in this worktree and were read directly.
+All paths below exist in this worktree and were read directly — except the
+PR #60 governance-foundation entries at the end of §4.5, which are cited
+against the merged `main` history and PR #60's foundation worktree per the
+note there (this plan-only branch predates that merge).
 
 ### 4.1 Deterministic preprocessing — `apps/api/app/services/review_mention_ingest.py`
 
@@ -372,7 +377,7 @@ A review/mention ingestion job is declared through the existing
 | Field | Review-ingest job (`review-mention-ingest`) | Attribute/recheck job (`review-attribute-batch`) |
 | --- | --- | --- |
 | trigger | schedule/manual (cron, e.g. nightly) or queue/manual | schedule/manual (follows ingest) or queue/manual |
-| writes | `ingest.review_sources` (lookup), `community.ingest_runs` (062 governance cols), `community.ingest_quarantine`, `community.posts`, `community.ingest_tasks`, `ops.job_runs` — **no `posts_raw`** (BLOCKED_EXTERNAL, §10) | `community.place_mentions_weekly`, `travel.place_enrichments`, `analytics.place_score_snapshots`, `rag.knowledge_chunks`, `ops.job_runs` |
+| writes | `ingest.review_sources` (lookup), `community.ingest_runs` (062 governance cols), `ingest.review_ingest_receipts` (062 aggregate-only dedupe), `community.ingest_quarantine`, `community.posts`, `community.ingest_tasks`, `ops.job_runs` — **no `posts_raw`** (BLOCKED_EXTERNAL, §10) | `community.place_mentions_weekly`, `travel.place_enrichments`, `analytics.place_score_snapshots`, `rag.knowledge_chunks`, `ops.job_runs` |
 | retry | exp `30s,2m,5m`; retryable `db_connection_error,source_api_timeout,rate_limited,transient_5xx`; non-retryable `invalid_event_schema,terms_violation` | exp `10s,30s,1m,2m,5m`; retryable `429,timeout,5xx`; non-retryable `schema_validation_error` |
 | idempotency | `run_key = source_name + window + schema_version` (062 run-ledger receipt) / `iso_week + place_id + provider + category` (aggregate) | `(place_id, week_start, schema_version)` |
 | poison | threshold → `community.ingest_quarantine` + `ops.job_runs(failed)` | threshold → leave prior enrichment, log to quarantine |
@@ -519,10 +524,14 @@ plan:
 
 - **In-batch:** `content_sha256 = sha256(provider|external_key|normalized_text)`
   (existing); duplicates flagged `duplicate_content`, not deleted (audit).
-- **Cross-batch / source:** dedup by normalized title + URL + source + text hash
-  (TARGET). Add `content_sha256` + `source_url` + `source_provider` +
-  `collected_at` + `created_at_source` to the normalized layer; enforce a unique
-  partial index on `(provider, content_sha256)` and `(source_url)` where present.
+- **Cross-batch / source:** governed review runs already dedupe cross-run via
+  `ingest.review_ingest_receipts` (062): an exact replay of
+  `(source_name, external_key, content_sha256)` yields `rowcount 0` and emits no
+  second aggregate; a new hash is a content revision and emits a fresh one
+  (§25.1). Remaining TARGET is the normalized-layer dedupe: add
+  `content_sha256` + `source_url` + `source_provider` + `collected_at` +
+  `created_at_source` to the normalized layer; enforce a unique partial index on
+  `(provider, content_sha256)` and `(source_url)` where present.
 - **Place-level:** aggregation naturally collapses by `(week, place, provider,
   category)`; ambiguous same-name places/franchise branches go to manual review
   (existing `ambiguous_match` path), never silently counted.
@@ -617,6 +626,7 @@ plan:
 | Target | Conflict key | Strategy |
 | --- | --- | --- |
 | `community.ingest_runs` (062 run ledger) | `run_key = source_name + window + schema_version` (partial unique where `run_key IS NOT NULL`) | insert-or-resume (062 `ON CONFLICT (run_key) DO UPDATE SET received_count ... RETURNING id`); finalized once per batch |
+| `ingest.review_ingest_receipts` (062) | `(source_name, external_key, content_sha256)` | insert `ON CONFLICT DO NOTHING` — rowcount 0 is an exact replay (suppress the aggregate; refresh `last_run_id`/`last_seen_at`); a new hash is a content revision → fresh aggregate |
 | `community.ingest_quarantine` (062) | `(provider, external_key, reason_category) WHERE resolved_at IS NULL` | insert; on conflict skip (one dead-letter row per reason while unresolved) |
 | `community.posts` | `(provider, external_key)` | update cleaned fields + language tag |
 | `community.place_mentions_weekly` | `(week_start, place_name_ko, provider, category)` | **existing** upsert; **preserves** higher-tier AI `review_attributes`/`review_quality` when deterministic metadata is rewritten |
@@ -935,8 +945,10 @@ history via `place_enrichments` generations.
   `review_ingest_governance.py` gate. The aggregate-only receipt + persistent
   dedupe (§25.1, **LANDED in `062`/PR #60**) is already the persistence
   floor; this lane adds only live acquisition. **No `posts_raw`**
-  (BLOCKED_EXTERNAL, §10). Live acquisition that calls external providers remains
-  BLOCKED_EXTERNAL until the legal/retention/access decision.
+  (BLOCKED_EXTERNAL, §10). The landed foundation makes no external-provider
+  calls, and wiring the first live source is additionally gated on per-source
+  legal sign-off (§32.1); the BLOCKED_EXTERNAL flag itself stays reserved for
+  raw retention (§10.2/§32.6), not for this lane.
 - **Acceptance (Ops/DB):** an approved source runs plan→preview→apply; every
   aggregate has a resolvable `source_run_id` + `license_class`.
 
