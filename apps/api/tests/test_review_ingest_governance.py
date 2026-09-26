@@ -1163,6 +1163,72 @@ def test_persist_review_ingest_run_received_count_is_retry_safe_on_resume(monkey
     assert finalized[-1][1] == 3
 
 
+def test_persist_review_ingest_run_resume_keeps_quarantine_count_at_classified_total(
+    monkeypatch,
+):
+    """Resumed-run quarantine accounting counts *classified* records, not inserts.
+
+    Pins the semantics documented on ``_insert_quarantine_entries``:
+    ``quarantined_count`` is ``len(quarantined)`` -- the records this batch
+    routed to quarantine -- and deliberately NOT the number of dead-letter rows
+    the INSERT actually inserted. On a resumed run (same run_key) the partial
+    unique dedupe index skips the already-present row, so the inserted count
+    drops to 0, but the run ledger must converge to the same absolute counter
+    as the first attempt. Counting inserts instead would silently "lose"
+    quarantined records on every retry (Finding 2: the ledger is idempotent
+    accounting, not an immutable log).
+    """
+    store: dict[str, object] = {}
+    _install_fake_psycopg2(monkeypatch, store)
+    _prime_happy_source(store)
+
+    good = _record_dict("post-1", seed="stable content")
+    malformed = _record_dict("post-bad", seed="y")
+    del malformed["content_sha256"]
+
+    def _finalize_params() -> list[tuple]:
+        return [
+            params
+            for sql, params in store["executed"]  # type: ignore[union-attr]
+            if "update community.ingest_runs" in sql.lower()
+        ]
+
+    first = governance.persist_review_ingest_run(
+        dsn="postgresql://redacted",
+        source_name=FICTIONAL_SOURCE_NAME,
+        expected_provider=FICTIONAL_PROVIDER,
+        expected_terms_version=TERMS_VERSION,
+        records=[good, malformed],
+        window_start=date(2026, 7, 20),
+    )
+    assert first.run.processed_count == 1
+    assert first.run.quarantined_count == 1
+    assert first.run.failure_category == "schema_invalid"
+    assert len(store["quarantine_rows"]) == 1  # type: ignore[arg-type]
+    # params[4] is quarantined_count in the finalize UPDATE.
+    assert _finalize_params()[-1][4] == 1
+
+    # Resume the SAME window: the quarantine row already exists, so the
+    # dead-letter INSERT inserts 0 rows; accounting must still report 1.
+    second = governance.persist_review_ingest_run(
+        dsn="postgresql://redacted",
+        source_name=FICTIONAL_SOURCE_NAME,
+        expected_provider=FICTIONAL_PROVIDER,
+        expected_terms_version=TERMS_VERSION,
+        records=[good, malformed],  # same batch, same window -> same run_key
+        window_start=date(2026, 7, 20),
+    )
+    assert second.run.quarantined_count == 1  # classified count, NOT inserted (0)
+    assert second.run.processed_count == 0  # good record is now an exact replay
+    assert second.run.duplicate_count == 1
+    assert second.accepted == ()
+    assert second.accepted_records == ()
+    # No duplicate dead-letter row was inserted on the resumed attempt.
+    assert len(store["quarantine_rows"]) == 1  # type: ignore[arg-type]
+    # The ledger row converged to the same absolute counter; it was not zeroed.
+    assert _finalize_params()[-1][4] == 1
+
+
 def test_persist_review_ingest_run_resume_same_window_is_idempotent(monkeypatch):
     """Re-running the SAME window (same run_key) must not double-emit.
 
