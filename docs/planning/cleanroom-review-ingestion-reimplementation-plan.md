@@ -37,7 +37,20 @@
 > with no behavioral change) and against `origin/main` (still `fa5db49b`; the
 > canonical sequence still ends at `071_api_cost_controls.sql`, and PR #60
 > remains merged there as `970922c5`, whose merge diff's only `sql/canonical`
-> change is still the addition of `062_review_ingestion_governance.sql`)):
+> change is still the addition of `062_review_ingestion_governance.sql`),
+> and re-verified 2026-09-28 against the same worktree (now at `ddec4e7d` —
+> two commits ahead of `origin/main`'s `fa5db49b`: the `fc76f3bb`
+> docstring-only clarification of quarantine-count accounting plus
+> `ddec4e7d`, a test-only commit whose sole change is one added test pinning
+> resumed-run `quarantined_count` to the classified total; its `062` remains
+> byte-identical to `origin/main`'s, the governance service still differs
+> from `origin/main`'s only by that docstring, and the governance tests now
+> differ from `origin/main`'s only by that one added test — no SQL,
+> production-code, or behavioral change to the foundation this plan relies
+> on) and against `origin/main` (still `fa5db49b`; the canonical sequence
+> still ends at `071_api_cost_controls.sql`, and PR #60 remains merged there
+> as `970922c5`, whose merge diff's only `sql/canonical` change is still the
+> addition of `062_review_ingestion_governance.sql`)):
 > this revision aligns the plan with the approved contract decisions and with
 > PR #60's **merged** foundation (`062_review_ingestion_governance.sql` +
 > `apps/api/app/services/review_ingest_governance.py`). Locked facts it
@@ -793,12 +806,16 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
   run create/resume → receipt → quarantine → finalize sequence on a
   caller-supplied cursor, for callers that co-locate the aggregate upsert in
   the same transaction); verified in PR #60 branch's current source
-  (`fc76f3bb`, re-verified 2026-09-26), where `062` and the governance tests
-  are byte-identical to `main`'s and the governance service differs from
-  `main`'s only by a comment-only docstring clarifying that
-  `quarantined_count` counts records *classified* into quarantine
-  (`len(quarantined)`), not rows inserted — no behavioral change — and the
-  one-transaction guarantee this plan relies on holds at both entry points.
+  (`ddec4e7d`, re-verified 2026-09-28), where `062` remains byte-identical
+  to `main`'s, the governance service differs from `main`'s only by a
+  comment-only docstring clarifying that `quarantined_count` counts records
+  *classified* into quarantine (`len(quarantined)`), not rows inserted, and
+  the governance tests differ from `main`'s only by one added test pinning
+  that resumed-run accounting (a resumed run re-classifies the same records
+  and converges to the same absolute counter while the dead-letter dedupe
+  index inserts 0 rows) — test-only, with no behavioral change to the
+  migration or the service — and the one-transaction guarantee this plan
+  relies on holds at both entry points.
   The aggregate-only receipt/dedupe is
   **implemented by this same migration**, not held for a separate one: receipts
   key cross-batch dedupe on (source, external_key, `content_sha256`), so an
