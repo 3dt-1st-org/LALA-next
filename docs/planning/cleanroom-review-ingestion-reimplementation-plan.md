@@ -64,12 +64,12 @@
 > transaction boundary, and typed safe quarantine metadata, with **no
 > external-provider calls**; and the bulk (`gpt-5.4-nano`) vs
 > recheck/docent (`gpt-5.4-mini`) model roles are unchanged. Reconciliation edits
-> are confined to this note, the §1 glossary row, §4.5, §7, the §8 job-writes
-> row, §9, §10, §11, the §12 cross-run-dedupe bullet, the §18 receipts row,
-> §19, §20, §24, §25, the §29 milestone markers, §30, the §31
-> BLOCKED_EXTERNAL acceptance row, and the §32 related-links list; the remaining
-> clean-room evidence and history sections (§0, §2–§3, §5–§6, §13–§17, §21–§23,
-> §26–§28) are retained unchanged in substance.
+> are confined to this note, the §1 glossary row, §4.5, the §4.7 gap-map rows,
+> §7, the §8 job-writes row, §9, §10, §11, the §12 cross-run-dedupe bullet, the
+> §18 receipts row, §19, §20, §21, §24, §25, the §29 milestone markers, §30,
+> the §31 BLOCKED_EXTERNAL acceptance row, and the §32 related-links list; the
+> remaining clean-room evidence and history sections (§0, §2–§3, §5–§6,
+> §13–§17, §22–§23, §26–§28) are retained unchanged in substance.
 > §25.1 is additionally corrected so that no canonical migration number — and no
 > list position that could be read as one — is reserved for any
 > not-yet-implemented item.
@@ -834,7 +834,7 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
 
 > **Migration-numbering rule (locked):** `062` is already in use by
 > `062_review_ingestion_governance.sql` on `main`, and the canonical sequence on
-> `main` has since continued past it (as re-verified 2026-09-26 against
+> `main` has since continued past it (as re-verified 2026-09-28 against
 > `origin/main` (still `fa5db49b`), still through `071_api_cost_controls.sql`; the previous
 > "through `068_community_chat_durable_controls.sql`" anchor — like the
 > "through `067`" one before it — went stale after the fact, as
