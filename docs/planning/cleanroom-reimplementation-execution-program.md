@@ -23,7 +23,7 @@ PR #54) have landed on `main` behind later merges — after this branch forked
 `main` at merge-base `2eb9c064`, so none of those snapshots is present in this
 branch's tree — but the owning branches continue to iterate ahead of those
 snapshots (e.g. the #59 plan was re-verified in its own worktree on 2026-09-28
-at tip `11dfccec`, ahead of `main`'s snapshot), so the snapshots are **not**
+at tip `b418a126`, ahead of `main`'s snapshot), so the snapshots are **not**
 treated as the plans' current text.
 Each plan is cited by name only — **do not add relative links to them from this
 branch**, since the files are not present in this branch's tree (a relative
@@ -770,8 +770,8 @@ a single PR may carry slices from one owner only (coordinate via §3 pins).
 > They are cited by name here rather than linked — do not add relative links
 > to them from this branch (snapshot copies exist on `main`, landed after this
 > branch forked at `2eb9c064`, but the owning branches iterate ahead of those
-> snapshots — e.g. the #59 plan's worktree tip `11dfccec` — so a `main`
-> snapshot is never the resolution target for a plan's current text). A plan
-> is citable as CURRENT only where its current text is consistent with §3.2
-> (migration numbering) and §4.4/§4.5 (review-data policy) — any conflicting
-> statement must be fixed in that plan's own PR first.
+> snapshots — e.g. the #59 plan's worktree tip `b418a126` (2026-09-28) — so a
+> `main` snapshot is never the resolution target for a plan's current text).
+> A plan is citable as CURRENT only where its current text is consistent with
+> §3.2 (migration numbering) and §4.4/§4.5 (review-data policy) — any
+> conflicting statement must be fixed in that plan's own PR first.
