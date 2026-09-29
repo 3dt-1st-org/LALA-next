@@ -50,6 +50,15 @@
 > on) and against `origin/main` (still `fa5db49b`; the canonical sequence
 > still ends at `071_api_cost_controls.sql`, and PR #60 remains merged there
 > as `970922c5`, whose merge diff's only `sql/canonical` change is still the
+> addition of `062_review_ingestion_governance.sql`), and re-verified
+> 2026-09-29 against the same worktree (still at `ddec4e7d`, still two
+> commits ahead of `origin/main`'s `fa5db49b`; its `062` remains
+> byte-identical to `origin/main`'s, the governance service still differs
+> from `origin/main`'s only by the `fc76f3bb` docstring, and the governance
+> tests still differ from `origin/main`'s only by the `ddec4e7d` added
+> test) and against `origin/main` (still `fa5db49b`; the canonical sequence
+> still ends at `071_api_cost_controls.sql`, and PR #60 remains merged there
+> as `970922c5`, whose merge diff's only `sql/canonical` change is still the
 > addition of `062_review_ingestion_governance.sql`)):
 > this revision aligns the plan with the approved contract decisions and with
 > PR #60's **merged** foundation (`062_review_ingestion_governance.sql` +
@@ -467,7 +476,7 @@ public endpoint). This closes the provenance gap noted in
 | --- | --- | --- | --- |
 | **Provenance** | **IMPLEMENTED (062)** — `ingest.review_sources` + `community.ingest_runs` governance extension | Source identity, license class, terms version, run lifecycle (run_key receipt), received/processed/duplicate/quarantined counters, failure_category. | Public-safe counts + identity only; no bodies. |
 | **Normalized** | CURRENT — `community.posts` (existing) | Cleaned text (HTML-stripped, whitespace-normalized), language tag, dedup hash — the working set for enrichment. | Cleaned but still source text; not served to users. This is **pre-existing** LALA-next state, not something this plan or PR #60 adds; no review-body text is written into it by the governance slice. |
-| **Raw retention** | **BLOCKED_EXTERNAL** — no `community.posts_raw` table is created by this plan or by PR #60. | Original acquired payload / review bodies. | Raw review text is **not stored, served, logged, or embedded** anywhere in the current pipeline. A future `posts_raw`-style table requires a separate legal/retention/access decision (§10.2) and is explicitly out of scope until then. |
+| **Raw retention** | **BLOCKED_EXTERNAL** — no `community.posts_raw` table is created by this plan or by PR #60. | Original acquired payload / review bodies. | Raw review text is **not stored, served, or logged**: no raw-payload table exists, no endpoint returns bodies (§4.6/§25.2), and tools redact bodies from logs (§23). Nothing in the governance foundation (062/PR #60) stores, serves, logs, or embeds body/title/url text. The one current raw-text exposure is **pre-existing and outside that foundation**: the `community_post` RAG chunk path (`rag_index.py::_community_post_chunk`) still embeds the normalized `community.posts` body/title — the known G7 gap, TARGET for removal (§17) — and is not a raw-retention store. A future `posts_raw`-style table requires a separate legal/retention/access decision (§10.2) and is explicitly out of scope until then. |
 
 062 deliberately ships **no raw-body column** on `community.ingest_quarantine`
 and no `posts_raw` table. The governance service
@@ -806,7 +815,8 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
   run create/resume → receipt → quarantine → finalize sequence on a
   caller-supplied cursor, for callers that co-locate the aggregate upsert in
   the same transaction); verified in PR #60 branch's current source
-  (`ddec4e7d`, re-verified 2026-09-28), where `062` remains byte-identical
+  (`ddec4e7d`, re-verified 2026-09-28 and 2026-09-29), where `062` remains
+  byte-identical
   to `main`'s, the governance service differs from `main`'s only by a
   comment-only docstring clarifying that `quarantined_count` counts records
   *classified* into quarantine (`len(quarantined)`), not rows inserted, and
@@ -834,8 +844,9 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
 
 > **Migration-numbering rule (locked):** `062` is already in use by
 > `062_review_ingestion_governance.sql` on `main`, and the canonical sequence on
-> `main` has since continued past it (as re-verified 2026-09-28 against
-> `origin/main` (still `fa5db49b`), still through `071_api_cost_controls.sql`; the previous
+> `main` has since continued past it (as re-verified 2026-09-28 and again
+> 2026-09-29 against `origin/main` (still `fa5db49b`), still through
+> `071_api_cost_controls.sql`; the previous
 > "through `068_community_chat_durable_controls.sql`" anchor — like the
 > "through `067`" one before it — went stale after the fact, as
 > `069_identity_deletion_jobs.sql`, `070_community_durability.sql`, and
