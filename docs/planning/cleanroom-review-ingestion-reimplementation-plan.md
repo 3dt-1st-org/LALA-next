@@ -59,6 +59,15 @@
 > test) and against `origin/main` (still `fa5db49b`; the canonical sequence
 > still ends at `071_api_cost_controls.sql`, and PR #60 remains merged there
 > as `970922c5`, whose merge diff's only `sql/canonical` change is still the
+> addition of `062_review_ingestion_governance.sql`), and re-verified
+> 2026-09-30 against the same worktree (still at `ddec4e7d`, still two
+> commits ahead of `origin/main`'s `fa5db49b`; its `062` is still
+> byte-identical to `origin/main`'s, the governance service still differs
+> from `origin/main`'s only by the `fc76f3bb` docstring, and the governance
+> tests still differ from `origin/main`'s only by the `ddec4e7d` added
+> test) and against `origin/main` (still `fa5db49b`; the canonical sequence
+> still ends at `071_api_cost_controls.sql`, and PR #60 remains merged there
+> as `970922c5`, whose merge diff's only `sql/canonical` change is still the
 > addition of `062_review_ingestion_governance.sql`)):
 > this revision aligns the plan with the approved contract decisions and with
 > PR #60's **merged** foundation (`062_review_ingestion_governance.sql` +
@@ -698,8 +707,10 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
   Replay re-reads from the pre-existing normalized `community.posts` rows plus
   the 062 run ledger (§10) — **no raw store exists to read from**
   (BLOCKED_EXTERNAL) — and re-enriches/re-upserts idempotently (§18).
-- **Determinism:** same raw inputs + same `prompt_version` → same outputs (bar
-  model non-determinism, mitigated by low temperature + JSON schema). Each
+- **Determinism:** the same **normalized** inputs + the same `prompt_version`
+  → the same outputs (bar model non-determinism, mitigated by low temperature
+  + JSON schema). Replay determinism is defined over the normalized layer only
+  — no raw inputs are re-read, because none are retained (§10.2). Each
   replay records a new `ops.job_runs` row and a new `place_enrichments`
   generation (history preserved).
 - **Scope guard:** replay never re-acquires from external sources unless an
@@ -815,8 +826,8 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
   run create/resume → receipt → quarantine → finalize sequence on a
   caller-supplied cursor, for callers that co-locate the aggregate upsert in
   the same transaction); verified in PR #60 branch's current source
-  (`ddec4e7d`, re-verified 2026-09-28 and 2026-09-29), where `062` remains
-  byte-identical
+  (`ddec4e7d`, re-verified 2026-09-28, 2026-09-29, and 2026-09-30), where
+  `062` remains byte-identical
   to `main`'s, the governance service differs from `main`'s only by a
   comment-only docstring clarifying that `quarantined_count` counts records
   *classified* into quarantine (`len(quarantined)`), not rows inserted, and
@@ -844,8 +855,8 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
 
 > **Migration-numbering rule (locked):** `062` is already in use by
 > `062_review_ingestion_governance.sql` on `main`, and the canonical sequence on
-> `main` has since continued past it (as re-verified 2026-09-28 and again
-> 2026-09-29 against `origin/main` (still `fa5db49b`), still through
+> `main` has since continued past it (as re-verified 2026-09-28, 2026-09-29,
+> and 2026-09-30 against `origin/main` (still `fa5db49b`), still through
 > `071_api_cost_controls.sql`; the previous
 > "through `068_community_chat_durable_controls.sql`" anchor — like the
 > "through `067`" one before it — went stale after the fact, as
