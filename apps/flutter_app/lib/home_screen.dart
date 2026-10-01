@@ -1024,7 +1024,7 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
                 Text(
                   hasPlan
                       ? t(
-                          '${placeCount}개 장소가 일정에 있어요${weatherLabel == null ? '' : ' · $weatherLabel'}',
+                          '$placeCount개 장소가 일정에 있어요${weatherLabel == null ? '' : ' · $weatherLabel'}',
                           '$placeCount stops in your plan${weatherLabel == null ? '' : ' · $weatherLabel'}',
                         )
                       : weatherLabel ??
