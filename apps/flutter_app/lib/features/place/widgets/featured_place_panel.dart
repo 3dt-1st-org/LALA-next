@@ -142,19 +142,19 @@ class FeaturedPlacePanel extends StatelessWidget {
               showEvidence
                   ? lalaCopyMulti(
                       language,
-                      ko: '점수/근거 숨기기',
-                      en: 'Hide signals',
-                      ja: 'スコア・根拠を隠す',
-                      zhHans: '隐藏评分和依据',
-                      zhHant: '隱藏評分和依據',
+                      ko: '상세 접기',
+                      en: 'Hide details',
+                      ja: '詳細を閉じる',
+                      zhHans: '收起详情',
+                      zhHant: '收合詳情',
                     )
                   : lalaCopyMulti(
                       language,
-                      ko: '점수/근거 보기',
-                      en: 'Show signals',
-                      ja: 'スコア・根拠を見る',
-                      zhHans: '查看评分和依据',
-                      zhHant: '查看評分和依據',
+                      ko: '상세',
+                      en: 'Details',
+                      ja: '詳細',
+                      zhHans: '详情',
+                      zhHant: '詳情',
                     ),
             ),
             style: OutlinedButton.styleFrom(

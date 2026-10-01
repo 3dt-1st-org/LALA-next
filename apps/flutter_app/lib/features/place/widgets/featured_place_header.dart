@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
@@ -89,8 +90,8 @@ class FeaturedPlaceHeader extends StatelessWidget {
                       zhHant: '儲存',
                     ),
               onPressed: onToggleSaved,
-              color: saved ? const Color(0xFFC53030) : const Color(0xFF64748B),
-              icon: Icon(saved ? Icons.favorite : Icons.favorite_border),
+              color: saved ? LalaVisualColors.primary : const Color(0xFF64748B),
+              icon: Icon(saved ? Icons.bookmark : Icons.bookmark_border),
             ),
           ],
         ),

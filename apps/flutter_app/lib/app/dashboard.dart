@@ -1,3 +1,6 @@
+import 'package:lala_next_app/features/place/widgets/featured_place_panel.dart';
+import 'package:lala_next_app/features/map/widgets/draggable_place_dock.dart';
+
 // C3 최종: main.dart 에서 이관. 본문 불변(이동만).
 // _Dashboard -> public Dashboard. 하단 시트/오버레이를 조합하는 presentational 컴포지터.
 import 'dart:math' as math;
@@ -35,6 +38,8 @@ const String _buildSha = String.fromEnvironment('LALA_BUILD_SHA');
 class Dashboard extends StatelessWidget {
   const Dashboard({
     super.key,
+    this.mapDockDismissed = false,
+    this.onDismissMapDock,
     required this.loading,
     required this.error,
     required this.placeFailureKind,
@@ -104,6 +109,8 @@ class Dashboard extends StatelessWidget {
     this.onPlayDocentPlace,
   });
 
+  final bool mapDockDismissed;
+  final VoidCallback? onDismissMapDock;
   final bool loading;
   final String? error;
   // 추천(places) 로드 실패의 honest 종류(unavailable vs error). null = 실패 없음.
@@ -215,6 +222,14 @@ class Dashboard extends StatelessWidget {
       filteredTopPlaces,
       focusedClusterMemberIds,
     );
+    final emptyResultsConfirmed =
+        places?.data != null &&
+        topPlaces.isEmpty &&
+        !loading &&
+        placeFailureKind == null &&
+        !locationRequestInFlight &&
+        !locationFallbackNoticeVisible &&
+        !locationStartPromptVisible;
     final tourPlaces = restaurantTourPlaces(allPlaces);
     final topPlace =
         placeById(topPlaces, selectedPlaceId) ?? featuredPlace(topPlaces);
@@ -278,16 +293,10 @@ class Dashboard extends StatelessWidget {
             : 220.0;
         final dockShowsExpandedContent =
             isWide || topPlace == null || mapDockExpanded;
-        // B2: 선택 장소가 있으면 지도 우선 84dp 요약으로 시작한다. 오류/빈 상태와
-        // 데스크톱은 복구 액션과 정보 밀도를 보존하기 위해 기존 높이를 유지한다.
-        final bottomDockHeight = dockShowsExpandedContent
-            ? isWide
-                  ? 218.0
-                  : constraints.maxHeight < 700
-                  ? 164.0
-                  : 196.0
-            : MapBottomDock.mobileCollapsedHeight;
-        final floatingControlsBottom = bottomDockHeight + 16;
+        final bottomDockHeight = isWide ? 218.0 : 196.0;
+        final floatingControlsBottom = mapDockDismissed
+            ? 16.0
+            : bottomDockHeight + 16;
         // OpenVector credits must stay visible above the bottom dock (the
         // MapLibre attribution row lives at the container's bottom edge);
         // the Naver path keeps its existing full-bleed layout.
@@ -341,6 +350,7 @@ class Dashboard extends StatelessWidget {
                       ? math.min(780.0, constraints.maxWidth - 32)
                       : constraints.maxWidth - 24,
                   child: MapPlaceCarouselOverlay(
+                    emptyResultsConfirmed: emptyResultsConfirmed,
                     places: topPlaces,
                     source: effectiveSource,
                     language: uiLanguage,
@@ -349,7 +359,10 @@ class Dashboard extends StatelessWidget {
                     expanded: recommendationRailExpanded,
                     compact: compactMapChrome,
                     onSelectPlace: onSelectPlace,
-                    onReselectSelectedPlace: onClearPlaceSelection,
+                    onReselectSelectedPlace:
+                        mapDockDismissed && topPlace != null
+                        ? () => onSelectPlace(topPlace)
+                        : onClearPlaceSelection,
                     onToggleExpanded: onToggleRecommendationRail,
                     onPlayDocent: onPlayDocentPlace,
                   ),
@@ -475,16 +488,77 @@ class Dashboard extends StatelessWidget {
                   ),
                 ),
               ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Center(
-                child: SizedBox(
-                  width: isWide
-                      ? math.min(760.0, constraints.maxWidth - 32)
-                      : constraints.maxWidth,
-                  child: MapBottomDock(
+            // 모바일 비주얼 계약(00-ground-truth §6 / 01-flow §3): 컨트롤 스택은
+            // 우측 가장자리(mapGutter=12), 도크 핸들보다 16dp 위. 세로 44dp 타겟.
+            AnimatedPositioned(
+              right: 12,
+              bottom: floatingControlsBottom,
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOutCubic,
+              child: FloatingMapControls(
+                voiceEnabled: voiceEnabled,
+                autoDocentEnabled: autoDocentEnabled,
+                language: uiLanguage,
+                onToggleVoice: onToggleVoice,
+                onToggleAutoDocent: onToggleAutoDocent,
+                onReturnToLocation: onReturnToLocation,
+              ),
+            ),
+            if (!locationFallbackNoticeVisible)
+              AnimatedPositioned(
+                key: const ValueKey('map-utility-position'),
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeInOut,
+                left: 16,
+                right: 16,
+                top: floatingPillTop,
+                child: MapUtilityControlRow(
+                  dailyPlan: activeDailyPlan,
+                  weather: currentWeather,
+                  language: uiLanguage,
+                  onOpenPlanner: () => onOpenSheet(ActiveMapSheet.planner),
+                  onOpenWeather: () {
+                    onOpenSheet(ActiveMapSheet.weather);
+                    onRefreshWeather();
+                  },
+                ),
+              ),
+            if (!mapDockDismissed)
+              Positioned.fill(
+                child: DraggablePlaceDock(
+                  key: ValueKey(topPlace?.placeId),
+                  initialHeight: bottomDockHeight,
+                  onDismiss: onDismissMapDock ?? () {},
+                  builder: (context, controller, panelHeight) => MapBottomDock(
+                    onClose: onDismissMapDock,
+                    placeContent: topPlace == null
+                        ? null
+                        : FeaturedPlacePanel(
+                            place: topPlace,
+                            language: uiLanguage,
+                            weather: currentWeather,
+                            intervention: activeIntervention,
+                            dailyPlan: activeDailyPlan,
+                            docentScript: activeDocent,
+                            docentAudio: docentAudio,
+                            audioLoading: audioLoading,
+                            audioError: localizedUiMessage(
+                              audioError,
+                              uiLanguage,
+                            ),
+                            liveSpeechEnabled: liveSpeechEnabled,
+                            source: effectiveSource,
+                            showEvidence: showEvidence,
+                            savedPlaceIds: savedPlaceIds,
+                            detailDocentPlayedPlaceIds:
+                                detailDocentPlayedPlaceIds,
+                            onToggleEvidence: onToggleEvidence,
+                            onToggleSavedPlace: onToggleSavedPlace,
+                            onAddToPlan: () =>
+                                onOpenSheet(ActiveMapSheet.planner),
+                            onFetchAudio: onFetchAudio,
+                          ),
+                    emptyResultsConfirmed: emptyResultsConfirmed,
                     isWide: isWide,
                     places: topPlaces,
                     source: effectiveSource,
@@ -492,7 +566,8 @@ class Dashboard extends StatelessWidget {
                     dataAsOf: effectiveDataAsOf,
                     topPlace: topPlace,
                     uiLanguage: uiLanguage,
-                    height: bottomDockHeight,
+                    height: panelHeight,
+                    scrollController: controller,
                     expanded: dockShowsExpandedContent,
                     docentScript: activeDocent?.placeId == topPlace?.placeId
                         ? activeDocent?.script
@@ -522,57 +597,14 @@ class Dashboard extends StatelessWidget {
                         recommendationRecoveryPending,
                     onFetchAudio: onFetchAudio,
                     onAddToPlan: () => onOpenSheet(ActiveMapSheet.planner),
-                    onOpenDetail: () => onOpenSheet(ActiveMapSheet.detail),
+                    onOpenDetail: onToggleEvidence,
                     onRefresh: onRefresh,
                     onToggleEvidence: onToggleEvidence,
                     onToggleExpanded: onToggleMapDock,
                   ),
                 ),
               ),
-            ),
-            // 모바일 비주얼 계약(00-ground-truth §6 / 01-flow §3): 컨트롤 스택은
-            // 우측 가장자리(mapGutter=12), 도크 핸들보다 16dp 위. 세로 44dp 타겟.
-            AnimatedPositioned(
-              right: 12,
-              bottom: floatingControlsBottom,
-              duration: const Duration(milliseconds: 240),
-              curve: Curves.easeOutCubic,
-              child: FloatingMapControls(
-                voiceEnabled: voiceEnabled,
-                autoDocentEnabled: autoDocentEnabled,
-                language: uiLanguage,
-                onToggleVoice: onToggleVoice,
-                onToggleAutoDocent: onToggleAutoDocent,
-                onReturnToLocation: onReturnToLocation,
-              ),
-            ),
-            if (!locationFallbackNoticeVisible)
-              AnimatedPositioned(
-                key: const ValueKey('map-utility-position'),
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeInOut,
-                left: 16,
-                right: 16,
-                top: floatingPillTop,
-                child: Center(
-                  child: SizedBox(
-                    width: isWide
-                        ? math.min(760.0, constraints.maxWidth - 32)
-                        : constraints.maxWidth - 32,
-                    child: MapUtilityControlRow(
-                      dailyPlan: activeDailyPlan,
-                      weather: currentWeather,
-                      language: uiLanguage,
-                      onOpenPlanner: () => onOpenSheet(ActiveMapSheet.planner),
-                      onOpenWeather: () {
-                        onOpenSheet(ActiveMapSheet.weather);
-                        onRefreshWeather();
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            if (activeSheet != null)
+            if (activeSheet != null && activeSheet != ActiveMapSheet.detail)
               Positioned.fill(
                 child: MapDraggableSheet(
                   activeSheet: activeSheet!,

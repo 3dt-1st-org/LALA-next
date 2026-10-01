@@ -2,6 +2,7 @@ import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:flutter/material.dart';
 
 import '../../../shared/l10n/lala_copy.dart';
+
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../../shared/l10n/place_labels.dart';
@@ -22,6 +23,10 @@ class MapBottomDock extends StatelessWidget {
 
   const MapBottomDock({
     super.key,
+    this.scrollController,
+    this.onClose,
+    this.placeContent,
+    this.emptyResultsConfirmed = false,
     required this.isWide,
     required this.places,
     required this.source,
@@ -49,6 +54,10 @@ class MapBottomDock extends StatelessWidget {
     this.onToggleExpanded,
   });
 
+  final Widget? placeContent;
+  final VoidCallback? onClose;
+  final ScrollController? scrollController;
+  final bool emptyResultsConfirmed;
   final bool isWide;
   final List<LalaPlace> places;
   final String? source;
@@ -84,11 +93,14 @@ class MapBottomDock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentPlace = topPlace;
-    final showExpandedContent = currentPlace == null || expanded;
+    final showExpandedContent =
+        scrollController != null || currentPlace == null || expanded;
     return AnimatedContainer(
       key: const ValueKey('map-bottom-dock'),
       height: height,
-      duration: const Duration(milliseconds: 240),
+      duration: scrollController == null
+          ? const Duration(milliseconds: 240)
+          : Duration.zero,
       curve: Curves.easeOutCubic,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -185,20 +197,30 @@ class MapBottomDock extends StatelessWidget {
 
   Widget _buildExpandedContent(BuildContext context, LalaPlace? currentPlace) {
     return SingleChildScrollView(
+      controller: scrollController,
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.fromLTRB(16, 8, 16, isWide ? 14 : 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Center(
+          SizedBox(
+            height: 48,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Center(
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTap: currentPlace == null || isWide
+                    onTap:
+                        scrollController != null ||
+                            currentPlace == null ||
+                            isWide
                         ? null
                         : onToggleExpanded,
-                    onVerticalDragEnd: currentPlace == null || isWide
+                    onVerticalDragEnd:
+                        scrollController != null ||
+                            currentPlace == null ||
+                            isWide
                         ? null
                         : _handleHeaderDragEnd,
                     child: const Padding(
@@ -207,46 +229,60 @@ class MapBottomDock extends StatelessWidget {
                     ),
                   ),
                 ),
-              ),
-              if (!isWide && currentPlace != null && onToggleExpanded != null)
-                IconButton(
-                  key: const ValueKey('map-dock-collapse-toggle'),
-                  tooltip: lalaCopyMulti(
-                    uiLanguage,
-                    ko: '장소 요약 접기',
-                    en: 'Collapse place summary',
-                    ja: 'スポット概要を折りたたむ',
-                    zhHans: '收起地点摘要',
-                    zhHant: '收合地點摘要',
+                if (currentPlace != null || onClose != null)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (scrollController == null &&
+                            !isWide &&
+                            onToggleExpanded != null)
+                          IconButton(
+                            key: const ValueKey('map-dock-collapse-toggle'),
+                            tooltip: lalaCopyMulti(
+                              uiLanguage,
+                              ko: '장소 요약 접기',
+                              en: 'Collapse place summary',
+                              ja: 'スポット概要を折りたたむ',
+                              zhHans: '收起地点摘要',
+                              zhHant: '收合地點摘要',
+                            ),
+                            onPressed: onToggleExpanded,
+                            icon: const Icon(Icons.keyboard_arrow_down),
+                          ),
+                        if (onClose != null)
+                          IconButton(
+                            key: const ValueKey('map-dock-close'),
+                            onPressed: onClose,
+                            tooltip: lalaCopyMulti(
+                              uiLanguage,
+                              ko: '장소 패널 닫기',
+                              en: 'Close place panel',
+                              ja: 'スポットパネルを閉じる',
+                              zhHans: '关闭地点面板',
+                              zhHant: '關閉地點面板',
+                            ),
+                            icon: const Icon(Icons.close),
+                          ),
+                      ],
+                    ),
                   ),
-                  onPressed: onToggleExpanded,
-                  icon: const Icon(Icons.keyboard_arrow_down),
-                ),
-              TextButton.icon(
-                onPressed: currentPlace == null ? null : onOpenDetail,
-                icon: const Icon(Icons.open_in_full, size: 18),
-                label: Text(
-                  lalaCopyMulti(
-                    uiLanguage,
-                    ko: '상세',
-                    en: 'Details',
-                    ja: '詳細',
-                    zhHans: '详情',
-                    zhHant: '詳情',
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 4),
           if (currentPlace == null)
             EmptyDockContent(
+              emptyResultsConfirmed: emptyResultsConfirmed,
               language: uiLanguage,
               errorLabel: error,
               failureKind: placeFailureKind,
               recoveryPending: recommendationRecoveryPending,
               onRetry: onRefresh,
             )
+          else if (placeContent != null)
+            placeContent!
           else ...[
             Row(
               children: [
@@ -267,20 +303,16 @@ class MapBottomDock extends StatelessWidget {
                   ),
                 ),
                 TextButton(
-                  onPressed: () {
-                    if (!showEvidence) {
-                      onToggleEvidence();
-                    }
-                    onOpenDetail();
-                  },
+                  key: const ValueKey('map-dock-detail'),
+                  onPressed: onOpenDetail,
                   child: Text(
                     lalaCopyMulti(
                       uiLanguage,
-                      ko: '점수/근거',
-                      en: 'Signals',
-                      ja: 'スコア/根拠',
-                      zhHans: '评分/依据',
-                      zhHant: '評分/依據',
+                      ko: '상세',
+                      en: 'Details',
+                      ja: '詳細',
+                      zhHans: '详情',
+                      zhHant: '詳情',
                     ),
                     style: const TextStyle(fontWeight: FontWeight.w900),
                   ),

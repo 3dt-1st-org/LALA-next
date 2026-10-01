@@ -189,6 +189,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   bool _locationStartPromptVisible = false;
   bool _recommendationRailExpanded = true;
   bool _mapDockExpanded = false;
+  bool _mapDockDismissed = false;
   List<String> _focusedClusterMemberIds = const <String>[];
   final Set<String> _savedPlaceIds = <String>{};
   final Set<String> _detailDocentPlayedPlaceIds = <String>{};
@@ -974,6 +975,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     LalaEnvelope<LalaPlacesResponse>? loadedPlaces,
   }) {
     setState(() {
+      _mapDockDismissed = false;
       if (loadedPlaces != null) {
         _places = loadedPlaces;
       }
@@ -983,7 +985,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _selectedCategory = place.category;
       }
       _publishSelection(place.placeId);
-      _activeSheet = ActiveMapSheet.detail;
+      _activeSheet = null;
       _mapDockExpanded = false;
       _docentAudio = null;
       _audioError = null;
@@ -1793,6 +1795,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
                   locationStartPromptVisible: _locationStartPromptVisible,
                   recommendationRailExpanded: _recommendationRailExpanded,
                   mapDockExpanded: _mapDockExpanded,
+                  mapDockDismissed: _mapDockDismissed,
+                  onDismissMapDock: () => setState(() => _mapDockDismissed = true),
                   recommendationRecoveryPending: _recommendationRecoveryPending,
                   recommendationRecoveryAttempt:
                       _recommendationRecoveryAttempts,

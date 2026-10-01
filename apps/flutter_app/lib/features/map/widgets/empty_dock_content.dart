@@ -13,6 +13,7 @@ import '../../home/home_view_helpers.dart';
 class EmptyDockContent extends StatelessWidget {
   const EmptyDockContent({
     super.key,
+    this.emptyResultsConfirmed = false,
     required this.language,
     this.errorLabel,
     this.failureKind,
@@ -20,6 +21,7 @@ class EmptyDockContent extends StatelessWidget {
     this.onRetry,
   });
 
+  final bool emptyResultsConfirmed;
   final String language;
   final String? errorLabel;
 
@@ -82,6 +84,19 @@ class EmptyDockContent extends StatelessWidget {
             ? '即將自動重試，您也可以立即重試。'
             : (isUnavailable ? '請檢查網路後重試。' : '請稍後重試，也可以立即重試。'),
       );
+    } else if (emptyResultsConfirmed) {
+      iconBg = LalaVisualColors.primarySoft;
+      iconColor = LalaVisualColors.primary;
+      iconData = Icons.search_off;
+      title = noNearbyPlacesLabel(language);
+      subtitle = lalaCopyMulti(
+        language,
+        ko: '다른 지역이나 카테고리를 선택해 주세요.',
+        en: 'Try another region or category.',
+        ja: '別の地域やカテゴリを選んでください。',
+        zhHans: '请选择其他地区或类别。',
+        zhHant: '請選擇其他地區或類別。',
+      );
     } else {
       iconBg = LalaVisualColors.primarySoft;
       iconColor = LalaVisualColors.primary;
@@ -106,10 +121,14 @@ class EmptyDockContent extends StatelessWidget {
     final semanticsLabel = lalaCopyMulti(
       language,
       ko: hasError
-          ? (isUnavailable ? '서버 연결 불가. $title $subtitle' : '추천 불러오기 실패. $title $subtitle')
+          ? (isUnavailable
+                ? '서버 연결 불가. $title $subtitle'
+                : '추천 불러오기 실패. $title $subtitle')
           : '추천 준비 중. $title $subtitle',
       en: hasError
-          ? (isUnavailable ? 'Service unreachable. $title $subtitle' : 'Failed to load recommendations. $title $subtitle')
+          ? (isUnavailable
+                ? 'Service unreachable. $title $subtitle'
+                : 'Failed to load recommendations. $title $subtitle')
           : 'Preparing recommendations. $title $subtitle',
       ja: hasError
           ? (isUnavailable
@@ -117,15 +136,21 @@ class EmptyDockContent extends StatelessWidget {
                 : 'おすすめの読み込みに失敗しました。$title $subtitle')
           : 'おすすめを準備中です。$title $subtitle',
       zhHans: hasError
-          ? (isUnavailable ? '无法连接服务器。$title $subtitle' : '加载推荐失败。$title $subtitle')
+          ? (isUnavailable
+                ? '无法连接服务器。$title $subtitle'
+                : '加载推荐失败。$title $subtitle')
           : '正在准备推荐。$title $subtitle',
       zhHant: hasError
-          ? (isUnavailable ? '無法連線伺服器。$title $subtitle' : '載入推薦失敗。$title $subtitle')
+          ? (isUnavailable
+                ? '無法連線伺服器。$title $subtitle'
+                : '載入推薦失敗。$title $subtitle')
           : '正在準備推薦。$title $subtitle',
     );
     return Semantics(
       container: true,
-      label: semanticsLabel,
+      label: emptyResultsConfirmed && !hasError
+          ? '$title $subtitle'
+          : semanticsLabel,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

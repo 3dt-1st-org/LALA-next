@@ -592,12 +592,6 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
                                 Expanded(child: _searchField())
                               else
                                 const Spacer(),
-                              const SizedBox(width: 12),
-                              IconButton(
-                                tooltip: t('이용 안내', 'Travel guide'),
-                                onPressed: _guide,
-                                icon: const Icon(Icons.info_outline),
-                              ),
                             ],
                           ),
                         if (!wide) ...[

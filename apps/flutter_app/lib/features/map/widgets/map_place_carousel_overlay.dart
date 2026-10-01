@@ -12,6 +12,7 @@ import '../map_helpers.dart';
 class MapPlaceCarouselOverlay extends StatelessWidget {
   const MapPlaceCarouselOverlay({
     super.key,
+    this.emptyResultsConfirmed = false,
     required this.places,
     required this.source,
     required this.language,
@@ -25,6 +26,7 @@ class MapPlaceCarouselOverlay extends StatelessWidget {
     this.onPlayDocent,
   });
 
+  final bool emptyResultsConfirmed;
   final List<LalaPlace> places;
   final String? source;
   final String language;
@@ -143,7 +145,10 @@ class MapPlaceCarouselOverlay extends StatelessWidget {
                   children: [
                     const SizedBox(height: 8),
                     if (items.isEmpty)
-                      EmptyPlaceState(language: language)
+                      EmptyPlaceState(
+                        language: language,
+                        emptyResultsConfirmed: emptyResultsConfirmed,
+                      )
                     else
                       SizedBox(
                         key: const ValueKey('recommendation-rail-list'),
@@ -183,8 +188,6 @@ class MapPlaceCarouselOverlay extends StatelessWidget {
                                 compact: compact,
                                 onTap: explicitlySelected
                                     ? onReselectSelectedPlace
-                                    : selected
-                                    ? null
                                     : () => onSelectPlace(place),
                                 onPlayDocent: onPlayDocent == null
                                     ? null
