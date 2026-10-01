@@ -10,6 +10,7 @@ import subprocess
 import sys
 import urllib.request
 from pathlib import Path
+from urllib.parse import urlunsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / "runtime" / "desktop-dev"
@@ -91,7 +92,9 @@ def database_env(*, create: bool = False) -> dict[str, str]:
         LALA_POSTGRES_PASSWORD=password,
         LALA_POSTGRES_DB="lala_desktop",
         LALA_POSTGRES_PORT="55433",
-        DB_DSN=f"postgresql://lala_desktop:{password}@127.0.0.1:55433/lala_desktop",
+        DB_DSN=urlunsplit(
+            ("postgresql", f"lala_desktop:{password}@127.0.0.1:55433", "/lala_desktop", "", "")
+        ),
     )
     return env
 
