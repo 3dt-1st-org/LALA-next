@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:flutter/material.dart';
 
 import '../../../shared/l10n/lala_copy.dart';
@@ -151,7 +152,7 @@ class MapBottomDock extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
-                                color: const Color(0xFF111827),
+                                color: LalaVisualColors.ink,
                                 fontWeight: FontWeight.w900,
                               ),
                         ),
@@ -160,7 +161,7 @@ class MapBottomDock extends StatelessWidget {
                       Text(
                         '${currentPlace.distanceM}m',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF64748B),
+                          color: LalaVisualColors.muted,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -168,7 +169,7 @@ class MapBottomDock extends StatelessWidget {
                       const ExcludeSemantics(
                         child: Icon(
                           Icons.keyboard_arrow_up,
-                          color: Color(0xFF2B6CB0),
+                          color: LalaVisualColors.primary,
                         ),
                       ),
                     ],
@@ -260,7 +261,7 @@ class MapBottomDock extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: const Color(0xFF111827),
+                      color: LalaVisualColors.ink,
                       fontWeight: FontWeight.w900,
                     ),
                   ),

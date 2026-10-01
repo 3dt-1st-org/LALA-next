@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:flutter/material.dart';
 
 /// 작은 상태 필 버튼(C3 추출 — main.dart 의 _SmallStatusPill).
@@ -52,8 +53,8 @@ class SmallStatusPill extends StatelessWidget {
                   icon,
                   size: 16,
                   color: active
-                      ? const Color(0xFF2B6CB0)
-                      : const Color(0xFF64748B),
+                      ? LalaVisualColors.primary
+                      : LalaVisualColors.muted,
                 ),
                 const SizedBox(width: 6),
                 Flexible(
@@ -62,7 +63,7 @@ class SmallStatusPill extends StatelessWidget {
                     maxLines: maxLines,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Color(0xFF0F172A),
+                      color: LalaVisualColors.ink,
                       fontWeight: FontWeight.w800,
                       fontSize: 12,
                     ),

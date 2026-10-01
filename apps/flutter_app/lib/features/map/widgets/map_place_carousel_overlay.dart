@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
@@ -118,7 +119,7 @@ class MapPlaceCarouselOverlay extends StatelessWidget {
                               '${items.length}處 · ${sourceLabel(source, language: language)}',
                         ),
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: const Color(0xFF64748B),
+                          color: LalaVisualColors.muted,
                           fontWeight: FontWeight.w800,
                         ),
                         overflow: TextOverflow.ellipsis,

@@ -36,7 +36,7 @@ void main() {
         expect(categoryColorHex('restaurant'), '#F4B740');
         expect(categoryColorHex('event'), '#1769CF');
         expect(categoryColorHex('culture_venue'), '#0B8478');
-        expect(categoryColorHex('unknown'), '#162033');
+        expect(categoryColorHex('unknown'), '#292725');
       },
     );
 

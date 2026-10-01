@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:flutter/material.dart';
 
 import '../../../shared/l10n/lala_copy.dart';
@@ -39,10 +40,10 @@ class EmptyDockContent extends StatelessWidget {
     final String subtitle;
     if (hasError) {
       iconBg = isUnavailable
-          ? const Color(0xFFEAF2FF)
+          ? LalaVisualColors.primarySoft
           : const Color(0xFFFFF3E8);
       iconColor = isUnavailable
-          ? const Color(0xFF2B6CB0)
+          ? LalaVisualColors.primary
           : const Color(0xFFB45309);
       iconData = isUnavailable
           ? Icons.wifi_off_rounded
@@ -82,8 +83,8 @@ class EmptyDockContent extends StatelessWidget {
             : (isUnavailable ? '請檢查網路後重試。' : '請稍後重試，也可以立即重試。'),
       );
     } else {
-      iconBg = const Color(0xFFEAF2FF);
-      iconColor = const Color(0xFF2B6CB0);
+      iconBg = LalaVisualColors.primarySoft;
+      iconColor = LalaVisualColors.primary;
       iconData = Icons.travel_explore;
       title = lalaCopyMulti(
         language,
@@ -142,7 +143,7 @@ class EmptyDockContent extends StatelessWidget {
                 Text(
                   title,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: const Color(0xFF111827),
+                    color: LalaVisualColors.ink,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -152,7 +153,7 @@ class EmptyDockContent extends StatelessWidget {
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: LalaVisualColors.muted,
                     fontWeight: FontWeight.w700,
                   ),
                 ),

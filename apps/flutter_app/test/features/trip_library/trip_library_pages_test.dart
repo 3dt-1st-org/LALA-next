@@ -64,7 +64,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('trip-settings-page')), findsOneWidget);
-      expect(find.text('이번 여행 설정'), findsOneWidget);
+      expect(find.text('이번 일정 조건'), findsOneWidget);
       await tester.tap(find.text('알차게'));
       await tester.drag(find.byType(ListView), const Offset(0, -1200));
       await tester.pumpAndSettle();

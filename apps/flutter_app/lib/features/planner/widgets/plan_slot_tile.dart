@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
@@ -155,7 +156,7 @@ class PlanSlotTile extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(color: LalaVisualColors.line),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -265,7 +266,7 @@ class PlanSlotTile extends StatelessWidget {
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF1F5F9),
+                            color: LalaVisualColors.cardSoft,
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(color: closureBadgeColor),
                           ),
@@ -298,7 +299,7 @@ class PlanSlotTile extends StatelessWidget {
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
+                              color: LalaVisualColors.cardSoft,
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(color: closingSoonColor),
                             ),
@@ -366,7 +367,7 @@ class PlanSlotTile extends StatelessWidget {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEBF4FE),
+                        color: LalaVisualColors.primarySoft,
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Row(
@@ -374,7 +375,7 @@ class PlanSlotTile extends StatelessWidget {
                           Icon(
                             Icons.swap_horiz,
                             size: 12,
-                            color: const Color(0xFF2B6CB0),
+                            color: LalaVisualColors.primary,
                           ),
                           const SizedBox(width: 3),
                           Expanded(
@@ -384,7 +385,7 @@ class PlanSlotTile extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.labelSmall
                                   ?.copyWith(
-                                    color: const Color(0xFF2B6CB0),
+                                    color: LalaVisualColors.primary,
                                     fontWeight: FontWeight.w700,
                                   ),
                             ),
@@ -522,9 +523,9 @@ class _PlanSlotMetaChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
+        color: LalaVisualColors.cardSoft,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: LalaVisualColors.line),
       ),
       child: Text(
         text,
@@ -600,7 +601,7 @@ class _VisitBadge extends StatelessWidget {
     final chip = Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
+        color: LalaVisualColors.cardSoft,
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: color),
       ),
@@ -664,9 +665,9 @@ class _SavedMarkerChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
+        color: LalaVisualColors.cardSoft,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: LalaVisualColors.line),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -706,9 +707,9 @@ class _SpendBandChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
+        color: LalaVisualColors.cardSoft,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: LalaVisualColors.line),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

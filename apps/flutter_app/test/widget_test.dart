@@ -1,3 +1,5 @@
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -28,11 +30,14 @@ import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   // RegionContextStore and the Lane 1 cross-tab holders (SelectedPlaceStore,
   // PlanContextStore) are process-local singletons; reset them before each test
   // so a selection/plan/region made in one test cannot leak into another tab's
   // state. Mirrors the existing region reset for the new sibling holders.
-  setUp(() {
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    await TravelPreferencesStore.instance.clear();
     RegionContextStore.clear();
     SelectedPlaceStore.clear();
     PlanContextStore.clear();
@@ -2505,7 +2510,7 @@ void main() {
     ) async {
       await pumpTabAt(tester, 360, planTab());
       expect(find.text('오늘 일정'), findsOneWidget);
-      expect(find.byTooltip('달력'), findsOneWidget);
+      expect(find.byTooltip('새로고침'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('plan-slot-hwaseong-haenggung')),
         findsOneWidget,
@@ -2517,7 +2522,7 @@ void main() {
     ) async {
       await pumpTabAt(tester, 430, planTab());
       expect(find.text('오늘 일정'), findsOneWidget);
-      expect(find.byTooltip('달력'), findsOneWidget);
+      expect(find.byTooltip('새로고침'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('plan-slot-hwaseong-haenggung')),
         findsOneWidget,
@@ -2529,7 +2534,7 @@ void main() {
     ) async {
       await pumpTabAt(tester, 768, planTab());
       expect(find.text('오늘 일정'), findsOneWidget);
-      expect(find.byTooltip('달력'), findsOneWidget);
+      expect(find.byTooltip('새로고침'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('plan-slot-hwaseong-haenggung')),
         findsOneWidget,

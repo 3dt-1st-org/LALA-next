@@ -1,3 +1,4 @@
+import 'package:lala_next_app/features/map/domain/active_map_sheet.dart';
 // Real-Dashboard attribution binding regression: the actual Dashboard map
 // canvas must end exactly at the place dock's top for openVector locales
 // (credits row never behind the dock) and stay full-bleed for KO. This must
@@ -49,7 +50,13 @@ LalaEnvelope<LalaPlacesResponse> _placesEnvelope() {
 Widget _host(Widget child) =>
     MaterialApp(home: Scaffold(body: child), debugShowCheckedModeBanner: false);
 
-Dashboard _dashboard(String locale, {required bool dockExpanded}) => Dashboard(
+Dashboard _dashboard(
+  String locale, {
+  required bool dockExpanded,
+  bool railExpanded = false,
+  ActiveMapSheet? sheet,
+  VoidCallback? closeSheet,
+}) => Dashboard(
   loading: false,
   error: null,
   placeFailureKind: null,
@@ -70,7 +77,7 @@ Dashboard _dashboard(String locale, {required bool dockExpanded}) => Dashboard(
   naverMapClientId: '',
   selectedCategory: 'all',
   selectedPlaceId: 'p1',
-  activeSheet: null,
+  activeSheet: sheet,
   uiLanguage: locale,
   voiceEnabled: false,
   autoDocentEnabled: false,
@@ -82,7 +89,7 @@ Dashboard _dashboard(String locale, {required bool dockExpanded}) => Dashboard(
   locationRequestInFlight: false,
   locationFallbackNoticeVisible: false,
   locationStartPromptVisible: false,
-  recommendationRailExpanded: false,
+  recommendationRailExpanded: railExpanded,
   mapDockExpanded: dockExpanded,
   recommendationRecoveryPending: false,
   recommendationRecoveryAttempt: 0,
@@ -100,7 +107,7 @@ Dashboard _dashboard(String locale, {required bool dockExpanded}) => Dashboard(
   onToggleRecommendationRail: () {},
   onToggleMapDock: () {},
   onOpenSheet: (_) {},
-  onCloseSheet: () {},
+  onCloseSheet: closeSheet ?? () {},
   onToggleVoice: () {},
   onToggleAutoDocent: () {},
   onToggleEvidence: () {},
@@ -170,6 +177,65 @@ void main() {
       expect(map.bottom, size.height);
     },
   );
+
+  testWidgets('utility buttons move up when recommendations collapse', (
+    tester,
+  ) async {
+    for (final size in sizes.values) {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      await tester.pumpWidget(
+        _host(_dashboard('ko', dockExpanded: false, railExpanded: true)),
+      );
+      await tester.pumpAndSettle();
+      final position = find.byKey(const ValueKey('map-utility-position'));
+      final expandedTop = tester.widget<AnimatedPositioned>(position).top!;
+      await tester.pumpWidget(_host(_dashboard('ko', dockExpanded: false)));
+      await tester.pumpAndSettle();
+      final collapsedTop = tester.widget<AnimatedPositioned>(position).top!;
+      expect(collapsedTop, lessThan(expandedTop));
+      expect(collapsedTop, size.width >= 860 ? 122 : 112);
+      expect(tester.takeException(), isNull);
+    }
+    tester.view.reset();
+  });
+
+  testWidgets('planner sheet expands fully and dismisses by dragging down', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    var closed = false;
+    await tester.pumpWidget(
+      _host(
+        _dashboard(
+          'ko',
+          dockExpanded: false,
+          sheet: ActiveMapSheet.planner,
+          closeSheet: () => closed = true,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    final sheet = find.byType(DraggableScrollableSheet);
+    final list = find
+        .descendant(of: sheet, matching: find.byType(ListView))
+        .first;
+    await tester.dragFrom(
+      tester.getTopLeft(list) + const Offset(100, 20),
+      const Offset(0, -600),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(tester.getTopLeft(list).dy, closeTo(0, 1));
+    await tester.dragFrom(
+      tester.getTopLeft(list) + const Offset(100, 20),
+      const Offset(0, 1000),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(closed, isTrue);
+    expect(tester.takeException(), isNull);
+  });
 
   // UNVERIFIED (honest gap): long/wrapped MapLibre credits rows live in the
   // embed DOM and cannot be measured from a Flutter widget test, and

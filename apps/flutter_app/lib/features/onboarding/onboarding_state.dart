@@ -139,9 +139,21 @@ class OnboardingState {
     }
   }
 
-  /// 상태를 초기값(미완료)으로 되돌린다. 테스트/재온보딩에 사용.
-  /// 재온보딩은 영속화된 완료/선택도 함께 지워 restart 로 이전 완료 상태가
-  /// 부활하지 않도록 한다. region 영속화는 RegionContextStore.clear() 가 담당.
+  /// Revisit onboarding without deleting saved trips, preferences or language.
+  static Future<void> restartKeepingChoices() async {
+    final prefs = _prefs;
+    if (prefs != null) {
+      await prefs.writeOnboarding(
+        completed: false,
+        language: _language.value,
+        touristTypeCode: _encodeTouristType(_touristType),
+      );
+    }
+    _completed.value = false;
+  }
+
+  /// Clear onboarding choices for tests or an explicit reset.
+  /// Region persistence is separately managed by RegionContextStore.clear().
   static void reset() {
     _touristType = OnboardingTouristType.localTourist;
     _language.value = 'ko';

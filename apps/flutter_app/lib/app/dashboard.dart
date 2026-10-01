@@ -259,7 +259,9 @@ class Dashboard extends StatelessWidget {
         final compactMapChrome =
             !isWide &&
             (constraints.maxWidth <= 430 || constraints.maxHeight < 760);
-        final floatingPillTop = isWide
+        final floatingPillTop = !recommendationRailExpanded
+            ? (isWide ? 122.0 : 112.0)
+            : isWide
             ? 264.0
             : compactMapChrome
             ? 242.0
@@ -545,7 +547,10 @@ class Dashboard extends StatelessWidget {
               ),
             ),
             if (!locationFallbackNoticeVisible)
-              Positioned(
+              AnimatedPositioned(
+                key: const ValueKey('map-utility-position'),
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeInOut,
                 left: 16,
                 right: 16,
                 top: floatingPillTop,

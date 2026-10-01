@@ -64,21 +64,22 @@ abstract final class LalaVisualTokens {
   static const double bottomNavMaxSafeInset = 16;
 }
 
-/// 계약 색상 토큰. 거의 흰 canvas + 선명한 action blue + 카테고리 다색을 함께 써서
-/// 근거 중심 화면이 회색 일변도로 보이지 않게 한다.
+/// DESIGN.md 공통 색상: 흰 배경, 옥색 포인트, 먹색 글자.
 abstract final class LalaVisualColors {
   const LalaVisualColors._();
 
-  static const Color primaryBlue = Color(0xFF0B67D8);
-  static const Color primaryPressed = Color(0xFF0754B5);
-  static const Color primarySoft = Color(0xFFEAF3FF);
-  static const Color ink = Color(0xFF162033);
-  static const Color muted = Color(0xFF5E6B7E);
-  static const Color line = Color(0xFFDCE5F0);
-  static const Color surface = Color(0xFFF8FBFF);
+  static const Color primary = Color(0xFF31786C);
+  static const Color primaryBlue = primary;
+  static const Color primaryPressed = primary;
+  static const Color primarySoft = Color(0xFFE4F1ED);
+  static const Color ink = Color(0xFF292725);
+  static const Color muted = Color(0xFF70736F);
+  static const Color line = Color(0xFFDCE9E4);
+  static const Color surface = Color(0xFFFFFFFF);
   static const Color card = Color(0xFFFFFFFF);
-  static const Color disabledFill = Color(0xFFC9DCF5);
-  static const Color disabledInk = Color(0xFF4D6685);
+  static const Color cardSoft = Color(0xFFF4F8F6);
+  static const Color disabledFill = Color(0xFFE4F1ED);
+  static const Color disabledInk = Color(0xFF70736F);
 
   // --- category colors (chip/pin) ---
   static const Color attraction = Color(0xFFD93C56);

@@ -2,6 +2,7 @@
 
 // C3 최종: main.dart 에서 이관. 본문 불변(이동만).
 // LalaHomePage + _LalaHomePageState. 상태 관리는 이번엔 그대로(setState 유지).
+import 'package:lala_next_app/app/lala_product_scope.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -31,6 +32,7 @@ import 'package:lala_next_app/features/location/widgets/permanently_denied_recov
 import 'package:lala_next_app/features/map/domain/active_map_sheet.dart';
 import 'package:lala_next_app/features/map/map_helpers.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
+import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
 import 'package:lala_next_app/features/planning/domain/plan_preference_context.dart';
 import 'package:lala_next_app/features/settings/widgets/user_settings_sheet.dart';
 import 'package:lala_next_app/features/settings/data/privacy_settings_store.dart';
@@ -241,6 +243,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
   @override
   void initState() {
     super.initState();
+    TravelPreferencesStore.instance.addListener(_handleDocentPreferenceChanged);
+    _autoDocentEnabled = TravelPreferencesStore.instance.value.docentAutoplay;
+    unawaited(TravelPreferencesStore.instance.ensureLoaded());
     final config = widget.initialConfig;
     _baseConfig = config;
     // 온보딩/다른 탭에서 확정된 컨텍스트(수동 선택 또는 현재 위치)가 있으면 그 좌표로
@@ -374,6 +379,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
 
   @override
   void dispose() {
+    TravelPreferencesStore.instance.removeListener(
+      _handleDocentPreferenceChanged,
+    );
     _mapCameraDebounce?.cancel();
     _interventionToastTimer?.cancel();
     _recommendationRecoveryTimer?.cancel();
@@ -1451,17 +1459,45 @@ class _LalaHomePageState extends State<LalaHomePage> {
     });
   }
 
-  void _toggleAutoDocent() {
-    final willEnable = !_autoDocentEnabled;
-    final nearestPlace = willEnable
+  void _handleDocentPreferenceChanged() {
+    if (!mounted) return;
+    final enabled = TravelPreferencesStore.instance.value.docentAutoplay;
+    if (_autoDocentEnabled == enabled) return;
+    final nearestPlace = enabled
         ? _nextAutoDocentPlace(_visiblePlacesForCurrentCategory())
         : null;
     setState(() {
-      _autoDocentEnabled = willEnable;
+      _autoDocentEnabled = enabled;
       if (nearestPlace != null) {
-        _applyAutoDocentPlace(nearestPlace, closeActiveSheet: true);
+        _applyAutoDocentPlace(nearestPlace, closeActiveSheet: false);
       }
     });
+  }
+
+  Future<void> _toggleAutoDocent() async {
+    final store = TravelPreferencesStore.instance;
+    try {
+      await store.ensureLoaded();
+      await store.save(
+        store.value.copyWith(docentAutoplay: !_autoDocentEnabled),
+      );
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            lalaCopyMulti(
+              _uiLanguage,
+              ko: '자동 안내 설정을 저장하지 못했어요. 다시 시도해 주세요.',
+              en: 'Could not save automatic guidance. Please try again.',
+              ja: '自動案内の設定を保存できませんでした。',
+              zhHans: '无法保存自动导览设置，请重试。',
+              zhHant: '無法儲存自動導覽設定，請重試。',
+            ),
+          ),
+        ),
+      );
+    }
   }
 
   void _toggleEvidence() {
@@ -1640,6 +1676,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 
   Future<void> _openSettingsSheet(BuildContext context) async {
+    if (LalaProductScope.isMeetingMvp(context)) {
+      await _openManualLocationSheet(context);
+      return;
+    }
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
