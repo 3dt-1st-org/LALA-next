@@ -73,21 +73,21 @@ class FeaturedPlaceHeader extends StatelessWidget {
             IconButton(
               tooltip: saved
                   ? lalaCopyMulti(
-  language,
-  ko: '저장됨',
-  en: 'Saved',
-  ja: '保存済み',
-  zhHans: '已保存',
-  zhHant: '已儲存',
-)
+                      language,
+                      ko: '저장됨',
+                      en: 'Saved',
+                      ja: '保存済み',
+                      zhHans: '已保存',
+                      zhHant: '已儲存',
+                    )
                   : lalaCopyMulti(
-      language,
-      ko: '저장',
-      en: 'Save',
-      ja: '保存',
-      zhHans: '保存',
-      zhHant: '儲存',
-    ),
+                      language,
+                      ko: '저장',
+                      en: 'Save',
+                      ja: '保存',
+                      zhHans: '保存',
+                      zhHant: '儲存',
+                    ),
               onPressed: onToggleSaved,
               color: saved ? const Color(0xFFC53030) : const Color(0xFF64748B),
               icon: Icon(saved ? Icons.favorite : Icons.favorite_border),
@@ -116,7 +116,9 @@ class FeaturedPlaceHeader extends StatelessWidget {
           children: [
             InlineIconText(
               icon: Icons.directions_walk,
-              label: '${place.distanceM}m',
+              label: place.distanceKnown
+                  ? '${place.distanceM}m'
+                  : (language == 'ko' ? '거리 정보 없음' : 'Distance unavailable'),
             ),
             // V1-RC2: per-place 신선도(텍스트만 — 검색 타일과 동일 스타일/원문).
             PlaceFreshnessText(place: place),
@@ -124,24 +126,24 @@ class FeaturedPlaceHeader extends StatelessWidget {
               InlineIconText(
                 icon: Icons.explore_outlined,
                 label: lalaCopyMulti(
-  language,
-  ko: '로컬 추천',
-  en: 'Local pick',
-  ja: 'ローカルのおすすめ',
-  zhHans: '本地精选',
-  zhHant: '在地精選',
-),
+                  language,
+                  ko: '로컬 추천',
+                  en: 'Local pick',
+                  ja: 'ローカルのおすすめ',
+                  zhHans: '本地精选',
+                  zhHant: '在地精選',
+                ),
               ),
             if (showEvidence) ...[
               Text(
                 lalaCopyMulti(
-  language,
-  ko: '로컬 점수',
-  en: 'Local score',
-  ja: 'ローカルスコア',
-  zhHans: '本地评分',
-  zhHant: '在地評分',
-),
+                  language,
+                  ko: '로컬 점수',
+                  en: 'Local score',
+                  ja: 'ローカルスコア',
+                  zhHans: '本地评分',
+                  zhHant: '在地評分',
+                ),
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: const Color(0xFF1A202C),
                   fontWeight: FontWeight.w900,

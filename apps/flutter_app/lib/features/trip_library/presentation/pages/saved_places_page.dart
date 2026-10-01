@@ -93,17 +93,23 @@ class _SavedPlacesPageState extends State<SavedPlacesPage> {
     );
     final backend = widget.backendFactory(config);
     try {
-      final response = await backend.getPlaces();
-      final data = response.data;
-      if (!response.ok || data == null) {
-        throw StateError('projection unavailable');
+      final places = <String, LalaPlace>{};
+      final requested = ids.toList();
+      for (var offset = 0; offset < requested.length; offset += 100) {
+        final end = (offset + 100).clamp(0, requested.length);
+        final response = await backend.lookupPlaces(
+          requested.sublist(offset, end),
+        );
+        if (!response.ok || response.data == null) {
+          throw StateError('projection unavailable');
+        }
+        for (final place in response.data!.places) {
+          if (ids.contains(place.placeId)) places[place.placeId] = place;
+        }
+        if (!mounted || epoch != _loadEpoch) return;
       }
-      if (!mounted || epoch != _loadEpoch) return;
       setState(() {
-        _places = <String, LalaPlace>{
-          for (final place in data.places)
-            if (ids.contains(place.placeId)) place.placeId: place,
-        };
+        _places = places;
         _status = _SavedProjectionStatus.ready;
       });
     } on Object {

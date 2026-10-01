@@ -241,6 +241,36 @@ class LalaApiClient {
     );
   }
 
+  /// ID lookup is independent of the current map viewport and user location.
+  Future<LalaEnvelope<LalaPlaceLookup>> lookupPlaces({
+    required List<String> placeIds,
+    String language = 'ko',
+    bool includeScores = true,
+  }) async {
+    if (placeIds.isEmpty || placeIds.length > 100) {
+      throw ArgumentError.value(
+          placeIds.length, 'placeIds', 'Expected 1 to 100 IDs');
+    }
+    final response = await _request('POST', '/api/v1/places/lookup',
+        query: {'language': language, 'include_scores': '$includeScores'},
+        body: {'place_ids': placeIds},
+        timeout: readTimeout);
+    return _envelopeFromResponse<LalaPlaceLookup>(response,
+        parseData: LalaPlaceLookup.fromJsonObject);
+  }
+
+  Future<LalaEnvelope<LalaPlace>> getPlace(
+      {required String placeId,
+      String language = 'ko',
+      bool includeScores = true}) async {
+    final response = await _request(
+        'GET', '/api/v1/places/${Uri.encodeComponent(placeId)}',
+        query: {'language': language, 'include_scores': '$includeScores'},
+        timeout: readTimeout);
+    return _envelopeFromResponse<LalaPlace>(response,
+        parseData: LalaPlace.fromJsonObject);
+  }
+
   /// Local Signals public projection. The server returns only published,
   /// approved, public first-party signal data; callers must not broaden this
   /// parser into author, moderation, location, or third-party evidence fields.
@@ -817,7 +847,7 @@ class LalaApiClient {
   }
 
   Future<LalaEnvelope<LalaTripPreferenceOverrideDocument?>>
-  getTripPreferenceOverride({
+      getTripPreferenceOverride({
     required String planDate,
     String? requestId,
     Duration? timeout,
@@ -837,7 +867,7 @@ class LalaApiClient {
   }
 
   Future<LalaEnvelope<LalaTripPreferenceOverrideDocument>>
-  putTripPreferenceOverride({
+      putTripPreferenceOverride({
     required String planDate,
     required int expectedRevision,
     required Map<String, dynamic> override,
@@ -1315,9 +1345,8 @@ class LalaApiClient {
     final raw = resp.data;
     if (raw is! Map<String, dynamic>) {
       throw LalaApiException(
-        code: status < 200 || status >= 300
-            ? 'HTTP_$status'
-            : 'INVALID_RESPONSE',
+        code:
+            status < 200 || status >= 300 ? 'HTTP_$status' : 'INVALID_RESPONSE',
         message: 'Expected a JSON object response.',
         statusCode: status,
         retryable: status >= 500,
@@ -1483,9 +1512,8 @@ class LalaEnvelope<T> {
     T Function(Object?)? parseData,
   }) {
     final rawMeta = json['meta'];
-    final meta = rawMeta is Map<String, dynamic>
-        ? rawMeta
-        : <String, dynamic>{};
+    final meta =
+        rawMeta is Map<String, dynamic> ? rawMeta : <String, dynamic>{};
     final rawData = json['data'];
     final data = parseData == null
         ? (rawData is T ? rawData : null)
@@ -1577,6 +1605,28 @@ class LalaTravelPreferencesDocument {
   }
 }
 
+class LalaPlaceLookup {
+  const LalaPlaceLookup(
+      {required this.places,
+      required this.missingPlaceIds,
+      required this.source,
+      this.dataAsOf});
+  final List<LalaPlace> places;
+  final List<String> missingPlaceIds;
+  final String source;
+  final String? dataAsOf;
+  static LalaPlaceLookup fromJsonObject(Object? value) {
+    final json = _asMap(value);
+    return LalaPlaceLookup(
+      places: _asList(json['places']).map(LalaPlace.fromJsonObject).toList(),
+      missingPlaceIds:
+          _asList(json['missing_place_ids']).whereType<String>().toList(),
+      source: _asString(json['source']),
+      dataAsOf: _asOptionalString(json['data_as_of']),
+    );
+  }
+}
+
 class LalaPlacesResponse {
   const LalaPlacesResponse({
     required this.count,
@@ -1651,6 +1701,7 @@ class LalaPlace {
     required this.lng,
     required this.address,
     required this.distanceM,
+    this.distanceKnown = true,
     required this.source,
     this.nameKo,
     this.nameEn,
@@ -1676,6 +1727,7 @@ class LalaPlace {
   final double lng;
   final String address;
   final int distanceM;
+  final bool distanceKnown;
   final String source;
   final String? nameKo;
   final String? nameEn;
@@ -1706,6 +1758,7 @@ class LalaPlace {
       lng: _asDouble(json['lng']),
       address: _asString(json['address']),
       distanceM: _asInt(json['distance_m']),
+      distanceKnown: json['distance_m'] is num,
       source: _asString(json['source']),
       nameKo: _asOptionalString(json['name_ko']),
       nameEn: _asOptionalString(json['name_en']),
@@ -2123,14 +2176,14 @@ class LalaPlanPreferenceContext {
 
   @override
   int get hashCode => Object.hash(
-    indoorOutdoor,
-    weatherSensitivity,
-    walkingBand,
-    maxOneWayMinutes,
-    Object.hashAll(foodCuisines),
-    budgetBand,
-    excludeClosingSoon,
-  );
+        indoorOutdoor,
+        weatherSensitivity,
+        walkingBand,
+        maxOneWayMinutes,
+        Object.hashAll(foodCuisines),
+        budgetBand,
+        excludeClosingSoon,
+      );
 }
 
 /// CP1: 서버가 보고한 선호 효과 한 건(applied 여부 + 기계 사유 코드 + 안내 문구).

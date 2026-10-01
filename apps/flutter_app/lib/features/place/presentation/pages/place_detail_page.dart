@@ -110,7 +110,7 @@ class _PlaceDetailPageState extends State<PlaceDetailPage> {
         lookupBackend = widget.backendFactory(
           widget.initialConfig.copyWith(category: 'all', lang: language),
         );
-        final response = await lookupBackend.getPlaces();
+        final response = await lookupBackend.lookupPlaces([widget.placeId]);
         final payload = response.data;
         if (!response.ok || payload == null) {
           throw StateError('place lookup unavailable');

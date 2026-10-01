@@ -279,7 +279,7 @@ Map<String, dynamic> _encodePlace(LalaPlace p) {
     'lat': p.lat,
     'lng': p.lng,
     'address': p.address,
-    'distance_m': p.distanceM,
+    'distance_m': p.distanceKnown ? p.distanceM : null,
     'source': p.source,
     if (p.nameKo != null) 'name_ko': p.nameKo,
     if (p.nameEn != null) 'name_en': p.nameEn,
