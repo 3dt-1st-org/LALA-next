@@ -969,7 +969,8 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
 
   Widget _travelStatusCard() {
     final slots = widget.dailyPlan?.slots ?? const <LalaPlanSlot>[];
-    final hasPlan = slots.isNotEmpty;
+    final placeCount = slots.where((slot) => slot.place != null).length;
+    final hasPlan = placeCount > 0;
     final regionLabel =
         widget.region?.label(widget.language) ??
         (widget.travelMode == 'explore_now'
@@ -1023,8 +1024,8 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
                 Text(
                   hasPlan
                       ? t(
-                          '${slots.length}개 장소가 일정에 있어요${weatherLabel == null ? '' : ' · $weatherLabel'}',
-                          '${slots.length} stops in your plan${weatherLabel == null ? '' : ' · $weatherLabel'}',
+                          '${placeCount}개 장소가 일정에 있어요${weatherLabel == null ? '' : ' · $weatherLabel'}',
+                          '$placeCount stops in your plan${weatherLabel == null ? '' : ' · $weatherLabel'}',
                         )
                       : weatherLabel ??
                             t(
