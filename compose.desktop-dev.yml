@@ -1,0 +1,7 @@
+# Override compose.local.yml with a separate desktop development container/volume.
+services:
+  postgres:
+    container_name: lala-next-desktop-dev-postgres
+volumes:
+  lala-next-postgres-data:
+    name: lala-next-desktop-dev-postgres-data
