@@ -2,6 +2,7 @@
 // ONMU P0: MaterialApp(home:) → MaterialApp.router(StatefulShellRoute 3-탭).
 // theme/title/의존성 주입 게이트는 그대로. LalaHomePage 는 /map-route 분기에서 래핑된다.
 // const 생성자를 유지(main.dart 의 const LalaApp() 보존)하기 위해 State 에서 라우터를 캐시한다.
+import 'package:lala_next_app/app/lala_product_scope.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -38,9 +39,11 @@ class LalaApp extends StatefulWidget {
     this.recommendationRecoveryDelays = _defaultRecommendationRecoveryDelays,
     this.authControllerFactory = createLalaAuthController,
     this.localSignalActionController,
+    this.useLocalDesign = false,
     this.docentExperienceController,
   });
 
+  final bool useLocalDesign;
   final LalaBackendFactory backendFactory;
   final LalaAppConfig initialConfig;
   final LalaLocationProvider locationProvider;
@@ -100,6 +103,7 @@ class _LalaAppState extends State<LalaApp> {
           baseConfig: _appConfig,
         ));
     _router = createLalaRouter(
+      useLocalDesign: widget.useLocalDesign,
       backendFactory: widget.backendFactory,
       initialConfig: _appConfig,
       locationProvider: widget.locationProvider,
@@ -182,6 +186,8 @@ class _LalaAppState extends State<LalaApp> {
 
     return MaterialApp.router(
       title: 'LALA',
+      builder: (context, child) =>
+          LalaProductScope(meetingMvp: widget.useLocalDesign, child: child!),
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: colorScheme,

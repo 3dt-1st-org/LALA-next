@@ -12,13 +12,18 @@ class LalaBottomNavBar extends StatelessWidget {
     required this.navigationShell,
     required this.language,
     super.key,
+    this.useLocalDesign = false,
   });
 
+  final bool useLocalDesign;
   final StatefulNavigationShell navigationShell;
   final String language;
 
   @override
   Widget build(BuildContext context) {
+    final branchIndices = useLocalDesign
+        ? const [0, 1, 2, 4]
+        : const [0, 1, 2, 3, 4];
     final systemBottomInset = MediaQuery.paddingOf(context).bottom;
     final compactBottomInset =
         systemBottomInset > LalaVisualTokens.bottomNavMaxSafeInset
@@ -76,25 +81,34 @@ class LalaBottomNavBar extends StatelessWidget {
                 indicatorShape: const RoundedRectangleBorder(
                   borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
-                selectedIndex: navigationShell.currentIndex,
+                selectedIndex: branchIndices
+                    .indexOf(navigationShell.currentIndex)
+                    .clamp(0, branchIndices.length - 1),
                 onDestinationSelected: (index) {
+                  final branch = branchIndices[index];
                   navigationShell.goBranch(
-                    index,
-                    initialLocation: index == navigationShell.currentIndex,
+                    branch,
+                    initialLocation: branch == navigationShell.currentIndex,
                   );
                 },
                 destinations: <NavigationDestination>[
                   NavigationDestination(
                     key: ValueKey('nav-search'),
-                    icon: Icon(Icons.search_outlined),
-                    selectedIcon: Icon(Icons.search),
+                    icon: Icon(
+                      useLocalDesign
+                          ? Icons.home_outlined
+                          : Icons.search_outlined,
+                    ),
+                    selectedIcon: Icon(
+                      useLocalDesign ? Icons.home : Icons.search,
+                    ),
                     label: lalaCopyMulti(
                       language,
-                      ko: '검색',
-                      en: 'Search',
-                      ja: '検索',
-                      zhHans: '搜索',
-                      zhHant: '搜尋',
+                      ko: useLocalDesign ? '홈' : '검색',
+                      en: useLocalDesign ? 'Home' : 'Search',
+                      ja: useLocalDesign ? 'ホーム' : '検索',
+                      zhHans: useLocalDesign ? '首页' : '搜索',
+                      zhHant: useLocalDesign ? '首頁' : '搜尋',
                     ),
                   ),
                   NavigationDestination(
@@ -123,19 +137,20 @@ class LalaBottomNavBar extends StatelessWidget {
                       zhHant: '計畫',
                     ),
                   ),
-                  NavigationDestination(
-                    key: const ValueKey('nav-local-signals'),
-                    icon: const Icon(Icons.campaign_outlined),
-                    selectedIcon: const Icon(Icons.campaign),
-                    label: lalaCopyMulti(
-                      language,
-                      ko: '로컬 신호',
-                      en: 'Local Signals',
-                      ja: 'ローカル信号',
-                      zhHans: '本地信号',
-                      zhHant: '在地訊號',
+                  if (!useLocalDesign)
+                    NavigationDestination(
+                      key: const ValueKey('nav-local-signals'),
+                      icon: const Icon(Icons.campaign_outlined),
+                      selectedIcon: const Icon(Icons.campaign),
+                      label: lalaCopyMulti(
+                        language,
+                        ko: '로컬 신호',
+                        en: 'Local Signals',
+                        ja: 'ローカル信号',
+                        zhHans: '本地信号',
+                        zhHant: '在地訊號',
+                      ),
                     ),
-                  ),
                   NavigationDestination(
                     key: const ValueKey('nav-profile'),
                     icon: const Icon(Icons.person_outline_rounded),

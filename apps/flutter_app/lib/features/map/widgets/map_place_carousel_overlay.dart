@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
@@ -11,6 +12,7 @@ import '../map_helpers.dart';
 class MapPlaceCarouselOverlay extends StatelessWidget {
   const MapPlaceCarouselOverlay({
     super.key,
+    this.emptyResultsConfirmed = false,
     required this.places,
     required this.source,
     required this.language,
@@ -24,6 +26,7 @@ class MapPlaceCarouselOverlay extends StatelessWidget {
     this.onPlayDocent,
   });
 
+  final bool emptyResultsConfirmed;
   final List<LalaPlace> places;
   final String? source;
   final String language;
@@ -118,7 +121,7 @@ class MapPlaceCarouselOverlay extends StatelessWidget {
                               '${items.length}處 · ${sourceLabel(source, language: language)}',
                         ),
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: const Color(0xFF64748B),
+                          color: LalaVisualColors.muted,
                           fontWeight: FontWeight.w800,
                         ),
                         overflow: TextOverflow.ellipsis,
@@ -142,7 +145,10 @@ class MapPlaceCarouselOverlay extends StatelessWidget {
                   children: [
                     const SizedBox(height: 8),
                     if (items.isEmpty)
-                      EmptyPlaceState(language: language)
+                      EmptyPlaceState(
+                        language: language,
+                        emptyResultsConfirmed: emptyResultsConfirmed,
+                      )
                     else
                       SizedBox(
                         key: const ValueKey('recommendation-rail-list'),
@@ -182,8 +188,6 @@ class MapPlaceCarouselOverlay extends StatelessWidget {
                                 compact: compact,
                                 onTap: explicitlySelected
                                     ? onReselectSelectedPlace
-                                    : selected
-                                    ? null
                                     : () => onSelectPlace(place),
                                 onPlayDocent: onPlayDocent == null
                                     ? null

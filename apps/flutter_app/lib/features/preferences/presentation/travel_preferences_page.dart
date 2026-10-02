@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_product_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -706,27 +707,29 @@ class _TravelPreferencesPageState extends State<TravelPreferencesPage> {
                             ),
                           ),
                         ),
-                        const _PanelDivider(indent: 58),
-                        _PreferenceMenuRow(
-                          key: const ValueKey('docent-preferences-entry'),
-                          icon: Icons.headphones_outlined,
-                          color: const Color(0xFF0B67D8),
-                          title: _text(
-                            widget.language,
-                            ko: '도슨트와 언어',
-                            en: 'Docent and language',
-                            ja: 'ガイドと表示',
-                            zhHans: '导览与语言',
-                            zhHant: '導覽與語言',
-                          ),
-                          subtitle: _docentSummary(widget.language, _draft),
-                          onTap: () => _openDetail(
-                            (value) => DocentPreferencesPage(
-                              language: widget.language,
-                              initialValue: value,
+                        if (!LalaProductScope.isMeetingMvp(context)) ...[
+                          const _PanelDivider(indent: 58),
+                          _PreferenceMenuRow(
+                            key: const ValueKey('docent-preferences-entry'),
+                            icon: Icons.headphones_outlined,
+                            color: const Color(0xFF0B67D8),
+                            title: _text(
+                              widget.language,
+                              ko: '도슨트 설정',
+                              en: 'Audio guide settings',
+                              ja: 'ガイドと表示',
+                              zhHans: '导览与语言',
+                              zhHant: '導覽與語言',
+                            ),
+                            subtitle: _docentSummary(widget.language, _draft),
+                            onTap: () => _openDetail(
+                              (value) => DocentPreferencesPage(
+                                language: widget.language,
+                                initialValue: value,
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),
@@ -1239,8 +1242,7 @@ class _FoodPreferencesPageState extends State<FoodPreferencesPage> {
                         _draft = _draft.copyWith(
                           // Tap-to-clear: a selected chip returns to "not
                           // saved", so the card only shows explicit choices.
-                          spiceLevel:
-                              _draft.spiceLevel == value ? null : value,
+                          spiceLevel: _draft.spiceLevel == value ? null : value,
                         );
                       }),
                       selectedColor: const Color(0xFFE24A3B),
@@ -1265,11 +1267,11 @@ class _FoodPreferencesPageState extends State<FoodPreferencesPage> {
               Text(
                 _text(
                   widget.language,
-                  ko: '선택하지 않으면 식당 카드에 표시하지 않아요.',
-                  en: 'Nothing is shown on the restaurant card until you choose.',
-                  ja: '選択しない限り、お店のカードには表示されません。',
-                  zhHans: '不选择时不会显示在餐厅需求卡上。',
-                  zhHant: '不選擇時不會顯示在餐廳需求卡上。',
+                  ko: '선택하지 않으면 매운 정도를 저장하지 않아요.',
+                  en: 'Spice preference is saved only when you choose one.',
+                  ja: '選択した辛さのみ保存されます。',
+                  zhHans: '仅保存您选择的辣度。',
+                  zhHant: '僅儲存您選擇的辣度。',
                 ),
                 style: const TextStyle(
                   color: LalaVisualColors.muted,
@@ -1282,69 +1284,71 @@ class _FoodPreferencesPageState extends State<FoodPreferencesPage> {
           ),
         ),
         const SizedBox(height: 24),
-        _SectionTitle(
-          title: _text(
-            widget.language,
-            ko: '주문 요청',
-            en: 'Order requests',
-            ja: '注文リクエスト',
-            zhHans: '点餐请求',
-            zhHant: '點餐請求',
+        if (!LalaProductScope.isMeetingMvp(context)) ...[
+          _SectionTitle(
+            title: _text(
+              widget.language,
+              ko: '주문 요청',
+              en: 'Order requests',
+              ja: '注文リクエスト',
+              zhHans: '点餐请求',
+              zhHant: '點餐請求',
+            ),
+            caption: _text(
+              widget.language,
+              ko: '최대 4개',
+              en: 'Up to 4',
+              ja: '最大4つ',
+              zhHans: '最多 4 个',
+              zhHant: '最多 4 個',
+            ),
           ),
-          caption: _text(
-            widget.language,
-            ko: '최대 4개',
-            en: 'Up to 4',
-            ja: '最大4つ',
-            zhHans: '最多 4 个',
-            zhHant: '最多 4 個',
+          _Panel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _text(
+                    widget.language,
+                    ko: '식당에 부탁할 일반 요청',
+                    en: 'Common requests for the restaurant',
+                    ja: 'お店へのお願い',
+                    zhHans: '向餐厅提出的常见请求',
+                    zhHant: '向餐廳提出的常見請求',
+                  ),
+                  style: _controlLabelStyle,
+                ),
+                const SizedBox(height: 10),
+                _EnumChips<RestaurantOrderRequest>(
+                  values: RestaurantOrderRequest.values,
+                  selected: _draft.orderRequests,
+                  label: (value) => _orderRequestLabel(widget.language, value),
+                  onChanged: (next) => setState(
+                    () => _draft = _draft.copyWith(orderRequests: next),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _text(
+                    widget.language,
+                    ko: '선택한 요청만 식당 카드에 한국어로 표시해요.',
+                    en: 'Only chosen requests appear in Korean on the restaurant card.',
+                    ja: '選んだリクエストだけが韓国語カードに表示されます。',
+                    zhHans: '只有选中的请求才会以韩语显示在餐厅需求卡上。',
+                    zhHant: '只有選中的請求才會以韓語顯示在餐廳需求卡上。',
+                  ),
+                  style: const TextStyle(
+                    color: LalaVisualColors.muted,
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        _Panel(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _text(
-                  widget.language,
-                  ko: '식당에 부탁할 일반 요청',
-                  en: 'Common requests for the restaurant',
-                  ja: 'お店へのお願い',
-                  zhHans: '向餐厅提出的常见请求',
-                  zhHant: '向餐廳提出的常見請求',
-                ),
-                style: _controlLabelStyle,
-              ),
-              const SizedBox(height: 10),
-              _EnumChips<RestaurantOrderRequest>(
-                values: RestaurantOrderRequest.values,
-                selected: _draft.orderRequests,
-                label: (value) => _orderRequestLabel(widget.language, value),
-                onChanged: (next) => setState(
-                  () => _draft = _draft.copyWith(orderRequests: next),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _text(
-                  widget.language,
-                  ko: '선택한 요청만 식당 카드에 한국어로 표시해요.',
-                  en: 'Only chosen requests appear in Korean on the restaurant card.',
-                  ja: '選んだリクエストだけが韓国語カードに表示されます。',
-                  zhHans: '只有选中的请求才会以韩语显示在餐厅需求卡上。',
-                  zhHant: '只有選中的請求才會以韓語顯示在餐廳需求卡上。',
-                ),
-                style: const TextStyle(
-                  color: LalaVisualColors.muted,
-                  fontSize: 12,
-                  height: 1.35,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
+          const SizedBox(height: 24),
+        ],
         _SectionTitle(
           title: _text(
             widget.language,
@@ -1430,41 +1434,42 @@ class _FoodPreferencesPageState extends State<FoodPreferencesPage> {
           ),
         ),
         const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          height: 52,
-          child: FilledButton.icon(
-            key: const ValueKey('restaurant-communication-card'),
-            onPressed: () {
-              FocusScope.of(context).unfocus();
-              showRestaurantCommunicationSheet(
-                context: context,
-                language: widget.language,
-                preferences: _draft.copyWith(
-                  avoidIngredients: _avoidController.text,
+        if (!LalaProductScope.isMeetingMvp(context))
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: FilledButton.icon(
+              key: const ValueKey('restaurant-communication-card'),
+              onPressed: () {
+                FocusScope.of(context).unfocus();
+                showRestaurantCommunicationSheet(
+                  context: context,
+                  language: widget.language,
+                  preferences: _draft.copyWith(
+                    avoidIngredients: _avoidController.text,
+                  ),
+                );
+              },
+              icon: const Icon(Icons.restaurant_menu),
+              label: Text(
+                _text(
+                  widget.language,
+                  ko: '식당에서 보여주기',
+                  en: 'Show at the restaurant',
+                  ja: 'お店で見せる',
+                  zhHans: '给餐厅工作人员看',
+                  zhHant: '給餐廳工作人員看',
                 ),
-              );
-            },
-            icon: const Icon(Icons.restaurant_menu),
-            label: Text(
-              _text(
-                widget.language,
-                ko: '식당에서 보여주기',
-                en: 'Show at the restaurant',
-                ja: 'お店で見せる',
-                zhHans: '给餐厅工作人员看',
-                zhHant: '給餐廳工作人員看',
+                style: const TextStyle(fontWeight: FontWeight.w900),
               ),
-              style: const TextStyle(fontWeight: FontWeight.w900),
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF0B67D8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF0B67D8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ),
-        ),
         const SizedBox(height: 12),
         _InfoNotice(
           icon: Icons.info_outline,
@@ -1942,8 +1947,8 @@ class _DocentPreferencesPageState extends State<DocentPreferencesPage> {
     return _DetailScaffold(
       title: _text(
         widget.language,
-        ko: '도슨트와 언어',
-        en: 'Docent and language',
+        ko: '도슨트 설정',
+        en: 'Audio guide settings',
         ja: 'ガイドと表示',
         zhHans: '导览与语言',
         zhHant: '導覽與語言',
@@ -3328,13 +3333,7 @@ String _orderRequestLabel(String language, RestaurantOrderRequest value) {
       '安静的位置',
       '安靜的位置',
     ],
-    RestaurantOrderRequest.takeout: [
-      '포장 요청',
-      'Pack to go',
-      '持ち帰り',
-      '打包',
-      '打包',
-    ],
+    RestaurantOrderRequest.takeout: ['포장 요청', 'Pack to go', '持ち帰り', '打包', '打包'],
   };
   return _localizedList(language, labels[value]!);
 }

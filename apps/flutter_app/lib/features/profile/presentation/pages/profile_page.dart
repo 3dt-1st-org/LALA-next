@@ -1,3 +1,5 @@
+import 'package:lala_next_app/features/preferences/presentation/travel_preferences_page.dart';
+import 'package:lala_next_app/app/lala_product_scope.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -20,8 +22,10 @@ class ProfilePage extends StatefulWidget {
     this.authController,
     this.preferencesStore,
     this.tripLibraryStore,
+    this.settingsOnly = false,
   });
 
+  final bool settingsOnly;
   final LalaAuthController? authController;
   final TravelPreferencesStore? preferencesStore;
   final TripLibraryStore? tripLibraryStore;
@@ -76,6 +80,9 @@ class _ProfilePageState extends State<ProfilePage> {
     String language,
     LalaAuthState? authState,
   ) {
+    if (widget.settingsOnly) {
+      return _buildSettingsPage(context, language);
+    }
     final preferences = _preferencesStore.value;
     final syncStatus = _preferencesStore.syncStatus;
     return Scaffold(
@@ -115,6 +122,21 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ),
                 _SyncIndicator(status: syncStatus, language: language),
+                if (LalaProductScope.isMeetingMvp(context))
+                  IconButton(
+                    key: const ValueKey('profile-settings-entry'),
+                    tooltip: lalaCopyMulti(
+                      language,
+                      ko: '설정',
+                      en: 'Settings',
+                      ja: '設定',
+                      zhHans: '设置',
+                      zhHant: '設定',
+                    ),
+                    onPressed: () =>
+                        context.push(LalaRoutePaths.profileSettings),
+                    icon: const Icon(Icons.settings_outlined),
+                  ),
               ],
             ),
             const SizedBox(height: 18),
@@ -143,11 +165,11 @@ class _ProfilePageState extends State<ProfilePage> {
             Text(
               lalaCopyMulti(
                 language,
-                ko: '여행 경험',
-                en: 'Travel experience',
-                ja: '旅行体験',
-                zhHans: '旅行体验',
-                zhHant: '旅行體驗',
+                ko: '내 여행',
+                en: 'My trips',
+                ja: 'マイトリップ',
+                zhHans: '我的旅行',
+                zhHant: '我的旅行',
               ),
               style: const TextStyle(
                 color: LalaVisualColors.ink,
@@ -207,102 +229,257 @@ class _ProfilePageState extends State<ProfilePage> {
                 ],
               ),
             ),
-            const SizedBox(height: LalaVisualTokens.sectionGap),
-            Text(
-              lalaCopyMulti(
-                language,
-                ko: '서비스 설정',
-                en: 'Service settings',
-                ja: 'サービス設定',
-                zhHans: '服务设置',
-                zhHant: '服務設定',
-              ),
-              style: const TextStyle(
-                color: LalaVisualColors.ink,
-                fontSize: LalaVisualTokens.sectionTitleSize,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Material(
-              color: LalaVisualColors.card,
-              clipBehavior: Clip.antiAlias,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(
-                  LalaVisualTokens.controlRadius,
+            if (!LalaProductScope.isMeetingMvp(context)) ...[
+              const SizedBox(height: LalaVisualTokens.sectionGap),
+              Text(
+                lalaCopyMulti(
+                  language,
+                  ko: '서비스 설정',
+                  en: 'Service settings',
+                  ja: 'サービス設定',
+                  zhHans: '服务设置',
+                  zhHant: '服務設定',
                 ),
-                side: const BorderSide(color: LalaVisualColors.line),
+                style: const TextStyle(
+                  color: LalaVisualColors.ink,
+                  fontSize: LalaVisualTokens.sectionTitleSize,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-              child: Column(
-                children: <Widget>[
-                  _ProfileMenuRow(
-                    key: const ValueKey('profile-language-entry'),
-                    icon: Icons.translate_rounded,
-                    title: lalaCopyMulti(
-                      language,
-                      ko: '언어',
-                      en: 'Language',
-                      ja: '言語',
-                      zhHans: '语言',
-                      zhHant: '語言',
-                    ),
-                    value: _languageName(language),
-                    onTap: () => _selectLanguage(context, language),
+              const SizedBox(height: 10),
+              Material(
+                color: LalaVisualColors.card,
+                clipBehavior: Clip.antiAlias,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(
+                    LalaVisualTokens.controlRadius,
                   ),
-                  const Divider(height: 1, indent: 56),
-                  _ProfileMenuRow(
-                    key: const ValueKey('profile-privacy-entry'),
-                    icon: Icons.privacy_tip_outlined,
-                    title: lalaCopyMulti(
-                      language,
-                      ko: '개인정보 및 위치',
-                      en: 'Privacy and location',
-                      ja: 'プライバシーと位置情報',
-                      zhHans: '隐私与位置',
-                      zhHant: '隱私與位置',
+                  side: const BorderSide(color: LalaVisualColors.line),
+                ),
+                child: Column(
+                  children: <Widget>[
+                    _ProfileMenuRow(
+                      key: const ValueKey('profile-language-entry'),
+                      icon: Icons.translate_rounded,
+                      title: lalaCopyMulti(
+                        language,
+                        ko: '언어',
+                        en: 'Language',
+                        ja: '言語',
+                        zhHans: '语言',
+                        zhHant: '語言',
+                      ),
+                      value: _languageName(language),
+                      onTap: () => _selectLanguage(context, language),
                     ),
-                    onTap: () => context.push(LalaRoutePaths.privacyLocation),
-                  ),
-                  const Divider(height: 1, indent: 56),
-                  _ProfileMenuRow(
-                    key: const ValueKey('profile-community-entry'),
-                    icon: Icons.groups_outlined,
-                    title: lalaCopyMulti(
-                      language,
-                      ko: '여행자 커뮤니티',
-                      en: 'Traveler community',
-                      ja: '旅行者コミュニティ',
-                      zhHans: '旅行者社区',
-                      zhHant: '旅行者社群',
+                    const Divider(height: 1, indent: 56),
+                    _ProfileMenuRow(
+                      key: const ValueKey('profile-privacy-entry'),
+                      icon: Icons.privacy_tip_outlined,
+                      title: lalaCopyMulti(
+                        language,
+                        ko: '개인정보 및 위치',
+                        en: 'Privacy and location',
+                        ja: 'プライバシーと位置情報',
+                        zhHans: '隐私与位置',
+                        zhHant: '隱私與位置',
+                      ),
+                      onTap: () => context.push(LalaRoutePaths.privacyLocation),
                     ),
-                    subtitle: lalaCopyMulti(
-                      language,
-                      ko: '사용자 대화 · 검증된 Local Signal과 달라요',
-                      en: 'User conversations, separate from verified Local Signals',
-                      ja: 'ユーザーの会話・検証済みLocal Signalsとは別です',
-                      zhHans: '用户对话，与已验证的 Local Signals 不同',
-                      zhHant: '使用者對話，與已驗證的 Local Signals 不同',
-                    ),
-                    onTap: () => context.push(LalaRoutePaths.community),
-                  ),
-                  const Divider(height: 1, indent: 56),
-                  _ProfileMenuRow(
-                    key: const ValueKey('profile-community-chat-entry'),
-                    icon: Icons.forum_outlined,
-                    title: lalaCopyMulti(
-                      language,
-                      ko: '현지 가이드 채팅',
-                      en: 'Local guide chats',
-                      ja: '現地ガイドのチャット',
-                      zhHans: '当地向导聊天',
-                      zhHant: '在地嚮導聊天',
-                    ),
-                    onTap: () => context.push(LalaRoutePaths.communityChat),
-                  ),
-                ],
+                    if (!LalaProductScope.isMeetingMvp(context)) ...[
+                      const Divider(height: 1, indent: 56),
+                      _ProfileMenuRow(
+                        key: const ValueKey('profile-community-entry'),
+                        icon: Icons.groups_outlined,
+                        title: lalaCopyMulti(
+                          language,
+                          ko: '여행자 커뮤니티',
+                          en: 'Traveler community',
+                          ja: '旅行者コミュニティ',
+                          zhHans: '旅行者社区',
+                          zhHant: '旅行者社群',
+                        ),
+                        subtitle: lalaCopyMulti(
+                          language,
+                          ko: '사용자 대화 · 검증된 Local Signal과 달라요',
+                          en: 'User conversations, separate from verified Local Signals',
+                          ja: 'ユーザーの会話・検証済みLocal Signalsとは別です',
+                          zhHans: '用户对话，与已验证的 Local Signals 不同',
+                          zhHant: '使用者對話，與已驗證的 Local Signals 不同',
+                        ),
+                        onTap: () => context.push(LalaRoutePaths.community),
+                      ),
+                      const Divider(height: 1, indent: 56),
+                      _ProfileMenuRow(
+                        key: const ValueKey('profile-community-chat-entry'),
+                        icon: Icons.forum_outlined,
+                        title: lalaCopyMulti(
+                          language,
+                          ko: '현지 가이드 채팅',
+                          en: 'Local guide chats',
+                          ja: '現地ガイドのチャット',
+                          zhHans: '当地向导聊天',
+                          zhHant: '在地嚮導聊天',
+                        ),
+                        onTap: () => context.push(LalaRoutePaths.communityChat),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
+            ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsPage(BuildContext context, String language) {
+    String text(String ko, String en, String ja, String hans, String hant) =>
+        lalaCopyMulti(
+          language,
+          ko: ko,
+          en: en,
+          ja: ja,
+          zhHans: hans,
+          zhHant: hant,
+        );
+    Widget row(
+      String key,
+      IconData icon,
+      String title,
+      VoidCallback onTap, {
+      String? value,
+    }) => _ProfileMenuRow(
+      key: ValueKey(key),
+      icon: icon,
+      title: title,
+      value: value,
+      onTap: onTap,
+    );
+    Widget section(String title, List<Widget> children) => Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE0E9E4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 16),
+          ...children,
+        ],
+      ),
+    );
+    return Scaffold(
+      key: const ValueKey('profile-page'),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        title: Text(text('설정', 'Settings', '設定', '设置', '設定')),
+      ),
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        bottom: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 820),
+            child: ListView(
+              key: const ValueKey('settings-page'),
+              padding: const EdgeInsets.all(24),
+              children: [
+                section(text('일반', 'General', '一般', '通用', '一般'), [
+                  row(
+                    'profile-language-entry',
+                    Icons.translate_rounded,
+                    text('언어', 'Language', '言語', '语言', '語言'),
+                    () => _selectLanguage(context, language),
+                    value: _languageName(language),
+                  ),
+                  row(
+                    'profile-privacy-entry',
+                    Icons.privacy_tip_outlined,
+                    text(
+                      '개인정보 및 위치',
+                      'Privacy and location',
+                      'プライバシーと位置情報',
+                      '隐私与位置',
+                      '隱私與位置',
+                    ),
+                    () => context.push(LalaRoutePaths.privacyLocation),
+                  ),
+                ]),
+                section(text('도슨트', 'Audio guide', '音声ガイド', '语音导览', '語音導覽'), [
+                  row(
+                    'settings-docent-entry',
+                    Icons.headphones_outlined,
+                    text(
+                      '도슨트 설정',
+                      'Audio guide settings',
+                      '音声ガイド設定',
+                      '语音导览设置',
+                      '語音導覽設定',
+                    ),
+                    () async {
+                      final result = await Navigator.of(context)
+                          .push<TravelPreferences>(
+                            MaterialPageRoute(
+                              builder: (_) => DocentPreferencesPage(
+                                language: language,
+                                initialValue: _preferencesStore.value,
+                              ),
+                            ),
+                          );
+                      if (result != null && mounted) {
+                        final current = _preferencesStore.value;
+                        await _saveLocalPreferences(
+                          current.copyWith(
+                            docentDepth: result.docentDepth,
+                            narrationSpeed: result.narrationSpeed,
+                            placeNameMode: result.placeNameMode,
+                            docentAutoplay: result.docentAutoplay,
+                            continueNarration: result.continueNarration,
+                            pronunciationHelp: result.pronunciationHelp,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ]),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveLocalPreferences(TravelPreferences next) async {
+    try {
+      await _preferencesStore.save(next);
+    } on Object {
+      _showLocalSaveError();
+    }
+  }
+
+  void _showLocalSaveError() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          lalaCopyMulti(
+            OnboardingState.language,
+            ko: '저장하지 못했어요. 다시 시도해 주세요.',
+            en: 'Could not save. Please try again.',
+            ja: '保存できませんでした。もう一度お試しください。',
+            zhHans: '保存失败，请重试。',
+            zhHant: '儲存失敗，請重試。',
+          ),
         ),
       ),
     );
@@ -477,7 +654,7 @@ class _PreferenceSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final interests = preferences.interests.take(3).toList(growable: false);
     return Material(
-      color: const Color(0xFF062552),
+      color: const Color(0xFF31786C),
       borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
       child: InkWell(
         key: const ValueKey('profile-travel-preferences-entry'),
@@ -498,7 +675,7 @@ class _PreferenceSummaryCard extends StatelessWidget {
                   zhHant: '預設旅行偏好',
                 ),
                 style: const TextStyle(
-                  color: Color(0xFFBFD7FF),
+                  color: Color(0xFFE4F1ED),
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -523,7 +700,7 @@ class _PreferenceSummaryCard extends StatelessWidget {
                     zhHant: '設定興趣後，推薦理由會更清楚。',
                   ),
                   style: const TextStyle(
-                    color: Color(0xFFDCE9FF),
+                    color: Color(0xFFE4F1ED),
                     height: 1.35,
                     fontWeight: FontWeight.w700,
                   ),
@@ -536,8 +713,8 @@ class _PreferenceSummaryCard extends StatelessWidget {
                     for (final interest in interests)
                       Chip(
                         visualDensity: VisualDensity.compact,
-                        side: const BorderSide(color: Color(0xFF527DB8)),
-                        backgroundColor: const Color(0xFF173E72),
+                        side: const BorderSide(color: Color(0xFF93BCAC)),
+                        backgroundColor: const Color(0xFF296658),
                         label: Text(
                           _interestName(interest, language),
                           style: const TextStyle(

@@ -16,8 +16,10 @@ class LalaMainShell extends StatelessWidget {
     required this.navigationShell,
     required this.docentExperienceController,
     super.key,
+    this.useLocalDesign = false,
   });
 
+  final bool useLocalDesign;
   final StatefulNavigationShell navigationShell;
 
   /// 이슈 #120 §6.2: 미니플레이어가 노출하는 단일 도슨트 경험 세션 소유자.
@@ -50,6 +52,7 @@ class LalaMainShell extends StatelessWidget {
                   ),
                   LalaBottomNavBar(
                     navigationShell: navigationShell,
+                    useLocalDesign: useLocalDesign,
                     language: language,
                   ),
                 ],

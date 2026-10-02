@@ -214,7 +214,7 @@ class DockDocentPreview extends StatelessWidget {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: onAddToPlan,
-                    icon: const Icon(Icons.add_circle_outline, size: 18),
+                    icon: const Icon(Icons.calendar_today_outlined, size: 18),
                     label: Text(
                       lalaCopy(language, ko: '하루 일정 보기', en: 'View plan'),
                       maxLines: 1,

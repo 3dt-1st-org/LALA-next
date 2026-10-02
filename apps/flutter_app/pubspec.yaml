@@ -56,3 +56,12 @@ flutter:
     # and is served to the web iframe and the native WebView alike. The
     # template is the reviewable source for tool/build_open_map_embed.sh.
     - assets/map/
+
+    - assets/images/onboarding/
+  fonts:
+    - family: Pretendard
+      fonts:
+        - asset: assets/fonts/PretendardVariable.ttf
+    - family: NotoSansCJK
+      fonts:
+        - asset: assets/fonts/NotoSansCJKsc-Regular.otf

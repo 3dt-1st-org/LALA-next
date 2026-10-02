@@ -152,3 +152,12 @@ String naverMapLabel(String language, {bool preview = false}) {
     zhHant: 'LALA NAVER 地圖',
   );
 }
+
+String noNearbyPlacesLabel(String language) => lalaCopyMulti(
+  language,
+  ko: '이 주변에 조건에 맞는 장소가 없어요',
+  en: 'No matching places were found nearby',
+  ja: 'この周辺に条件に合うスポットは見つかりませんでした',
+  zhHans: '附近未找到符合条件的地点',
+  zhHant: '附近未找到符合條件的地點',
+);

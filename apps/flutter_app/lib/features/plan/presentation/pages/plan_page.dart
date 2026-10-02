@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 // ONMU P1: 플랜 탭 본문 — 오늘의 일정(createDailyPlan) 표시.
 // LalaAppConfig.fromEnvironment() + LalaApiBackend 로 백엔드를 구성하고,
 // GeolocatorLalaLocationProvider 로 현재 위치를 잡아 일정을 생성한다.
@@ -641,7 +642,7 @@ class _PlanPageState extends State<PlanPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: LalaVisualColors.surface,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -657,12 +658,13 @@ class _PlanPageState extends State<PlanPage> {
               ),
               dateLabel: _todayLabel(),
               language: _language,
-              onCalendar: _load,
-              onSettings: () => unawaited(
-                context.push(
+              onRefresh: _load,
+              onSettings: () async {
+                final applied = await context.push<bool>(
                   LalaRoutePaths.tripSettingsFor(tripLibraryDateKey()),
-                ),
-              ),
+                );
+                if (applied == true && mounted) await _load();
+              },
             ),
             if (_regionIsDefault) DefaultRegionIndicator(language: _language),
             // CP1: 요청에 선호 컨텍스트가 실렸던 플랜만 간단한 선호 반영 요약을
@@ -763,7 +765,7 @@ class _PlanHeader extends StatelessWidget {
     required this.title,
     required this.dateLabel,
     required this.language,
-    required this.onCalendar,
+    required this.onRefresh,
     required this.onSettings,
   });
 
@@ -771,8 +773,8 @@ class _PlanHeader extends StatelessWidget {
   final String dateLabel;
   final String language;
 
-  /// 달력/캘린더 액션 — 오늘 일정을 다시 불러온다.
-  final VoidCallback onCalendar;
+  /// 오늘 일정을 다시 불러온다.
+  final VoidCallback onRefresh;
   final VoidCallback onSettings;
 
   @override
@@ -797,7 +799,7 @@ class _PlanHeader extends StatelessWidget {
                 Text(
                   dateLabel,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: LalaVisualColors.muted,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -807,22 +809,22 @@ class _PlanHeader extends StatelessWidget {
           IconButton(
             tooltip: lalaCopyMulti(
               language,
-              ko: '달력',
-              en: 'Calendar',
-              ja: 'カレンダー',
-              zhHans: '日历',
-              zhHant: '日曆',
+              ko: '새로고침',
+              en: 'Refresh',
+              ja: '更新',
+              zhHans: '刷新',
+              zhHant: '重新整理',
             ),
-            onPressed: onCalendar,
-            icon: const Icon(Icons.calendar_today_rounded),
+            onPressed: onRefresh,
+            icon: const Icon(Icons.refresh_rounded),
             color: Theme.of(context).colorScheme.primary,
           ),
           IconButton(
             key: const ValueKey('plan-trip-settings-entry'),
             tooltip: lalaCopyMulti(
               language,
-              ko: '이번 여행 설정',
-              en: 'This trip settings',
+              ko: '이번 일정 조건',
+              en: 'Plan conditions',
               ja: '今回の旅行設定',
               zhHans: '本次旅行设置',
               zhHant: '本次旅行設定',
@@ -971,7 +973,7 @@ class _PlanFailureView extends StatelessWidget {
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 label: Text(retryLabel),
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF2B6CB0),
+                  backgroundColor: LalaVisualColors.primary,
                   foregroundColor: Colors.white,
                   textStyle: const TextStyle(fontWeight: FontWeight.w900),
                   minimumSize: const Size.fromHeight(44),
@@ -1038,7 +1040,7 @@ class _PlanEmptyView extends StatelessWidget {
                 message,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: Color(0xFF64748B),
+                  color: LalaVisualColors.muted,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -1050,8 +1052,8 @@ class _PlanEmptyView extends StatelessWidget {
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 label: Text(actionLabel),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF2B6CB0),
-                  side: const BorderSide(color: Color(0xFFB9D4F3)),
+                  foregroundColor: LalaVisualColors.primary,
+                  side: const BorderSide(color: LalaVisualColors.line),
                   textStyle: const TextStyle(fontWeight: FontWeight.w900),
                   minimumSize: const Size.fromHeight(44),
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1124,7 +1126,7 @@ class _PlanContent extends StatelessWidget {
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: Color(0xFFE2E8F0)),
+            side: const BorderSide(color: LalaVisualColors.line),
           ),
           child: Padding(
             padding: const EdgeInsets.all(12),

@@ -64,7 +64,7 @@ class TravelPreferencesStore extends ChangeNotifier {
   /// through this single queue: call order becomes commit order at the storage
   /// seam. The `SharedPreferences` handle itself is acquired *before*
   /// enqueueing so a slow factory never parks unrelated writers behind it.
-  Future<void> _storageTail = Future<void>.value();
+  Future<void>? _storageTail;
 
   /// Generation of the newest committed local document state. Every committed
   /// `_saveLocal`/`_load` apply/`clear` bumps it, so a *derived* write (server
@@ -188,9 +188,15 @@ class TravelPreferencesStore extends ChangeNotifier {
   /// initial load) has fully completed, and a failed section never breaks the
   /// chain for later writers. Sections must not nest `_serialize` calls.
   Future<T> _serialize<T>(Future<T> Function() section) {
-    final previous = _storageTail;
+    final previous = _storageTail ?? Future<void>.value();
     final run = previous.then<T>((_) => section());
-    _storageTail = run.then<void>((_) {}, onError: (Object _) {});
+    final settled = run.then<void>((_) {}, onError: (Object _) {});
+    _storageTail = settled;
+    settled.then((_) {
+      // Once idle, do not retain a completed future owned by an old test zone.
+      // A pending newer write keeps its own tail and preserves serialization.
+      if (identical(_storageTail, settled)) _storageTail = null;
+    });
     return run;
   }
 

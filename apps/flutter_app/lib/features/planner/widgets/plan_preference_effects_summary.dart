@@ -55,18 +55,23 @@ class PlanPreferenceEffectsSummary extends StatelessWidget {
     );
     final summarySemantics = lalaCopyMulti(
       language,
-      ko: '여행 선호 중 $appliedCount건이 일정에 반영되었고, '
-          '$unappliedCount건은 데이터가 없어 반영되지 않았어요. 자세히 보기로 '
+      ko:
+          '여행 선호 중 $appliedCount건이 일정에 반영되었고, '
+          '$unappliedCount건은 반영되지 않았어요. 자세히 보기로 '
           '항목별 설명을 확인할 수 있어요.',
-      en: '$appliedCount of your travel preferences were applied to this plan '
-          'and $unappliedCount were not applied because the data is missing. '
+      en:
+          '$appliedCount of your travel preferences were applied to this plan '
+          'and $unappliedCount were not applied. '
           'Open details for per-item explanations.',
-      ja: '旅行の好みのうち$appliedCount件がプランに反映され、'
-          '$unappliedCount件はデータがないため反映されませんでした。詳細で項目別の説明を確認できます。',
-      zhHans: '您的旅行偏好中有 $appliedCount 项已应用到行程，'
-          '$unappliedCount 项因缺少数据未应用。打开详情可查看逐项说明。',
-      zhHant: '您的旅行偏好中有 $appliedCount 項已套用到行程，'
-          '$unappliedCount 項因缺少資料未套用。開啟詳細可查看逐項說明。',
+      ja:
+          '旅行の好みのうち$appliedCount件がプランに反映され、'
+          '$unappliedCount件は反映されませんでした。詳細で項目別の説明を確認できます。',
+      zhHans:
+          '您的旅行偏好中有 $appliedCount 项已应用到行程，'
+          '$unappliedCount 项未应用。打开详情可查看逐项说明。',
+      zhHant:
+          '您的旅行偏好中有 $appliedCount 項已套用到行程，'
+          '$unappliedCount 項未套用。開啟詳細可查看逐項說明。',
     );
 
     return Semantics(
@@ -74,9 +79,9 @@ class PlanPreferenceEffectsSummary extends StatelessWidget {
       label: summarySemantics,
       child: Material(
         key: const ValueKey('plan-preference-effects-summary'),
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(
-              alpha: 0.45,
-            ),
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(12),
         clipBehavior: Clip.antiAlias,
         child: Theme(
@@ -93,9 +98,9 @@ class PlanPreferenceEffectsSummary extends StatelessWidget {
               key: const ValueKey('plan-preference-effects-count'),
               maxLines: null,
               overflow: TextOverflow.visible,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
             ),
             children: [
               for (final effect in effects)
@@ -127,7 +132,8 @@ class PlanPreferenceEffectsSummary extends StatelessWidget {
                           '${localizedPreferenceEffectExplanation(effect, language) ?? effect.explanation}',
                           maxLines: null,
                           overflow: TextOverflow.visible,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
                                 color: Theme.of(
                                   context,
                                 ).colorScheme.onSurfaceVariant,
@@ -163,15 +169,20 @@ String? localizedPreferenceEffectExplanation(
       }
       return lalaCopyMulti(
         language,
-        ko: '이동 시간 선호($minutes분)에 맞춰 탐색 반경을 '
+        ko:
+            '이동 시간 선호($minutes분)에 맞춰 탐색 반경을 '
             '${requested}m에서 ${effective}m로 줄였어요.',
-        en: 'Capped the search radius from ${requested}m to ${effective}m '
+        en:
+            'Capped the search radius from ${requested}m to ${effective}m '
             'to match the $minutes-minute one-way preference.',
-        ja: '移動時間の設定（$minutes分）に合わせて、検索範囲を'
+        ja:
+            '移動時間の設定（$minutes分）に合わせて、検索範囲を'
             '${requested}mから${effective}mに狭めました。',
-        zhHans: '根据单程时间偏好（$minutes 分钟），已将搜索范围从 '
+        zhHans:
+            '根据单程时间偏好（$minutes 分钟），已将搜索范围从 '
             '$requested 米缩小到 $effective 米。',
-        zhHant: '依據單程時間偏好（$minutes 分鐘），已將搜尋範圍從 '
+        zhHant:
+            '依據單程時間偏好（$minutes 分鐘），已將搜尋範圍從 '
             '$requested 公尺縮小到 $effective 公尺。',
       );
     case 'RADIUS_CAP_NOT_BINDING':
@@ -181,11 +192,14 @@ String? localizedPreferenceEffectExplanation(
       }
       return lalaCopyMulti(
         language,
-        ko: '요청한 반경이 이미 이동 시간 선호($minutes분 이내)에 '
+        ko:
+            '요청한 반경이 이미 이동 시간 선호($minutes분 이내)에 '
             '들어와 그대로 유지했어요.',
-        en: 'The requested radius already fits the $minutes-minute one-way '
+        en:
+            'The requested radius already fits the $minutes-minute one-way '
             'preference, so it was kept as-is.',
-        ja: 'リクエストされた範囲はすでに移動時間の設定（$minutes分以内）に'
+        ja:
+            'リクエストされた範囲はすでに移動時間の設定（$minutes分以内）に'
             '収まっているため、そのまま維持しました。',
         zhHans: '请求的范围已符合单程时间偏好（$minutes 分钟以内），因此保持不变。',
         zhHant: '請求的範圍已符合單程時間偏好（$minutes 分鐘以內），因此維持不變。',
@@ -194,7 +208,8 @@ String? localizedPreferenceEffectExplanation(
       return lalaCopyMulti(
         language,
         ko: '실내/야외 선호에 따라 후보 순서를 조정했어요.',
-        en: 'Candidate order was adjusted to match the indoor/outdoor '
+        en:
+            'Candidate order was adjusted to match the indoor/outdoor '
             'preference.',
         ja: '屋内・屋外の設定に合わせて候補の並び順を調整しました。',
         zhHans: '已根据室内/室外偏好调整候选顺序。',
@@ -204,7 +219,8 @@ String? localizedPreferenceEffectExplanation(
       return lalaCopyMulti(
         language,
         ko: '날씨가 좋지 않아 야외 선호보다 실내 후보를 우선 배치했어요.',
-        en: 'Weather is bad, so known indoor candidates were prioritized '
+        en:
+            'Weather is bad, so known indoor candidates were prioritized '
             'over the outdoor preference.',
         ja: '天気が悪いため、屋外の設定より屋内の候補を優先しました。',
         zhHans: '天气不佳，因此优先安排室内候选，而非室外偏好。',
@@ -214,7 +230,8 @@ String? localizedPreferenceEffectExplanation(
       return lalaCopyMulti(
         language,
         ko: '실내/야외 중립 선호라 순서를 바꾸지 않았어요.',
-        en: 'The indoor/outdoor preference is neutral, so no ordering was '
+        en:
+            'The indoor/outdoor preference is neutral, so no ordering was '
             'applied.',
         ja: '屋内・屋外どちらでもよい設定のため、並び順は変更しませんでした。',
         zhHans: '室内/室外偏好为中性，因此未调整顺序。',
@@ -224,7 +241,8 @@ String? localizedPreferenceEffectExplanation(
       return lalaCopyMulti(
         language,
         ko: '후보가 이미 선호에 맞는 순서라 바뀐 항목이 없어요.',
-        en: 'Candidates were already ordered per the preference, so nothing '
+        en:
+            'Candidates were already ordered per the preference, so nothing '
             'changed.',
         ja: '候補はすでに設定どおりの並び順のため、変更はありませんでした。',
         zhHans: '候选顺序已符合偏好，没有变化。',
@@ -234,7 +252,8 @@ String? localizedPreferenceEffectExplanation(
       return lalaCopyMulti(
         language,
         ko: '실내/야외 정보가 있는 장소가 없어 순서를 바꾸지 못했어요.',
-        en: 'No place carries indoor/outdoor provenance, so no ordering was '
+        en:
+            'No place carries indoor/outdoor provenance, so no ordering was '
             'possible.',
         ja: '屋内・屋外の情報がある場所がないため、並び順を変更できませんでした。',
         zhHans: '没有地点带有室内/室外信息，因此无法调整顺序。',
@@ -244,7 +263,8 @@ String? localizedPreferenceEffectExplanation(
       return lalaCopyMulti(
         language,
         ko: '장소 데이터에 요리 정보가 없어 요리 선호를 반영하지 못했어요.',
-        en: 'Place data has no cuisine facet, so the cuisine preference was '
+        en:
+            'Place data has no cuisine facet, so the cuisine preference was '
             'not applied.',
         ja: '場所データに料理の情報がないため、料理の設定は反映されませんでした。',
         zhHans: '地点数据没有菜系信息，因此未应用菜系偏好。',
@@ -254,7 +274,8 @@ String? localizedPreferenceEffectExplanation(
       return lalaCopyMulti(
         language,
         ko: '장소 데이터에 가격 정보가 없어 예산 선호를 반영하지 못했어요.',
-        en: 'Place data has no price facet, so the budget preference was not '
+        en:
+            'Place data has no price facet, so the budget preference was not '
             'applied.',
         ja: '場所データに価格の情報がないため、予算の設定は反映されませんでした。',
         zhHans: '地点数据没有价格信息，因此未应用预算偏好。',
@@ -264,7 +285,8 @@ String? localizedPreferenceEffectExplanation(
       return lalaCopyMulti(
         language,
         ko: '장소 데이터에 마감 임박 정보가 없어 제외 선호를 반영하지 못했어요.',
-        en: 'Place data has no closing-soon facet, so the exclusion '
+        en:
+            'Place data has no closing-soon facet, so the exclusion '
             'preference was not applied.',
         ja: '場所データにまもなく閉店という情報がないため、除外の設定は反映されませんでした。',
         zhHans: '地点数据没有即将打烊信息，因此未应用排除偏好。',

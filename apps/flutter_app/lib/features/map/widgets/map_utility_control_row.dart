@@ -25,6 +25,7 @@ class MapUtilityControlRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       key: const ValueKey('map-utility-control-row'),
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Expanded(
           child: Align(
@@ -36,7 +37,7 @@ class MapUtilityControlRow extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 46),
+        const SizedBox(width: 12),
         Expanded(
           child: Align(
             alignment: Alignment.centerRight,

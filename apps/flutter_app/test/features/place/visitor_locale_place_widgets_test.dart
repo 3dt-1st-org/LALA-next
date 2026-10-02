@@ -327,9 +327,9 @@ void main() {
         _expectNoKorean(tester, locale, 'featured place panel (loaded)');
         expect(find.text('Show signals'), findsNothing);
         final toggle = switch (locale) {
-          'ja' => 'スコア・根拠を見る',
-          'zh-Hans' => '查看评分和依据',
-          _ => '查看評分和依據',
+          'ja' => '詳細',
+          'zh-Hans' => '详情',
+          _ => '詳情',
         };
         expect(find.text(toggle), findsOneWidget);
       });

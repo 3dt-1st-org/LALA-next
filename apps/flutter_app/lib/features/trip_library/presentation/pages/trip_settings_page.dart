@@ -1,3 +1,5 @@
+import 'package:lala_next_app/app/lala_product_scope.dart';
+import 'package:go_router/go_router.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -73,8 +75,8 @@ class _TripSettingsPageState extends State<TripSettingsPage> {
             title: Text(
               _copy(
                 language,
-                '이번 여행 설정',
-                'This trip settings',
+                '이번 일정 조건',
+                'Plan conditions',
                 '今回の旅行設定',
                 '本次旅行设置',
                 '本次旅行設定',
@@ -122,46 +124,48 @@ class _TripSettingsPageState extends State<TripSettingsPage> {
                     : null,
               ),
               const SizedBox(height: 20),
-              _SectionTitle(
-                icon: Icons.people_alt_outlined,
-                text: _copy(
-                  language,
-                  '동행과 속도',
-                  'Company and pace',
-                  '同行者とペース',
-                  '同行与节奏',
-                  '同行與節奏',
+              if (!LalaProductScope.isMeetingMvp(context)) ...[
+                _SectionTitle(
+                  icon: Icons.people_alt_outlined,
+                  text: _copy(
+                    language,
+                    '동행과 속도',
+                    'Company and pace',
+                    '同行者とペース',
+                    '同行与节奏',
+                    '同行與節奏',
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              _EnumWrap<TravelCompanion>(
-                values: TravelCompanion.values,
-                selected: effective.companions,
-                label: (value) => _companionLabel(value, language),
-                onChanged: (value) => setState(() {
-                  final next = Set<TravelCompanion>.of(effective.companions);
-                  if (!next.remove(value)) next.add(value);
-                  if (next.isEmpty) next.add(TravelCompanion.solo);
-                  _draft = _draft.copyWith(companions: next);
-                }),
-              ),
-              const SizedBox(height: 12),
-              _SegmentedField<TravelPace>(
-                label: _copy(
-                  language,
-                  '여행 속도',
-                  'Pace',
-                  '旅行ペース',
-                  '旅行节奏',
-                  '旅行節奏',
+                const SizedBox(height: 10),
+                _EnumWrap<TravelCompanion>(
+                  values: TravelCompanion.values,
+                  selected: effective.companions,
+                  label: (value) => _companionLabel(value, language),
+                  onChanged: (value) => setState(() {
+                    final next = Set<TravelCompanion>.of(effective.companions);
+                    if (!next.remove(value)) next.add(value);
+                    if (next.isEmpty) next.add(TravelCompanion.solo);
+                    _draft = _draft.copyWith(companions: next);
+                  }),
                 ),
-                values: TravelPace.values,
-                selected: effective.pace,
-                text: (value) => _paceLabel(value, language),
-                onChanged: (value) =>
-                    setState(() => _draft = _draft.copyWith(pace: value)),
-              ),
-              const SizedBox(height: 22),
+                const SizedBox(height: 12),
+                _SegmentedField<TravelPace>(
+                  label: _copy(
+                    language,
+                    '여행 속도',
+                    'Pace',
+                    '旅行ペース',
+                    '旅行节奏',
+                    '旅行節奏',
+                  ),
+                  values: TravelPace.values,
+                  selected: effective.pace,
+                  text: (value) => _paceLabel(value, language),
+                  onChanged: (value) =>
+                      setState(() => _draft = _draft.copyWith(pace: value)),
+                ),
+                const SizedBox(height: 22),
+              ],
               _SectionTitle(
                 icon: Icons.cloud_outlined,
                 text: _copy(
@@ -209,105 +213,162 @@ class _TripSettingsPageState extends State<TripSettingsPage> {
                 ),
               ),
               const SizedBox(height: 12),
-              Text(
-                _copy(language, '이동 수단', 'Transport', '移動手段', '交通方式', '交通方式'),
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 6),
-              _EnumWrap<TransportMode>(
-                values: TransportMode.values,
-                selected: effective.transportModes,
-                label: (value) => _transportLabel(value, language),
-                onChanged: (value) => setState(() {
-                  final next = Set<TransportMode>.of(effective.transportModes);
-                  if (!next.remove(value)) next.add(value);
-                  if (next.isEmpty) next.add(TransportMode.walk);
-                  _draft = _draft.copyWith(transportModes: next);
-                }),
-              ),
-              const SizedBox(height: 22),
-              _SectionTitle(
-                icon: Icons.tune_rounded,
-                text: _copy(
-                  language,
-                  '혼잡·예산·운영',
-                  'Crowds, budget and hours',
-                  '混雑・予算・営業時間',
-                  '拥挤、预算与营业',
-                  '擁擠、預算與營業',
-                ),
-              ),
-              const SizedBox(height: 10),
-              _SegmentedField<CrowdTolerance>(
+              _SegmentedField<WeatherSensitivity>(
                 label: _copy(
                   language,
-                  '혼잡 허용',
-                  'Crowd tolerance',
-                  '混雑の許容度',
-                  '拥挤接受度',
-                  '擁擠接受度',
+                  '날씨 민감도',
+                  'Weather sensitivity',
+                  '天気への敏感さ',
+                  '天气敏感度',
+                  '天氣敏感度',
                 ),
-                values: CrowdTolerance.values,
-                selected: effective.crowdTolerance,
-                text: (value) => _crowdLabel(value, language),
-                onChanged: (value) => setState(
-                  () => _draft = _draft.copyWith(crowdTolerance: value),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _DropdownField<int>(
-                label: _copy(
-                  language,
-                  '최대 대기 시간',
-                  'Maximum wait',
-                  '最大待ち時間',
-                  '最长等待',
-                  '最長等候',
-                ),
-                value: effective.maxWaitMinutes,
-                values: const <int>[10, 20, 40, 60],
-                text: (value) => _copy(
-                  language,
-                  '$value분',
-                  '$value min',
-                  '$value分',
-                  '$value分钟',
-                  '$value分鐘',
-                ),
-                onChanged: (value) => setState(
-                  () => _draft = _draft.copyWith(maxWaitMinutes: value),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _SegmentedField<BudgetBand>(
-                label: _copy(language, '예산', 'Budget', '予算', '预算', '預算'),
-                values: BudgetBand.values,
-                selected: effective.budgetBand,
-                text: (value) => _budgetLabel(value, language),
-                onChanged: (value) =>
-                    setState(() => _draft = _draft.copyWith(budgetBand: value)),
-              ),
-              const SizedBox(height: 12),
-              SwitchListTile.adaptive(
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  _copy(
+                values: WeatherSensitivity.values,
+                selected: effective.weatherSensitivity,
+                text: (value) => switch (value) {
+                  WeatherSensitivity.low => _copy(
                     language,
-                    '마감 임박 장소 제외',
-                    'Exclude places closing soon',
-                    '閉店間近の場所を除外',
-                    '排除即将关门的地点',
-                    '排除即將關門的地點',
+                    '낮음',
+                    'Low',
+                    '低',
+                    '低',
+                    '低',
                   ),
+                  WeatherSensitivity.medium => _copy(
+                    language,
+                    '보통',
+                    'Medium',
+                    '中',
+                    '中',
+                    '中',
+                  ),
+                  WeatherSensitivity.high => _copy(
+                    language,
+                    '높음',
+                    'High',
+                    '高',
+                    '高',
+                    '高',
+                  ),
+                },
+                onChanged: (value) => setState(
+                  () => _draft = _draft.copyWith(weatherSensitivity: value),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _copy(
+                  language,
+                  '이 날짜의 일정에만 적용돼요. 도보 범위는 기본 편도 시간 한도 안에서 반영되며, 실내·야외 선호는 장소 정보와 날씨에 따라 달라져요.',
+                  'Applies only to this date. Walking range respects your default one-way limit; indoor/outdoor preference depends on place data and weather.',
+                  'この日程のみに適用します。徒歩範囲は基本の片道時間内、屋内・屋外は場所情報と天気に応じて反映します。',
+                  '仅用于当天行程。步行范围受默认单程时间限制，室内外偏好取决于地点信息和天气。',
+                  '僅用於當天行程。步行範圍受預設單程時間限制，室內外偏好取決於地點資訊和天氣。',
+                ),
+              ),
+              if (!LalaProductScope.isMeetingMvp(context)) ...[
+                Text(
+                  _copy(language, '이동 수단', 'Transport', '移動手段', '交通方式', '交通方式'),
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
-                value: effective.excludeClosingSoon,
-                onChanged: (value) => setState(
-                  () => _draft = _draft.copyWith(excludeClosingSoon: value),
+                const SizedBox(height: 6),
+                _EnumWrap<TransportMode>(
+                  values: TransportMode.values,
+                  selected: effective.transportModes,
+                  label: (value) => _transportLabel(value, language),
+                  onChanged: (value) => setState(() {
+                    final next = Set<TransportMode>.of(
+                      effective.transportModes,
+                    );
+                    if (!next.remove(value)) next.add(value);
+                    if (next.isEmpty) next.add(TransportMode.walk);
+                    _draft = _draft.copyWith(transportModes: next);
+                  }),
                 ),
-              ),
-              const SizedBox(height: 18),
-              _SafetyPanel(defaults: defaults, language: language),
+                const SizedBox(height: 22),
+                _SectionTitle(
+                  icon: Icons.tune_rounded,
+                  text: _copy(
+                    language,
+                    '혼잡·예산·운영',
+                    'Crowds, budget and hours',
+                    '混雑・予算・営業時間',
+                    '拥挤、预算与营业',
+                    '擁擠、預算與營業',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _SegmentedField<CrowdTolerance>(
+                  label: _copy(
+                    language,
+                    '혼잡 허용',
+                    'Crowd tolerance',
+                    '混雑の許容度',
+                    '拥挤接受度',
+                    '擁擠接受度',
+                  ),
+                  values: CrowdTolerance.values,
+                  selected: effective.crowdTolerance,
+                  text: (value) => _crowdLabel(value, language),
+                  onChanged: (value) => setState(
+                    () => _draft = _draft.copyWith(crowdTolerance: value),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _DropdownField<int>(
+                  label: _copy(
+                    language,
+                    '최대 대기 시간',
+                    'Maximum wait',
+                    '最大待ち時間',
+                    '最长等待',
+                    '最長等候',
+                  ),
+                  value: effective.maxWaitMinutes,
+                  values: const <int>[10, 20, 40, 60],
+                  text: (value) => _copy(
+                    language,
+                    '$value분',
+                    '$value min',
+                    '$value分',
+                    '$value分钟',
+                    '$value分鐘',
+                  ),
+                  onChanged: (value) => setState(
+                    () => _draft = _draft.copyWith(maxWaitMinutes: value),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _SegmentedField<BudgetBand>(
+                  label: _copy(language, '예산', 'Budget', '予算', '预算', '預算'),
+                  values: BudgetBand.values,
+                  selected: effective.budgetBand,
+                  text: (value) => _budgetLabel(value, language),
+                  onChanged: (value) => setState(
+                    () => _draft = _draft.copyWith(budgetBand: value),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    _copy(
+                      language,
+                      '마감 임박 장소 제외',
+                      'Exclude places closing soon',
+                      '閉店間近の場所を除外',
+                      '排除即将关门的地点',
+                      '排除即將關門的地點',
+                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  value: effective.excludeClosingSoon,
+                  onChanged: (value) => setState(
+                    () => _draft = _draft.copyWith(excludeClosingSoon: value),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _SafetyPanel(defaults: defaults, language: language),
+              ],
             ],
           ),
         ),
@@ -359,8 +420,8 @@ class _TripSettingsPageState extends State<TripSettingsPage> {
                   label: Text(
                     _copy(
                       language,
-                      '이번 여행에 적용',
-                      'Apply to this trip',
+                      '적용하고 일정 다시 만들기',
+                      'Apply and rebuild plan',
                       'この旅行に適用',
                       '应用到本次旅行',
                       '套用到本次旅行',
@@ -377,13 +438,41 @@ class _TripSettingsPageState extends State<TripSettingsPage> {
 
   Future<void> _save(String language) async {
     setState(() => _saving = true);
-    await _tripStore.saveOverride(widget.planDate, _draft);
+    try {
+      await _tripStore.saveOverride(widget.planDate, _draft);
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _copy(
+                language,
+                '설정을 저장하지 못했어요. 다시 시도해 주세요.',
+                'Could not save settings. Please try again.',
+                '設定を保存できませんでした。もう一度お試しください。',
+                '无法保存设置，请重试。',
+                '無法儲存設定，請重試。',
+              ),
+            ),
+          ),
+        );
+      }
+      return;
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
     if (!mounted) return;
-    setState(() => _saving = false);
+    final needsSync =
+        _tripStore.syncStatus == TripLibrarySyncStatus.error ||
+        _tripStore.syncStatus == TripLibrarySyncStatus.conflict;
+    if (LalaProductScope.isMeetingMvp(context) && !needsSync) {
+      context.pop(true);
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          _tripStore.syncStatus == TripLibrarySyncStatus.error
+          needsSync
               ? _copy(
                   language,
                   '기기에는 저장했지만 계정 동기화가 필요해요.',
@@ -442,8 +531,9 @@ class _TripSettingsPageState extends State<TripSettingsPage> {
       ),
     );
     if (confirmed != true) return;
-    await _tripStore.resetOverride(widget.planDate);
-    if (mounted) setState(() => _draft = const TripPreferenceOverride());
+    if (!mounted) return;
+    setState(() => _draft = const TripPreferenceOverride());
+    // The reset is a draft change: Apply commits it and rebuilds the plan.
   }
 }
 
@@ -481,7 +571,7 @@ class _SyncBanner extends StatelessWidget {
         border: Border.all(
           color: conflict || syncFailed
               ? const Color(0xFFF59E0B)
-              : const Color(0xFFBDD8FA),
+              : LalaVisualColors.line,
         ),
       ),
       child: Row(

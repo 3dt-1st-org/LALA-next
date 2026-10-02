@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_product_scope.dart';
 import 'package:flutter/material.dart';
 
 import '../../../shared/l10n/lala_copy.dart';
@@ -102,16 +103,28 @@ class TopMapChrome extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               MapRoundButton(
-                buttonKey: const ValueKey('settings-button'),
+                buttonKey: ValueKey(
+                  LalaProductScope.isMeetingMvp(context)
+                      ? 'map-region-button'
+                      : 'settings-button',
+                ),
                 tooltip: lalaCopyMulti(
-      language,
-      ko: '설정',
-      en: 'Settings',
-      ja: '設定',
-      zhHans: '设置',
-      zhHant: '設定',
-    ),
-                icon: Icons.settings,
+                  language,
+                  ko: LalaProductScope.isMeetingMvp(context) ? '지역 선택' : '설정',
+                  en: LalaProductScope.isMeetingMvp(context)
+                      ? 'Choose area'
+                      : 'Settings',
+                  ja: LalaProductScope.isMeetingMvp(context) ? '地域を選択' : '設定',
+                  zhHans: LalaProductScope.isMeetingMvp(context)
+                      ? '选择地区'
+                      : '设置',
+                  zhHant: LalaProductScope.isMeetingMvp(context)
+                      ? '選擇地區'
+                      : '設定',
+                ),
+                icon: LalaProductScope.isMeetingMvp(context)
+                    ? Icons.location_on_outlined
+                    : Icons.settings,
                 onPressed: onOpenSettings,
               ),
             ],

@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -60,8 +61,8 @@ class MapToast extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             minimumSize: const Size(0, 32),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            foregroundColor: const Color(0xFF2B6CB0),
-            backgroundColor: const Color(0xFFE6F0FB),
+            foregroundColor: LalaVisualColors.primary,
+            backgroundColor: LalaVisualColors.primarySoft,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(999),
             ),

@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:flutter/material.dart';
 
 /// 지도 라운드 버튼(설정 진입 등)(C3 추출 — main.dart 의 _MapRoundButton).
@@ -31,7 +32,7 @@ class MapRoundButton extends StatelessWidget {
             elevation: 7,
             shadowColor: const Color(0x22000000),
             shape: const CircleBorder(
-              side: BorderSide(color: Color(0xFFE2E8F0), width: 1.4),
+              side: BorderSide(color: LalaVisualColors.line, width: 1.4),
             ),
             child: SizedBox.square(
               dimension: 44,

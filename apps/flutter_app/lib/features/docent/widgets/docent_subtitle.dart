@@ -111,8 +111,10 @@ class DocentSubtitle extends StatelessWidget {
                                   ko: '${placeDisplayName(place!, language)} 도슨트',
                                   en: '${placeDisplayName(place!, language)} docent',
                                   ja: '${placeDisplayName(place!, language)} ガイド',
-                                  zhHans: '${placeDisplayName(place!, language)} 讲解',
-                                  zhHant: '${placeDisplayName(place!, language)} 導覽',
+                                  zhHans:
+                                      '${placeDisplayName(place!, language)} 讲解',
+                                  zhHant:
+                                      '${placeDisplayName(place!, language)} 導覽',
                                 ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -246,7 +248,11 @@ class DocentSubtitle extends StatelessWidget {
                       : const Icon(Icons.volume_up),
                   label: Text(
                     audioLoading
-                        ? lalaCopy(language, ko: '음성 생성 중', en: 'Preparing audio')
+                        ? lalaCopy(
+                            language,
+                            ko: '음성 생성 중',
+                            en: 'Preparing audio',
+                          )
                         : lalaCopy(language, ko: '정보 더 듣기', en: 'Listen'),
                   ),
                 ),
@@ -256,8 +262,10 @@ class DocentSubtitle extends StatelessWidget {
             if (onAddToPlan != null)
               Expanded(
                 child: OutlinedButton.icon(
-                  icon: const Icon(Icons.add_circle_outline),
-                  label: Text(lalaCopy(language, ko: '하루 일정 보기', en: 'View plan')),
+                  icon: const Icon(Icons.calendar_today_outlined),
+                  label: Text(
+                    lalaCopy(language, ko: '하루 일정 보기', en: 'View plan'),
+                  ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF2B6CB0),
                     side: const BorderSide(color: Color(0xFF2B6CB0)),
@@ -432,12 +440,12 @@ String _docentStateCaption(DocentPlaybackState state, String language) {
       ko: '불러오는 중',
       en: 'Loading',
     ),
-    DocentPlaybackState.playing => lalaCopy(language, ko: '재생 중', en: 'Playing'),
-    DocentPlaybackState.paused => lalaCopy(
+    DocentPlaybackState.playing => lalaCopy(
       language,
-      ko: '일시정지됨',
-      en: 'Paused',
+      ko: '재생 중',
+      en: 'Playing',
     ),
+    DocentPlaybackState.paused => lalaCopy(language, ko: '일시정지됨', en: 'Paused'),
     DocentPlaybackState.done => lalaCopy(language, ko: '재생 완료', en: 'Finished'),
     DocentPlaybackState.error => lalaCopy(
       language,

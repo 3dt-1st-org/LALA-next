@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
@@ -84,7 +85,7 @@ class PlannerOverviewCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: LalaVisualColors.muted,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -130,8 +131,8 @@ class PlannerOverviewCard extends StatelessWidget {
                   : const Icon(Icons.refresh, size: 17),
               label: Text(lalaCopy(language, ko: '일정 재생성', en: 'Regenerate')),
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF2B6CB0),
-                side: const BorderSide(color: Color(0xFFB9D4F3)),
+                foregroundColor: LalaVisualColors.primary,
+                side: const BorderSide(color: LalaVisualColors.line),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                 minimumSize: const Size(44, 44),
                 textStyle: const TextStyle(fontWeight: FontWeight.w900),

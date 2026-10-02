@@ -47,26 +47,46 @@ class DocentPlayerPage extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  body: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: <Widget>[
-                      _DocentVerifiedImage(place: place),
-                      const SizedBox(height: 12),
-                      _DocentPlayerHeader(
-                        place: place,
-                        language: language,
-                        state: state,
+                  body: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 760),
+                      child: ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: <Widget>[
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 88,
+                                height: 88,
+                                child: _DocentVerifiedImage(place: place),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: _DocentPlayerHeader(
+                                  place: place,
+                                  language: language,
+                                  state: state,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _DocentPlaybackCard(
+                            controller: controller,
+                            language: language,
+                            state: state,
+                            onStop: () =>
+                                _stopDocentSession(context, controller),
+                          ),
+                          const SizedBox(height: 16),
+                          _DocentTranscriptCard(
+                            state: state,
+                            language: language,
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      _DocentPlaybackCard(
-                        controller: controller,
-                        language: language,
-                        state: state,
-                        onStop: () => _stopDocentSession(context, controller),
-                      ),
-                      const SizedBox(height: 16),
-                      _DocentTranscriptCard(state: state, language: language),
-                    ],
+                    ),
                   ),
                 );
               },
@@ -122,7 +142,7 @@ class _DocentVerifiedImage extends StatelessWidget {
   }
 }
 
-/// 장소명 + 운전기사용 한국어 이름 유틸리티 + source/생성시각/grounding 칩.
+/// 장소명과 해설 출처. 주소는 장소 상세 화면에서 제공한다.
 class _DocentPlayerHeader extends StatelessWidget {
   const _DocentPlayerHeader({
     required this.place,
@@ -138,10 +158,9 @@ class _DocentPlayerHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final displayName = placeDisplayName(place, language);
     final nameKo = place.nameKo?.trim();
-    // 외국어 표시명에서는 한국어 원문도 함께 보여준다. 기사님 유틸리티는 실제
-    // nameKo 가 있으면 현재 UI 언어와 관계없이 제공한다(§6.3의 유일한 숨김 조건).
-    final driverName = nameKo != null && nameKo.isNotEmpty ? nameKo : null;
-    final showKoreanName = driverName != null && driverName != displayName;
+    // 외국어 표시명에서는 한국어 원문도 함께 보여준다.
+    final koreanName = nameKo != null && nameKo.isNotEmpty ? nameKo : null;
+    final showKoreanName = koreanName != null && koreanName != displayName;
     final script = state.script;
     final chips = <Widget>[
       if (script != null)
@@ -167,7 +186,7 @@ class _DocentPlayerHeader extends StatelessWidget {
         if (showKoreanName) ...<Widget>[
           const SizedBox(height: 3),
           Text(
-            driverName,
+            koreanName,
             key: const ValueKey('docent-korean-place-name'),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -181,28 +200,6 @@ class _DocentPlayerHeader extends StatelessWidget {
         if (chips.isNotEmpty) ...<Widget>[
           const SizedBox(height: 8),
           Wrap(spacing: 6, runSpacing: 6, children: chips),
-        ],
-        if (driverName != null) ...<Widget>[
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              key: const ValueKey('docent-driver-name-button'),
-              onPressed: () => _showDriverNameSheet(context, driverName),
-              icon: const Icon(Icons.local_taxi_outlined, size: 18),
-              label: Text(
-                docentDriverNameButtonLabel(language),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF744210),
-                side: const BorderSide(color: Color(0xFFF5C842)),
-                backgroundColor: const Color(0xFFFFFBEB),
-                minimumSize: const Size.fromHeight(48),
-              ),
-            ),
-          ),
         ],
       ],
     );
@@ -230,51 +227,6 @@ class _DocentPlayerHeader extends StatelessWidget {
             grounding: true,
           ),
     ];
-  }
-
-  void _showDriverNameSheet(BuildContext context, String driverName) {
-    // 기사님 시트에는 실제 주소도 함께 — 있을 때만(없으면 라인을 만들지 않는다).
-    final address = place.address.trim();
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (BuildContext sheetContext) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                docentDriverNameSheetCaption(language),
-                style: const TextStyle(fontSize: 13, color: Color(0xFF92400E)),
-              ),
-              const SizedBox(height: 8),
-              // 기사님에게 보여주는 용도 — 한국어 원문을 크게, 번역하지 않는다.
-              Text(
-                driverName,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              if (address.isNotEmpty) ...<Widget>[
-                const SizedBox(height: 10),
-                Text(
-                  address,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF334155),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        );
-      },
-    );
   }
 }
 
