@@ -1,6 +1,15 @@
 # 장소 상세 → 저장 → 목록: MVVM 비교와 계약
 
-상태: **설계 비교·추천 작성 / 팀 채택 대기**. 첫 흐름은 A안인 기존 Controller 보완을 추천한다. 이번 문서 작업에서는 MVVM 코드·공개 API·DB 스키마를 변경하지 않는다. 비교 근거는 과거 main 9e312bb4와 후보 8aa184e3이며, 현재 제품 코드 기준은 두 PR을 병합한 main e64ed058이다.
+상태: **현재 main 계약 재대조 / MVVM 팀 채택 대기**. 첫 흐름은 A안인 기존 Controller 보완을 추천하되, 현재 실행 경로를 다시 추적한 뒤 변경 범위를 확정한다. 이번 문서 작업에서는 MVVM 코드·공개 API·DB 스키마를 변경하지 않는다. 과거 비교 기준은 main `9e312bb4`와 후보 `8aa184e3`, 당시 통합 기준은 `e64ed058`이며, 2026-10-03 현재 코드 기준은 `origin/main` `2d17a1ee7b05100776b900c13ed79e5c2289bacb`다.
+
+## 0. 2026-10-03 현재 main 확인 사항
+
+- `main.dart`는 `ProviderScope(child: LalaApp(useLocalDesign: true))`로 시작한다. Riverpod 루트가 이미 있으므로 “Riverpod 미도입”을 전제로 비교하지 않는다. 각 기능이 provider를 실제 소비하는지와 기존 Controller·store 책임은 별도로 확인한다.
+- `LalaApp`은 `authenticated && accountSyncStatus == ready` 이후에만 `TravelPreferencesStore`와 `TripLibraryStore`를 계정 remote에 연결한다. Logto 로그인 성공과 LALA 계정 동기화 완료를 같은 상태로 보지 않는다.
+- `require_logto_identity` 등 인증 dependency는 identity provisioning을 수행할 수 있고 `identity_repository.py`는 `INSERT ... ON CONFLICT DO UPDATE SET last_seen_at = now()`를 실행한다. `/me` 계열 GET을 운영 read-only smoke로 분류하지 않는다.
+- 저장 목록, 일정, 기본 취향, 일정별 override API와 `expected_revision`·409 계약이 이미 있다. 새 API를 제안하기 전에 router, service/repository, Dart client와 현재 consumer를 함께 대조한다.
+- 지도 선택은 현재 코드에서 `ko` NAVER, 지원 방문객 언어 open-vector다. MapLibre/OpenFreeMap 표시 경로와 NAVER Search 서버 자격증명을 같은 시스템으로 취급하지 않고 attribution과 web/native 조건부 구현을 보존한다.
+- `DiscoveryPage`는 선택된 region이 없으면 장소·날씨 API를 호출하지 않는다. 온보딩·지역 선택 없이 reload한 빈 상태를 API·비밀 설정 장애로 판정하지 않는다.
 
 ## 1. 기존 구현을 연결해서 읽기
 
@@ -14,7 +23,7 @@
 | 기본 취향 | TravelPreferencesStore/Remote → /me/preferences → service/repository → SQL 065 |
 | 여행별 설정·지난 일정·방문 | TripLibraryStore/Remote → 날짜 기반 계획 API → PlanningRepository → SQL 064·066 |
 
-두 SHA에서 SavedPlaceStore, ActionPreferences, SavedPlacesPage, TripLibraryRemote, 저장 API router·PlanningRepository·planning schema는 동일하다. TripLibraryStore의 후보 변경은 이미 로딩된 경우 호출자 zone에서 새 완료 Future를 반환하도록 보완한 부분이다. 앱 인증 Controller의 후속 변경과 저장소 자체의 변경을 혼동하지 않는다.
+역사적 두 SHA에서 SavedPlaceStore, ActionPreferences, SavedPlacesPage, TripLibraryRemote, 저장 API router·PlanningRepository·planning schema는 동일했다. TripLibraryStore의 후보 변경은 이미 로딩된 경우 호출자 zone에서 새 완료 Future를 반환하도록 보완한 부분이다. 현재 구조 판단은 이 비교만 재사용하지 않고 `origin/main`의 후속 인증·계정 epoch·충돌 처리까지 포함한다.
 
 대표 근거:
 
@@ -128,9 +137,10 @@ Riverpod은 제거하지 않는다. 다음 조건 중 하나가 확인되면 두
 ### C-03 인증·오류
 
 - provider 로그인과 /me 계정 동기화는 별도다. 이름·이메일이 보이는 것만으로 LALA 저장 연결 성공이라고 판단하지 않는다.
+- Flutter 로그인에는 LALA API Resource audience를 사용한다. Logto Management API audience나 관리 자격증명을 앱 인증 설정으로 재사용하지 않는다.
 - 기존 Logto gate는 USER_AUTH_REQUIRED(401), 잘못된 클라이언트 인증 경로는 UNAUTHORIZED(401)를 사용한다. 유효성 검사 오류는 422 경로를 확인한다.
 - 네트워크 실패·잘못된 envelope는 adapter의 실패로 다룬다. PlanningRepositoryUnavailable의 구체적인 HTTP/envelope 매핑은 이 저장 흐름에서 별도 인수 검증할 공백이다. 임의의 503 계약을 추가하지 않는다.
-- GET /me와 GET /me/preferences도 사용자 provision을 통해 DB 쓰기를 수행할 수 있다. 준비 단계의 읽기 전용 smoke로 실계정 호출하지 않는다.
+- GET /me와 GET /me/preferences뿐 아니라 `require_logto_identity`를 거치는 인증 경로는 사용자 provision을 통해 DB 쓰기를 수행할 수 있다. HTTP GET이라는 이유로 준비 단계의 읽기 전용 smoke에서 실계정 호출하지 않는다.
 
 ### C-04 기본 취향·여행별 설정과의 구분
 
