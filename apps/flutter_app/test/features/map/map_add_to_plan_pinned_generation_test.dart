@@ -3,6 +3,7 @@
 // 플래너 시트를 연다. 포함을 보장할 수 없으면 시트를 열지 않고 정직한 실패
 // 안내만 낸다(추가된 척 금지). 라이브 호출 없음 — 백엔드/위치는 주입 fake.
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,7 +19,6 @@ import 'package:lala_next_app/core/state/selected_place_store.dart';
 import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
 import 'package:lala_next_app/features/map_route/presentation/pages/map_route_page.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
-import 'package:lala_next_app/features/planner/widgets/planner_sheet_content.dart';
 
 import '../docent/inert_docent_audio_player.dart';
 
@@ -121,13 +121,13 @@ class _RecordingPlanBackend implements LalaBackend {
 
   @override
   Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() async =>
-    _envelope(_placesResponse());
+      _envelope(_placesResponse());
 
   @override
   Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
     String? selectedPlaceId,
     LalaPlanPreferenceContext? preferenceContext,
-    }) async {
+  }) async {
     requestedSelectedPlaceIds.add(selectedPlaceId);
     final failure = planFailure?.call(selectedPlaceId);
     if (failure != null) {
@@ -197,7 +197,7 @@ void main() {
       final docentController = _docentController();
       addTearDown(docentController.dispose);
       await tester.pumpWidget(
-        MaterialApp(
+        _routedApp(
           home: MapRoutePage(
             backendFactory: (config) => backend,
             initialConfig: const LalaAppConfig(baseUri: 'http://test'),
@@ -223,7 +223,10 @@ void main() {
       await _flush(tester);
 
       // 고정 생성이 정확히 한 번, 카노니컬 id 로 요청되었다.
-      expect(backend.requestedSelectedPlaceIds, <String?>[null, 'pin-restaurant']);
+      expect(backend.requestedSelectedPlaceIds, <String?>[
+        null,
+        'pin-restaurant',
+      ]);
       // 공유 스토어(=크로스탭 persistence 게시 지점)가 '정확한 플랜'을 보유:
       // 장소가 포함되고, unpinned cache_key 와 다른 정체성이다.
       final shared = PlanContextStore.current;
@@ -234,8 +237,13 @@ void main() {
         1,
       );
       // 플래너 시트가 열려 그 플랜을 보여준다.
-      expect(find.byType(PlannerSheetContent), findsOneWidget);
-      expect(find.text('고정 맛집'), findsWidgets);
+      expect(find.text('plan-tab'), findsOneWidget);
+      expect(
+        PlanContextStore.current!.slots.any(
+          (slot) => slot.place?.name == '고정 맛집',
+        ),
+        isTrue,
+      );
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
@@ -259,7 +267,7 @@ void main() {
       final docentController = _docentController();
       addTearDown(docentController.dispose);
       await tester.pumpWidget(
-        MaterialApp(
+        _routedApp(
           home: MapRoutePage(
             backendFactory: (config) => backend,
             initialConfig: const LalaAppConfig(baseUri: 'http://test'),
@@ -283,13 +291,49 @@ void main() {
       await _flush(tester);
 
       // 고정 요청은 발사했지만, 실패 → 정직한 안내 + 시트 미개방 + 스토어 보존.
-      expect(backend.requestedSelectedPlaceIds, <String?>[null, 'pin-restaurant']);
-      expect(find.text('이 장소를 일정에 추가하지 못했어요. 잠시 후 다시 시도해 주세요.'), findsOneWidget);
-      expect(find.byType(PlannerSheetContent), findsNothing);
+      expect(backend.requestedSelectedPlaceIds, <String?>[
+        null,
+        'pin-restaurant',
+      ]);
+      expect(
+        find.text('이 장소를 일정에 추가하지 못했어요. 잠시 후 다시 시도해 주세요.'),
+        findsOneWidget,
+      );
+      expect(find.text('plan-tab'), findsNothing);
       expect(identical(PlanContextStore.current, before), isTrue);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
     },
   );
+}
+
+// Keep the map branch mounted, as in the real shell, while opening the plan tab.
+Widget _routedApp({required Widget home}) {
+  final router = GoRouter(
+    initialLocation: '/map-route',
+    routes: [
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, shell) => shell,
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/map-route', builder: (context, state) => home),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/plan',
+                builder: (context, state) =>
+                    const Scaffold(body: Text('plan-tab')),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ],
+  );
+  addTearDown(router.dispose);
+  return MaterialApp.router(routerConfig: router);
 }

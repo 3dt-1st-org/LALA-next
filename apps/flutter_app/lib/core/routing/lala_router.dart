@@ -191,6 +191,8 @@ GoRouter createLalaRouter({
                 path: LalaRoutePaths.plan,
                 builder: (BuildContext context, GoRouterState state) =>
                     PlanPage(
+                      backendFactory: backendFactory,
+                      locationProvider: locationProvider,
                       initialConfig: initialConfig,
                       docentExperienceController: docentExperienceController,
                     ),

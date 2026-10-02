@@ -10,6 +10,8 @@ import '../../core/routing/lala_route_paths.dart';
 import '../../core/state/plan_context_store.dart';
 import '../../core/state/saved_place_store.dart';
 import '../../home_screen.dart';
+import '../trip_library/data/trip_library_store.dart';
+import '../trip_library/domain/trip_library_models.dart';
 import '../../manual_location_options.dart';
 import '../location/widgets/manual_location_sheet.dart';
 import '../onboarding/onboarding_state.dart';
@@ -37,6 +39,12 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
   bool _loading = false;
   String? _error;
   int _epoch = 0;
+  int _planEpoch = 0;
+  LalaDailyPlan? _todayPlan;
+  List<LalaPlace> _savedPlaces = const [];
+  int _savedEpoch = 0;
+  String _todayKey = tripLibraryDateKey();
+  Timer? _todayTimer;
 
   @override
   void initState() {
@@ -47,16 +55,80 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
     unawaited(TravelPreferencesStore.instance.ensureLoaded());
     _privacyChanged();
     _reload();
+    TripLibraryStore.instance.addListener(_loadTodayPlan);
+    _loadTodayPlan();
+    SavedPlaceStore.listenable.addListener(_loadSavedPlaces);
+    _loadSavedPlaces();
+    _todayTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (_todayKey != tripLibraryDateKey()) {
+        _loadTodayPlan();
+      }
+    });
   }
 
   @override
   void dispose() {
     _epoch++;
+    _planEpoch++;
+    _savedEpoch++;
+    SavedPlaceStore.listenable.removeListener(_loadSavedPlaces);
+    _todayTimer?.cancel();
+    TripLibraryStore.instance.removeListener(_loadTodayPlan);
     RegionContextStore.listenable.removeListener(_reload);
     OnboardingState.languageListenable.removeListener(_reload);
     PrivacySettingsStore.instance.removeListener(_privacyChanged);
     _search.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSavedPlaces() async {
+    final epoch = ++_savedEpoch;
+    final ids = SavedPlaceStore.current.toList().reversed.take(3).toList();
+    if (ids.isEmpty) {
+      if (mounted) setState(() => _savedPlaces = const []);
+      return;
+    }
+    final backend = widget.backendFactory(
+      widget.initialConfig.copyWith(lang: OnboardingState.language),
+    );
+    try {
+      final result = await backend.lookupPlaces(ids);
+      if (mounted && epoch == _savedEpoch) {
+        setState(
+          () => _savedPlaces = result.ok
+              ? [
+                  for (final id in ids)
+                    ...?result.data?.places.where((place) => place.placeId == id),
+                ]
+              : const [],
+        );
+      }
+    } on Object {
+      if (mounted && epoch == _savedEpoch) {
+        setState(() => _savedPlaces = const []);
+      }
+    } finally {
+      backend.close();
+    }
+  }
+
+  Future<void> _loadTodayPlan() async {
+    final epoch = ++_planEpoch;
+    final library = TripLibraryStore.instance;
+    final today = tripLibraryDateKey();
+    _todayKey = today;
+    if (!library.accountConnected) {
+      if (mounted) setState(() => _todayPlan = null);
+      return;
+    }
+    try {
+      final plan = await library.readSavedPlan(today);
+      if (mounted && epoch == _planEpoch && today == tripLibraryDateKey()) {
+        setState(() => _todayPlan = plan);
+      }
+    } on Object {
+      if (mounted && epoch == _planEpoch) setState(() => _todayPlan = null);
+    }
   }
 
   void _reload() => unawaited(_load());
@@ -176,12 +248,11 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
           SnackBar(
             content: Text(
               ko
-                  ? '위치를 확인하지 못했어요. 지역을 직접 선택해 주세요.'
-                  : 'Location unavailable. Please choose an area.',
+                  ? '위치를 확인하지 못했어요. 현재 위치로 버튼을 눌러 다시 시도해 주세요.'
+                  : 'Location unavailable. Tap Use my location to retry.',
             ),
           ),
         );
-        await _chooseRegion();
       }
     } on Object {
       if (mounted) {
@@ -231,8 +302,9 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
             error: _error,
             places: _places,
             weather: _weather,
-            dailyPlan: PlanContextStore.current,
+            dailyPlan: _todayPlan,
             savedIds: SavedPlaceStore.current,
+            savedPlaces: _savedPlaces,
             lat: region?.lat ?? widget.initialConfig.lat,
             lng: region?.lng ?? widget.initialConfig.lng,
             region: manual.isEmpty ? null : manual.first,
@@ -247,7 +319,10 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
             ),
             onMap: () => context.go(LalaRoutePaths.mapRoute),
             onSavedPlaces: () => context.push(LalaRoutePaths.savedPlaces),
-            onPlan: () => context.go(LalaRoutePaths.plan),
+            onPlan: () {
+              if (_todayPlan != null) PlanContextStore.set(_todayPlan);
+              context.go(LalaRoutePaths.plan);
+            },
             onSettings: () => context.go(LalaRoutePaths.profile),
             onRefresh: _reload,
           ),

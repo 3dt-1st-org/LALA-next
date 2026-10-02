@@ -23,6 +23,24 @@ void main() {
     PlanContextStore.clear();
   });
 
+  test(
+    'home saved-plan preview does not publish active plan or write to server',
+    () async {
+      final store = TripLibraryStore();
+      final remote = _MemoryTripRemote();
+      await store.connectAccount(remote);
+      final plan = LalaDailyPlan.fromJsonObject({'slots': []});
+      remote.previewPlan = plan;
+      final loaded = await store.readSavedPlan('2026-10-02');
+      expect(loaded, same(plan));
+      expect(PlanContextStore.current, isNull);
+      expect(remote.planWrites, 0);
+      store.disconnectAccount();
+      expect(await store.readSavedPlan('2026-10-02'), isNull);
+      store.dispose();
+    },
+  );
+
   test('one-trip override cannot weaken dietary or accessibility safety', () {
     const defaults = TravelPreferences(
       pace: TravelPace.balanced,
@@ -389,6 +407,8 @@ class _MemoryTripRemote implements TripLibraryRemote {
        overrides = overrides ?? <String, TripOverrideDocument>{},
        pastTrips = pastTrips ?? const <PastTripSummary>[];
 
+  LalaDailyPlan? previewPlan;
+  int planWrites = 0;
   final Set<String> savedIds;
   final Map<String, TripOverrideDocument> overrides;
   final bool failVisit;
@@ -433,7 +453,7 @@ class _MemoryTripRemote implements TripLibraryRemote {
       );
 
   @override
-  Future<LalaDailyPlan?> loadPlan(String planDate) async => null;
+  Future<LalaDailyPlan?> loadPlan(String planDate) async => previewPlan;
 
   @override
   Future<TripOverrideDocument> putOverride(
@@ -481,7 +501,9 @@ class _MemoryTripRemote implements TripLibraryRemote {
   }
 
   @override
-  Future<void> savePlan(String planDate, Map<String, dynamic> plan) async {}
+  Future<void> savePlan(String planDate, Map<String, dynamic> plan) async {
+    planWrites++;
+  }
 
   @override
   Future<void> setSavedPlace(String placeId, {required bool saved}) async {

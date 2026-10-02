@@ -1288,6 +1288,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 
   void _openSheet(ActiveMapSheet sheet) {
+    if (sheet == ActiveMapSheet.planner) {
+      setState(() => _activeSheet = null);
+      context.go(LalaRoutePaths.plan);
+      return;
+    }
     setState(() {
       _activeSheet = sheet;
     });
@@ -1796,7 +1801,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
                   recommendationRailExpanded: _recommendationRailExpanded,
                   mapDockExpanded: _mapDockExpanded,
                   mapDockDismissed: _mapDockDismissed,
-                  onDismissMapDock: () => setState(() => _mapDockDismissed = true),
+                  onDismissMapDock: () =>
+                      setState(() => _mapDockDismissed = true),
                   recommendationRecoveryPending: _recommendationRecoveryPending,
                   recommendationRecoveryAttempt:
                       _recommendationRecoveryAttempts,

@@ -56,6 +56,7 @@ Dashboard _dashboard(
   bool railExpanded = false,
   ActiveMapSheet? sheet,
   VoidCallback? closeSheet,
+  ValueChanged<LalaPlace>? openDetails,
 }) => Dashboard(
   loading: false,
   error: null,
@@ -107,6 +108,7 @@ Dashboard _dashboard(
   onToggleRecommendationRail: () {},
   onToggleMapDock: () {},
   onOpenSheet: (_) {},
+  onOpenPlaceDetails: openDetails,
   onCloseSheet: closeSheet ?? () {},
   onToggleVoice: () {},
   onToggleAutoDocent: () {},
@@ -140,6 +142,29 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets('map details opens the selected place instead of evidence', (
+    tester,
+  ) async {
+    LalaPlace? opened;
+    await tester.pumpWidget(
+      _host(
+        _dashboard(
+          'ko',
+          dockExpanded: false,
+          openDetails: (place) => opened = place,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final details = find.byKey(const ValueKey('open-full-place-details'));
+    expect(details, findsOneWidget);
+    expect(find.text('점수·추천 근거'), findsNothing);
+    await tester.ensureVisible(details);
+    await tester.pumpAndSettle();
+    await tester.tap(details);
+    expect(opened?.placeId, 'p1');
+  });
+
   const sizes = {
     'small': Size(320, 568),
     'mobile': Size(393, 852),

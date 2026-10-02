@@ -1,3 +1,4 @@
+import 'package:go_router/go_router.dart';
 import 'package:lala_next_app/features/place/widgets/featured_place_panel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
@@ -345,26 +346,40 @@ void main() {
     await tester.tap(addToPlanButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('하루 일정'), findsAtLeastNWidgets(1));
+    expect(find.byType(PlanPage), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
     expect(find.textContaining('화성행궁'), findsAtLeastNWidgets(1));
 
-    await tester.tap(find.byTooltip('닫기').first);
+    GoRouter.of(tester.element(find.byType(PlanPage))).go('/map-route');
     await tester.pumpAndSettle();
 
     await expandMapDockIfCollapsed(tester);
 
-    final evidenceButton = find.widgetWithText(OutlinedButton, '상세');
+    final evidenceButton = find.byKey(
+      const ValueKey('open-full-place-details'),
+    );
     await tester.ensureVisible(evidenceButton);
     await tester.tap(evidenceButton);
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('detail-place-hero-image')), findsNothing);
+    expect(find.byKey(const ValueKey('place-detail-page')), findsOneWidget);
+    final evidenceToggle = find.byKey(
+      const ValueKey('place-detail-toggle-evidence'),
+    );
+    await tester.ensureVisible(evidenceToggle);
+    await tester.tap(evidenceToggle);
+    await tester.pumpAndSettle();
     expect(find.text('로컬 점수'), findsOneWidget);
     expect(find.text('내국인 소비'), findsOneWidget);
     expect(find.text('수요 분산'), findsOneWidget);
     expect(find.text('문화 연계'), findsOneWidget);
     expect(find.text('날씨 적합'), findsOneWidget);
     expect(find.text('86'), findsAtLeastNWidgets(1));
+    await tester.drag(
+      find.byKey(const ValueKey('place-detail-scroll')),
+      const Offset(0, -400),
+    );
+    await tester.pumpAndSettle();
     expect(find.text('한국관광공사'), findsOneWidget);
     expect(find.text('카드 소비'), findsOneWidget);
     expect(find.text('문화행사 데이터'), findsOneWidget);
@@ -407,7 +422,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('하루 일정'), findsAtLeastNWidgets(1));
+    expect(find.byType(PlanPage), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
     expect(find.textContaining('화성행궁'), findsAtLeastNWidgets(1));
   });
 
@@ -459,7 +475,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('하루 일정'), findsAtLeastNWidgets(1));
+      expect(find.byType(PlanPage), findsOneWidget);
+      expect(find.byType(BottomSheet), findsNothing);
       expect(find.text('현재 지도 결과에서 연결된 장소를 찾지 못했어요.'), findsNothing);
 
       actions.dispatch(
@@ -1266,9 +1283,10 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('intervention-toast-plan')));
     await tester.pumpAndSettle();
-    expect(find.text('하루 일정'), findsAtLeastNWidgets(1));
+    expect(find.byType(PlanPage), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
 
-    await tester.tap(find.byIcon(Icons.close).last);
+    GoRouter.of(tester.element(find.byType(PlanPage))).go('/map-route');
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('intervention-toast-close')));
     await tester.pumpAndSettle();
@@ -1297,7 +1315,7 @@ void main() {
     },
   );
 
-  testWidgets('planner sheet shows weather header and regenerates plan', (
+  testWidgets('planner action opens the plan tab and regenerates plan', (
     tester,
   ) async {
     final backend = FakeBackend(
@@ -1323,10 +1341,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('planner-regenerate')));
     await tester.pumpAndSettle();
-    expect(find.text('하루 일정 재생성'), findsOneWidget);
-
-    await tester.tap(find.widgetWithText(FilledButton, '다시 생성'));
-    await tester.pumpAndSettle();
+    expect(find.byType(PlanPage), findsOneWidget);
     expect(backend.dailyPlanRequests, 2);
   });
 
@@ -1347,8 +1362,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(FeaturedPlacePanel), findsOneWidget);
-    expect(find.text('화성행궁 도슨트'), findsAtLeastNWidgets(1));
+    expect(find.byKey(const ValueKey('place-detail-page')), findsOneWidget);
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('auto docent on keeps the nearest place in map guidance', (
@@ -2691,7 +2706,10 @@ void main() {
 
     expect(find.text('장소 상세'), findsNothing);
     expect(find.byKey(const ValueKey('map-bottom-dock')), findsOneWidget);
-    expect(find.byKey(const ValueKey('open-full-place-details')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('open-full-place-details')),
+      findsOneWidget,
+    );
     expect(find.byIcon(Icons.bookmark_border), findsOneWidget);
     expect(find.byTooltip('저장'), findsOneWidget);
 
@@ -2811,18 +2829,23 @@ void main() {
     expect(find.text('1 linked events'), findsOneWidget);
     expect(find.text('Card spend KRW 14,000,000'), findsNothing);
 
-    final showSignalsButton = find.widgetWithText(
-      OutlinedButton,
-      'Details',
+    final showSignalsButton = find.byKey(
+      const ValueKey('open-full-place-details'),
     );
     await tester.ensureVisible(showSignalsButton);
     await tester.pumpAndSettle();
     await tester.tap(showSignalsButton);
     await tester.pumpAndSettle();
 
+    final evidenceToggle = find.byKey(
+      const ValueKey('place-detail-toggle-evidence'),
+    );
+    await tester.ensureVisible(evidenceToggle);
+    await tester.tap(evidenceToggle);
+    await tester.pumpAndSettle();
     expect(find.text('Card spend KRW 14,000,000'), findsOneWidget);
     expect(find.text('Local score'), findsOneWidget);
-    expect(find.text('LALA recommendation score'), findsOneWidget);
+    expect(find.text('86'), findsAtLeastNWidgets(1));
     expect(find.textContaining('화성행궁'), findsNothing);
     expect(find.textContaining('경기도'), findsNothing);
     expect(find.textContaining('snapshot'), findsNothing);
@@ -2887,7 +2910,9 @@ void main() {
       expect(find.text('로컬 점수'), findsNothing);
       expect(find.text('내국인 소비'), findsNothing);
 
-      final evidenceButton = find.widgetWithText(OutlinedButton, '상세');
+      final evidenceButton = find.byKey(
+        const ValueKey('open-full-place-details'),
+      );
       await tester.scrollUntilVisible(
         evidenceButton,
         180,
@@ -2923,9 +2948,8 @@ void main() {
 
     expect(find.byType(FeaturedPlacePanel), findsOneWidget);
     await tester.pumpAndSettle();
-    final showSignalsButton = find.widgetWithText(
-      OutlinedButton,
-      'Details',
+    final showSignalsButton = find.byKey(
+      const ValueKey('open-full-place-details'),
     );
     await tester.scrollUntilVisible(
       showSignalsButton,
@@ -2968,7 +2992,9 @@ void main() {
     expect(find.text('Open event details'), findsOneWidget);
     expect(find.textContaining('행사'), findsNothing);
 
-    final evidenceButton = find.widgetWithText(OutlinedButton, 'Details');
+    final evidenceButton = find.byKey(
+      const ValueKey('open-full-place-details'),
+    );
     await tester.scrollUntilVisible(
       evidenceButton,
       180,
@@ -3101,7 +3127,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('화성행궁 산책'), findsAtLeastNWidgets(1));
     expect(find.textContaining('Hwaseong walk'), findsNothing);
-    await tester.tap(find.byIcon(Icons.close).last);
+    GoRouter.of(tester.element(find.byType(PlanPage))).go('/map-route');
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('settings-button')));

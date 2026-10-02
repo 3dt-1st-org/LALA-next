@@ -191,8 +191,8 @@ class _LalaGuide extends StatelessWidget {
                                   Icons.location_on_outlined,
                                   t('어디서 시작할까요?', 'Where shall we begin?'),
                                   t(
-                                    '지금 여행 중이라면 ‘내 주변’을, 떠날 곳이 정해졌다면 ‘지역 변경’을 눌러보세요.',
-                                    'Choose “Near me” while travelling, or select a destination with “Change area”.',
+                                    '지금 있는 곳을 둘러보려면 ‘현재 위치로’를, 여행지를 고르려면 ‘지역 변경’을 눌러보세요.',
+                                    'Choose “Use my location” to explore nearby, or “Change area” to pick a destination.',
                                   ),
                                   t(
                                     '위치를 허용하지 않아도 지역을 직접 고를 수 있어요.',
@@ -208,8 +208,8 @@ class _LalaGuide extends StatelessWidget {
                                     'Browse nearby areas, sights, food and culture. Search to find places in the current list.',
                                   ),
                                   t(
-                                    '하트를 누르면 다시 보고 싶은 장소를 저장해요.',
-                                    'Tap the heart to save a place for later.',
+                                    '북마크를 누르면 장소를 저장하고 홈의 ‘저장한 장소’에서 다시 볼 수 있어요.',
+                                    'Tap the bookmark to keep a place in Saved places on your home screen.',
                                   ),
                                 ),
                                 (
@@ -236,12 +236,12 @@ class _LalaGuide extends StatelessWidget {
                                     'Plan a day that feels like you',
                                   ),
                                   t(
-                                    '‘여행 계획’이나 ‘내 여행’에서 탐색 중인 지역을 바탕으로 하루의 코스를 살펴보세요.',
-                                    'Open “Plan a trip” or “My trip” to explore a day plan for your chosen area.',
+                                    '‘하루 일정 만들기’에서 일정을 계획해요. 오늘 날짜로 계정에 저장한 일정은 홈의 ‘오늘의 여행’에서 다시 열 수 있어요.',
+                                    'Use “Plan my day” to create an itinerary. A plan saved to your account for today appears in Your trip today.',
                                   ),
                                   t(
-                                    'MY에서 여행 취향과 안내 설정을 언제든 바꿀 수 있어요.',
-                                    'Update your interests and guide preferences in MY.',
+                                    '내 정보에서 여행 취향을, 설정에서 언어를 바꿀 수 있어요.',
+                                    'Update travel preferences in Profile and change your language in Settings.',
                                   ),
                                 ),
                               ];
@@ -375,8 +375,8 @@ class _LalaGuide extends StatelessWidget {
                                       const SizedBox(height: 8),
                                       Text(
                                         t(
-                                          '회원가입 없이 둘러볼 수 있어요. 처음부터 모든 계획을 세우지 않아도 괜찮아요. 궁금한 장소 하나부터 만나보세요.',
-                                          'You can explore without an account. You don’t need a perfect itinerary—start with one place that makes you curious.',
+                                          '처음부터 모든 계획을 세우지 않아도 괜찮아요. 궁금한 장소를 저장하고 나만의 여행을 만들어 보세요.',
+                                          'Start with one place that makes you curious. Save your favourites and build your own trip.',
                                         ),
                                         style: const TextStyle(
                                           fontSize: 13,

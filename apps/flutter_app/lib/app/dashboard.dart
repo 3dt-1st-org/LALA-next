@@ -548,7 +548,7 @@ class Dashboard extends StatelessWidget {
                             ),
                             liveSpeechEnabled: liveSpeechEnabled,
                             source: effectiveSource,
-                            showEvidence: showEvidence,
+                            showEvidence: false,
                             savedPlaceIds: savedPlaceIds,
                             detailDocentPlayedPlaceIds:
                                 detailDocentPlayedPlaceIds,
@@ -557,6 +557,9 @@ class Dashboard extends StatelessWidget {
                             onAddToPlan: () =>
                                 onOpenSheet(ActiveMapSheet.planner),
                             onFetchAudio: onFetchAudio,
+                            onOpenFullDetails: onOpenPlaceDetails == null
+                                ? null
+                                : () => onOpenPlaceDetails!(topPlace),
                           ),
                     emptyResultsConfirmed: emptyResultsConfirmed,
                     isWide: isWide,
@@ -597,7 +600,9 @@ class Dashboard extends StatelessWidget {
                         recommendationRecoveryPending,
                     onFetchAudio: onFetchAudio,
                     onAddToPlan: () => onOpenSheet(ActiveMapSheet.planner),
-                    onOpenDetail: onToggleEvidence,
+                    onOpenDetail: () {
+                      if (topPlace != null) onOpenPlaceDetails?.call(topPlace);
+                    },
                     onRefresh: onRefresh,
                     onToggleEvidence: onToggleEvidence,
                     onToggleExpanded: onToggleMapDock,

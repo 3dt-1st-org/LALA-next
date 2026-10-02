@@ -127,6 +127,53 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final language in ['ko', 'en', 'ja', 'zh-Hans', 'zh-Hant']) {
+    for (final width in [340.0, 768.0, 1440.0]) {
+      testWidgets('local shell layout $language at $width', (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = Size(width, 900);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        OnboardingState.markCompleted();
+        OnboardingState.selectLanguage(language);
+        const config = LalaAppConfig(baseUri: 'https://example.invalid');
+        final controller = DocentExperienceController(
+          backendFactory: (_) => _NoNetworkBackend(),
+          baseConfig: config,
+          player: InertDocentAudioPlayer(),
+        );
+        await tester.pumpWidget(
+          LalaApp(
+            useLocalDesign: true,
+            initialConfig: config,
+            backendFactory: (_) => _NoNetworkBackend(),
+            docentExperienceController: controller,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: 'home $language $width');
+        for (final tab in ['map', 'plan', 'profile']) {
+          await tester.tap(find.byKey(ValueKey('nav-$tab')));
+          await tester.pumpAndSettle();
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: '$tab $language $width',
+          );
+        }
+        await tester.tap(find.byKey(const ValueKey('profile-settings-entry')));
+        await tester.pumpAndSettle();
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'settings $language $width',
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
+        await controller.dispose();
+      });
+    }
+  }
+
   for (final width in [390.0, 1440.0]) {
     testWidgets(
       'production local home routes to server-backed settings at width $width',
@@ -156,6 +203,11 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.byType(DiscoveryHome), findsOneWidget);
+        expect(find.byIcon(Icons.info_outline), findsOneWidget);
+        expect(find.text('둘러보기 →'), findsNothing);
+        expect(find.text('여행 계획 중'), findsNothing);
+        expect(find.text('오늘의 여행'), findsNothing);
+
         expect(find.byKey(const ValueKey('nav-local-signals')), findsNothing);
         expect(find.byType(NavigationDestination), findsNWidgets(4));
         expect(tester.takeException(), isNull);
