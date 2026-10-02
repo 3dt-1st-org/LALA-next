@@ -23,13 +23,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      NAVER_MAP_CLIENT_ID: ${{ vars.NAVER_MAP_CLIENT_ID }}
-      LOGTO_ENDPOINT: ${{ vars.LOGTO_ENDPOINT }}
-      LOGTO_API_AUDIENCE: ${{ vars.LOGTO_API_AUDIENCE }}
-      LOGTO_WEB_APP_ID: ${{ vars.LOGTO_WEB_APP_ID }}
+      NAVER_MAP_CLIENT_ID: ${{ secrets.NAVER_MAP_CLIENT_ID }}
+      LOGTO_ENDPOINT: ${{ secrets.LOGTO_ENDPOINT }}
+      LOGTO_API_AUDIENCE: ${{ secrets.LOGTO_API_AUDIENCE }}
+      LOGTO_WEB_APP_ID: ${{ secrets.LOGTO_WEB_APP_ID }}
       LALA_API_BASE_URL: https://api.lala-next.cloud
     steps:
       - uses: actions/checkout@v4
@@ -63,7 +63,7 @@ jobs:
             exit 0
           fi
           echo "current=true" >> "$GITHUB_OUTPUT"
-          echo "BUILD_SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "BUILD_SHA=$HEAD_SHA" >> "$GITHUB_ENV"
 
       - uses: subosito/flutter-action@v2
         if: steps.head.outputs.current == 'true'

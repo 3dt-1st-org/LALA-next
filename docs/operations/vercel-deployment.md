@@ -100,12 +100,13 @@ Configure the GitHub repository before enabling the workflow:
 
 - Store a dedicated, expiring Vercel token scoped to the owning team as the
   `VERCEL_TOKEN` repository secret. Never copy a personal CLI login token.
-- Set `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` repository variables from the
+- Set `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` repository secrets from the
   existing Flutter project's `.vercel/project.json` binding.
 - Set the public, domain-restricted build variables `NAVER_MAP_CLIENT_ID`,
   `LOGTO_ENDPOINT`, `LOGTO_API_AUDIENCE`, and `LOGTO_WEB_APP_ID` as repository
-  variables. These values are compiled into the browser bundle; no server API
-  secret belongs in these variables. The workflow uses the production API URL.
+  secrets so GitHub Actions masks their values in job logs. They are still
+  compiled into the browser bundle; no server API secret belongs in these
+  settings. The workflow uses the production API URL.
 - Set `LALA_WEB_DEPLOY_ENABLED=true` only after those settings have been checked.
   Leave it unset or set it to `false` to stop automatic deployment without
   removing the workflow.
