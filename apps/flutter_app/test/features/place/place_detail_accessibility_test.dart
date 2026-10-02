@@ -168,7 +168,13 @@ const LalaPlace _place = LalaPlace(
   freshness: '2026-09-03T09:00:00Z',
 );
 
-class _DetailBackend implements LalaBackend {
+class _DetailBackend implements LalaBackend, LalaPlaceLookupBackend {
+  @override
+  Future<LalaEnvelope<LalaPlaceLookup>> lookupPlaces(List<String> ids) async =>
+      _envelope(
+        LalaPlaceLookup(places: [_place], missingPlaceIds: [], source: 'db'),
+      );
+
   @override
   Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() async => _envelope(
     const LalaPlacesResponse(
@@ -221,7 +227,11 @@ class _DetailBackend implements LalaBackend {
 }
 
 /// Never-resolving backend so the page stays in its loading state.
-class _HangingBackend implements LalaBackend {
+class _HangingBackend implements LalaBackend, LalaPlaceLookupBackend {
+  @override
+  Future<LalaEnvelope<LalaPlaceLookup>> lookupPlaces(List<String> ids) =>
+      Completer<LalaEnvelope<LalaPlaceLookup>>().future;
+
   @override
   Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() =>
       Completer<LalaEnvelope<LalaPlacesResponse>>().future;
@@ -235,7 +245,11 @@ class _HangingBackend implements LalaBackend {
 }
 
 /// Backend whose lookups fail after the initial place was supplied.
-class _FailingBackend implements LalaBackend {
+class _FailingBackend implements LalaBackend, LalaPlaceLookupBackend {
+  @override
+  Future<LalaEnvelope<LalaPlaceLookup>> lookupPlaces(List<String> ids) async =>
+      throw StateError('lookup unavailable');
+
   @override
   Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() async =>
       throw StateError('lookup unavailable');

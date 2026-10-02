@@ -82,6 +82,48 @@ String? _h(RequestOptions options, String name) {
 }
 
 void main() {
+  test(
+      'ID lookup preserves missing IDs and unknown distance without location query',
+      () async {
+    RequestOptions? request;
+    final client = LalaApiClient(
+        baseUri: Uri.parse('https://example.invalid'),
+        accessTokenProvider: () async => 'test-session',
+        dio: _dio(
+            (options) async => _json({
+                  'ok': true,
+                  'data': {
+                    'places': [
+                      {'place_id': 'outside/map', 'distance_m': null}
+                    ],
+                    'missing_place_ids': ['removed'],
+                    'source': 'db',
+                    'data_as_of': null,
+                  }
+                }),
+            sink: (options) => request = options));
+    final result = await client
+        .lookupPlaces(placeIds: ['outside/map', 'removed'], language: 'en');
+    expect(request!.uri.path, '/api/v1/places/lookup');
+    expect(request!.method, 'POST');
+    expect(request!.uri.queryParameters.containsKey('lat'), isFalse);
+    expect(_h(request!, 'Authorization'), 'Bearer test-session');
+    expect(result.data!.missingPlaceIds, ['removed']);
+    expect(result.data!.places.single.distanceKnown, isFalse);
+    expect(result.data!.places.single.reason, isNull);
+    client.close();
+  });
+
+  test('lookup bounds are enforced before sending requests', () async {
+    final client = LalaApiClient(
+        baseUri: Uri.parse('https://example.invalid'),
+        dio: _dio((_) async => throw StateError('must not call network')));
+    await expectLater(client.lookupPlaces(placeIds: []), throwsArgumentError);
+    await expectLater(client.lookupPlaces(placeIds: List.filled(101, 'p')),
+        throwsArgumentError);
+    client.close();
+  });
+
   test('uses a fresh provider token for each sequential private request',
       () async {
     final tokens = <String>['first-token', 'second-token'];

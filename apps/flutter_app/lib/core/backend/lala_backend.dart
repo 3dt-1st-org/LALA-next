@@ -63,7 +63,29 @@ abstract class LalaBackend {
   void close();
 }
 
-class LalaApiBackend implements LalaBackend {
+abstract interface class LalaPlaceLookupBackend {
+  Future<LalaEnvelope<LalaPlaceLookup>> lookupPlaces(List<String> placeIds);
+}
+
+/// Keep optional lookup capabilities explicit for injected backends.
+extension PlaceLookupCapability on LalaBackend {
+  Future<LalaEnvelope<LalaPlaceLookup>> lookupPlaces(List<String> placeIds) {
+    final backend = this;
+    if (backend is LalaPlaceLookupBackend) {
+      return (backend as LalaPlaceLookupBackend).lookupPlaces(placeIds);
+    }
+    throw UnsupportedError('This backend does not support ID lookup');
+  }
+}
+
+class LalaApiBackend implements LalaBackend, LalaPlaceLookupBackend {
+  @override
+  Future<LalaEnvelope<LalaPlaceLookup>> lookupPlaces(List<String> placeIds) =>
+      _client.lookupPlaces(
+        placeIds: placeIds,
+        language: apiRequestLanguage(config.lang),
+      );
+
   LalaApiBackend(this.config)
     : _client = LalaApiClient(
         baseUri: Uri.parse(config.baseUri),
@@ -190,7 +212,7 @@ class LalaApiBackend implements LalaBackend {
       address: place.address,
       regionKo: place.regionKo,
       regionEn: place.regionEn,
-      distanceM: place.distanceM,
+      distanceM: place.distanceKnown ? place.distanceM : null,
       source: place.source,
       upstreamSource: place.upstreamSource,
       finalScore: place.score?.finalScore,
