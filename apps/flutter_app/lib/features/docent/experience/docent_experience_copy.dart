@@ -290,30 +290,6 @@ String docentTranscriptSectionTitle(String language) {
   );
 }
 
-/// 운전기사용 한국어 이름 유틸리티 버튼 라벨(§6.3).
-String docentDriverNameButtonLabel(String language) {
-  return lalaCopyMulti(
-    language,
-    ko: '운전기사에게 보여주기',
-    en: 'Show your driver',
-    ja: '運転手さんに見せる',
-    zhHans: '出示给司机',
-    zhHant: '出示給司機',
-  );
-}
-
-/// 한국어 이름 시트 캡션(이름 자체는 nameKo 원문 그대로 — 번역하지 않는다).
-String docentDriverNameSheetCaption(String language) {
-  return lalaCopyMulti(
-    language,
-    ko: '한국어 이름',
-    en: 'Korean name',
-    ja: '韓国語の名前',
-    zhHans: '韩语名称',
-    zhHant: '韓語名稱',
-  );
-}
-
 /// grounding source_type 식별자 → bounded 지역화 라벨(§6.3). 원시 내부값을
 /// 그대로 노출하지 않는다 — 알 수 없는 값은 출처 성격을 단정하지 않는 중립
 /// 라벨로 수렴한다.

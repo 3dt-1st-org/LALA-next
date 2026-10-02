@@ -5,7 +5,9 @@
 
 [팀 공유 Notion](https://app.notion.com/p/3dba803276a480d6b174ec2e5370fb9c) · [PR #209](https://github.com/3dt-1st-org/LALA-next/pull/209)
 
-이 문서는 LALA의 데이터 구조와 실제 운영 DB의 차이를 확인하고, 9월 15일 회의에서 정한 개발 방향과 후속 작업을 한곳에서 안내한다. DB 구조 조사는 `main 765570a2`를 기준으로 수행했다. PR #210 병합 뒤 현재 main `41468b01`에는 canonical SQL 069~071이 추가되어 21개가 되었으며, 이 세 파일은 기존 운영 DB 대조 수치에 포함되지 않았다. Alembic 기준선을 정하기 전에 현재 main으로 구조 대조를 다시 실행해야 한다.
+이 문서는 LALA의 데이터 구조와 실제 운영 DB의 차이를 확인하고, 9월 15일 회의에서 정한 개발 방향과 후속 작업을 한곳에서 안내한다. DB 구조 조사는 `main 765570a2`를 기준으로 수행했다. PR #210 병합 뒤 당시 main `41468b01`에는 canonical SQL 069~071이 추가되어 21개가 되었으며, 이 세 파일은 기존 운영 DB 대조 수치에 포함되지 않았다. Alembic 기준선을 정하기 전에 최신 main으로 구조 대조를 다시 실행해야 한다.
+
+**2026-10-03 재검토:** `origin/main` `59bb3ef0`에도 canonical SQL은 21개다. 아래 구조 수치와 운영 PostgreSQL 버전은 9월 15일 조사 스냅샷이며, 현재 운영 DB 상태를 재조회한 결과가 아니다. 당시 회원가입 필수 방향(D-02)은 회의 기록이다. 현행 앱에는 게스트 온보딩이 있으므로 첫 실증의 인증 정책은 팀이 다시 결정해야 한다. PR #218의 격리 로컬 DB/API 실행 경로는 [현재 개발 환경 준비표](../team-development-preparation-20260909/08-development-environment.md)에서 다루며, 공용 개발 API 인수와는 별개다.
 
 ## 주요 결정
 
@@ -37,7 +39,7 @@
 3. `rag.knowledge_chunks.embedding_generation`은 실제 DB에만 있으며 canonical 밖의 operator-pending SQL에 같은 정의가 있다.
 4. 공통 447개 컬럼의 타입·NULL 여부, 103개 PK/UNIQUE/FK 정의, 이름 있는 CHECK 67개의 존재와 검증 상태를 확인했다.
 5. 운영 DB는 조사 당시 PostgreSQL 15.18이고 현재 로컬 구성은 PostgreSQL 16이다.
-6. 현재 main에는 SQL 069~071이 추가됐다. 운영 DB 적용 여부와 전체 구조 수치는 아직 다시 대조하지 않았다.
+6. 9월 조사 뒤 main에 SQL 069~071이 추가됐다. 이 PR에서는 운영 DB 적용 여부와 전체 구조 수치를 다시 대조하지 않았다.
 
 이 결과는 구조를 읽기 전용으로 대조한 것이다. 사용자 행·위치·취향 값은 조회하지 않았고, DB 변경·기능 구현·배포·앱 통합 검증은 수행하지 않았다.
 

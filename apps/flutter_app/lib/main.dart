@@ -8,6 +8,7 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/bootstrap.dart';
+import 'app/migrate_local_preferences.dart';
 import 'app/lala_app.dart';
 import 'features/settings/data/privacy_settings_store.dart';
 
@@ -46,6 +47,7 @@ Future<void> main() async {
   // swallowed inside bootstrapAppState (clean first-run); the app always starts.
   await bootstrapAppState();
   await PrivacySettingsStore.instance.ensureLoaded();
+  await migrateLocalPreferences();
   // C2: Riverpod 루트. feature 컨트롤러(C3)가 ProviderScope 하위에서 동작한다.
-  runApp(const ProviderScope(child: LalaApp()));
+  runApp(const ProviderScope(child: LalaApp(useLocalDesign: true)));
 }

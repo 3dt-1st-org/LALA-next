@@ -166,7 +166,18 @@ const LalaPlace _place = LalaPlace(
   ),
 );
 
-class _PlaceDetailBackend implements LalaBackend {
+class _PlaceDetailBackend implements LalaBackend, LalaPlaceLookupBackend {
+  @override
+  Future<LalaEnvelope<LalaPlaceLookup>> lookupPlaces(List<String> ids) async =>
+      _envelope(
+        LalaPlaceLookup(
+          places: ids.contains(_place.placeId) ? [_place] : [],
+          missingPlaceIds: ids.where((id) => id != _place.placeId).toList(),
+          source: 'db',
+          dataAsOf: '2026-09-03T09:00:00Z',
+        ),
+      );
+
   @override
   Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() async => _envelope(
     const LalaPlacesResponse(

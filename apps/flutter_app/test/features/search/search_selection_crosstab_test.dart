@@ -1,3 +1,4 @@
+import 'package:lala_next_app/features/place/widgets/featured_place_panel.dart';
 // V7 follow-up: search-tab place selection through the shared cross-tab state.
 //
 // Proves the wiring end-to-end (§13.4):
@@ -108,7 +109,10 @@ class _MapFakeBackend implements LalaBackend {
       _envelope(_placesResponse());
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async => _envelope(
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
+    String? selectedPlaceId,
+    LalaPlanPreferenceContext? preferenceContext,
+  }) async => _envelope(
     LalaDailyPlan(
       language: 'ko',
       center: const LalaCoordinate(lat: 37.2828, lng: 127.0101),
@@ -160,12 +164,11 @@ Future<void> _flush(WidgetTester tester) async {
 
 /// Hermetic docent controller for the map branch — nothing plays in these
 /// tests, so the backend factory must never be called (eager call 금지).
-DocentExperienceController _docentController() =>
-    DocentExperienceController(
-      backendFactory: (_) => throw StateError('docent unused in crosstab'),
-      baseConfig: const LalaAppConfig(baseUri: ''),
-      player: InertDocentAudioPlayer(),
-    );
+DocentExperienceController _docentController() => DocentExperienceController(
+  backendFactory: (_) => throw StateError('docent unused in crosstab'),
+  baseConfig: const LalaAppConfig(baseUri: ''),
+  player: InertDocentAudioPlayer(),
+);
 
 /// Two-branch shell mirroring the production StatefulShellRoute. Like the real
 /// router it STARTS ON THE MAP branch — go_router builds inactive branches
@@ -274,7 +277,8 @@ void main() {
       );
       // The map adopted the selection: the detail sheet is open, driven by the
       // place the user tapped on the search tab.
-      expect(find.byType(MapDraggableSheet), findsOneWidget);
+      expect(find.byType(MapDraggableSheet), findsNothing);
+      expect(find.byType(FeaturedPlacePanel), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
@@ -311,7 +315,8 @@ void main() {
     // The map adopted it through the local tap path: selection held, detail
     // sheet open — the same surface a map-originated tap produces.
     expect(SelectedPlaceStore.current, 'crosstab-cafe');
-    expect(find.byType(MapDraggableSheet), findsOneWidget);
+    expect(find.byType(MapDraggableSheet), findsNothing);
+    expect(find.byType(FeaturedPlacePanel), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -349,7 +354,8 @@ void main() {
       await _flush(tester);
 
       expect(SelectedPlaceStore.current, 'crosstab-cafe');
-      expect(find.byType(MapDraggableSheet), findsOneWidget);
+      expect(find.byType(MapDraggableSheet), findsNothing);
+      expect(find.byType(FeaturedPlacePanel), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();

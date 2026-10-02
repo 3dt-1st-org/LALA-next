@@ -61,6 +61,40 @@ def fetch_places(
     return places[: max(1, min(limit, 100))]
 
 
+def fetch_places_by_ids(
+    *,
+    place_ids: list[str],
+    language: str,
+    include_scores: bool = False,
+) -> list[dict[str, Any]]:
+    rows_by_id = {str(row.get("place_id")): row for row in (_load_snapshot().get("places") or [])}
+    places: list[dict[str, Any]] = []
+    for place_id in place_ids:
+        row = rows_by_id.get(place_id)
+        if row is None:
+            continue
+        if not _has_valid_coordinates(row):
+            continue
+        place = _place_payload(row, distance_m=None, language=language)
+        if not include_scores:
+            place["score"] = None
+        places.append(place)
+    return places
+
+
+def _has_valid_coordinates(row: dict[str, Any]) -> bool:
+    lat = row.get("lat")
+    lng = row.get("lng")
+    return (
+        isinstance(lat, (int, float))
+        and not isinstance(lat, bool)
+        and isinstance(lng, (int, float))
+        and not isinstance(lng, bool)
+        and -90 <= float(lat) <= 90
+        and -180 <= float(lng) <= 180
+    )
+
+
 @lru_cache(maxsize=1)
 def _load_snapshot() -> dict[str, Any]:
     try:
@@ -76,7 +110,9 @@ def _load_snapshot() -> dict[str, Any]:
     return decoded
 
 
-def _place_payload(row: dict[str, Any], *, distance_m: float, language: str) -> dict[str, Any]:
+def _place_payload(
+    row: dict[str, Any], *, distance_m: float | None, language: str
+) -> dict[str, Any]:
     name = (
         row.get("name_en")
         if language == "en" and row.get("name_en")
@@ -108,7 +144,7 @@ def _place_payload(row: dict[str, Any], *, distance_m: float, language: str) -> 
         "event_url": row.get("event_url"),
         "is_ongoing": row.get("is_ongoing"),
         "is_approximate_location": row.get("is_approximate_location"),
-        "distance_m": int(round(distance_m)),
+        "distance_m": int(round(distance_m)) if distance_m is not None else None,
         "source": SOURCE_NAME,
         "upstream_source": row.get("upstream_source") or "snapshot",
         "score": _score_payload(row.get("score")),

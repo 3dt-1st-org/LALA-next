@@ -338,6 +338,15 @@ class TripLibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Read a saved plan without publishing it or triggering automatic writes.
+  Future<LalaDailyPlan?> readSavedPlan(String planDate) async {
+    final remote = _remote;
+    final epoch = _syncEpoch;
+    if (remote == null) return null;
+    final plan = await remote.loadPlan(planDate);
+    return epoch == _syncEpoch ? plan : null;
+  }
+
   Future<LalaDailyPlan?> loadPastPlan(String planDate) async {
     final remote = _remote;
     if (remote == null) return null;

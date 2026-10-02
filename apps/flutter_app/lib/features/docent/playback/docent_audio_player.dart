@@ -6,6 +6,7 @@ import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import '../../preferences/data/travel_preferences_store.dart';
 
 /// Docent narration playback state machine (§V4-B B4).
 enum DocentPlaybackState { idle, loading, playing, paused, done, error }
@@ -27,8 +28,11 @@ abstract class DocentAudioPlayer {
 
 /// Production impl backed by `package:audioplayers` ([AudioPlayer] + [BytesSource]).
 class AudioplayersDocentAudioPlayer implements DocentAudioPlayer {
-  AudioplayersDocentAudioPlayer({AudioPlayer? audioPlayer})
-    : _audioPlayer = audioPlayer ?? AudioPlayer() {
+  AudioplayersDocentAudioPlayer({
+    AudioPlayer? audioPlayer,
+    TravelPreferencesStore? preferencesStore,
+  }) : _preferencesStore = preferencesStore ?? TravelPreferencesStore.instance,
+       _audioPlayer = audioPlayer ?? AudioPlayer() {
     _subscriptions = [
       _audioPlayer.onPlayerStateChanged.listen(_applyPlayerState),
       // The dedicated complete event is authoritative for short clips whose
@@ -43,6 +47,7 @@ class AudioplayersDocentAudioPlayer implements DocentAudioPlayer {
     ];
   }
 
+  final TravelPreferencesStore _preferencesStore;
   final AudioPlayer _audioPlayer;
   late final List<StreamSubscription<dynamic>> _subscriptions;
   final ValueNotifier<DocentPlaybackState> _state = ValueNotifier(
@@ -61,7 +66,12 @@ class AudioplayersDocentAudioPlayer implements DocentAudioPlayer {
     }
     _state.value = DocentPlaybackState.loading;
     try {
-      await _audioPlayer.play(BytesSource(bytes));
+      await _preferencesStore.ensureLoaded();
+      await _audioPlayer.setSource(BytesSource(bytes));
+      await _audioPlayer.setPlaybackRate(
+        _preferencesStore.value.narrationSpeed,
+      );
+      await _audioPlayer.resume();
       // The state stream drives playing/paused; loading stays until the platform
       // emits `playing` (or an error/onLog supersedes it).
     } on Object catch (_) {
@@ -81,6 +91,10 @@ class AudioplayersDocentAudioPlayer implements DocentAudioPlayer {
   @override
   Future<void> resume() async {
     try {
+      await _preferencesStore.ensureLoaded();
+      await _audioPlayer.setPlaybackRate(
+        _preferencesStore.value.narrationSpeed,
+      );
       await _audioPlayer.resume();
     } on Object catch (_) {
       _state.value = DocentPlaybackState.error;

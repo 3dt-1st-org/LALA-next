@@ -1,6 +1,14 @@
 # 공용 개발 API와 개발 환경 준비표
 
-상태: **공용 개발 API 우선 확정 / 개발 Azure 런타임 인수 대기**. 준비 조사 뒤 사용자의 별도 지시로 main CI와 운영 EC2 API 자동 배포를 실행·확인했다. 개발 전용 API·DB의 현재 가동·분리 상태는 여전히 인수되지 않았다.
+상태: **공용 개발 API 우선 / 개발 Azure 런타임 인수 대기 / 격리 데스크톱 로컬 경로 사용 가능**. 2026-10-03 기준 코드는 `origin/main` `2d17a1ee7b05100776b900c13ed79e5c2289bacb`이며, 개발 전용 공용 API·DB의 현재 가동·분리 상태는 여전히 인수되지 않았다. 데스크톱 로컬 경로의 존재는 공용 환경 인수를 대신하지 않는다.
+
+## 0. 2026-10-03 현재 기준 갱신
+
+- `main 9e312bb4`, 후보 `8aa184e3`, 통합 기준 `e64ed058`은 2026-09 준비·통합 과정의 역사적 기준이다. 현재 구현 사실은 위 `origin/main`에서 다시 확인한다.
+- PR #213으로 추적되는 공통 `AGENTS.md`, `CLAUDE.md`, Copilot 진입점과 비밀·API 기준 문서 연결이 이미 반영됐다. 이 문서에서는 공통 지침을 다시 만들지 않는다.
+- PR #218로 [데스크톱 로컬 개발 절차](../../operations/desktop-local-development.md)와 `scripts/local_dev.py`가 `main`에 포함됐다. PostgreSQL/PostGIS/pgvector 격리 Docker DB와 local API의 `setup`·`serve`·`check` 경로다.
+- 로컬 runner는 운영 dotenv와 상속된 클라우드 자격증명을 가져오지 않고 live AI·Speech를 끈다. 수원 장소·날씨·도슨트 fixture를 쓰므로 DB-backed여도 운영 데이터나 현재 여행정보의 인수 증거가 아니다.
+- 이번 갱신에서는 로컬 `setup`·서버 실행, DB 쓰기, 클라우드 조회, 비밀값 조회, 앱 실행을 하지 않았다. 코드·문서 계약만 읽기 전용으로 확인했다.
 
 ## 1. 확인한 사실과 한계
 
@@ -45,18 +53,19 @@ GitHub 설정은 “다시 배포할 수 있는 구성 흔적”이며, 현재 �
 |---|---|---|
 | 공용 개발 API URL·접근 방식 | [접근 차단] GitHub dev 설정은 있으나 현재 배포 구독 읽기 권한·environment URL 없음. 운영 API를 대체값으로 쓰지 않음 | 기술 리드 |
 | API 프로세스·DB·권한의 운영 분리 | [미검증] Container App·DB·Key Vault·배포 구독의 현재 상태와 운영 분리 증거 | 기술 리드 |
-| 앱 SHA / API SHA / 적용 SQL 수준 | 제품 코드 기준 `e64ed058`; 운영 API 자동 배포 확인. 개발 API·Flutter 빌드 SHA와 SQL head는 [확인 필요] | 기술 리드 + 백엔드 |
+| 앱 SHA / API SHA / 적용 SQL 수준 | 현재 코드 기준 `2d17a1ee`; 공용 개발 API·Flutter 빌드 SHA와 적용 SQL head는 [확인 필요] | 기술 리드 + 백엔드 |
 | 공개 조회·인증 테스트 경로 | 장소 조회, 저장 계정 API, 인증 callback·CORS 등록 | 백엔드 + 프론트 |
 | 개발 계정 | 게스트 경로 + 서로 다른 Logto 시험 계정 A/B. 자격증명은 비공개 전달 | 백엔드 + 기술 리드 |
 | 비밀 backend·프로필·공개 allowlist | registry·승인된 region/prefix/mapping·IAM·존재 metadata를 순서대로 확인 | 기술 리드 |
 | 개발 데이터 | 안정적인 장소 ID, 정상·빈 결과·장소 누락 사례, 사용자별 저장 상태 | 백엔드 + DB |
 | 데이터 준비·초기화 | 비운영 대상, 소유자, 복구·초기화 범위와 실행 절차 | DB·인프라 |
+| 선택적 데스크톱 로컬 | PR #218 경로 존재. 격리 Docker DB·local API·수원 fixture이며 실행 결과는 [미검증] | 기능 담당 + 기술 리드 |
 | 실환경 인수 기록 | 앱/API SHA, 검사 일시, 플랫폼·언어, 성공·실패, 담당 역할 | 기능 담당 |
 | 비용·자원 구성 | 별도 환경이 없다면 구성안·예상 비용·운영자 검토부터 작성 | 기술 리드 |
 
 확인 요청은 위 카드의 빈칸을 한 번에 모아 기술 리드가 정리한다. 환경 생성, 실제 IAM 변경, DB 초기화는 인수 카드가 채워진 뒤 별도 작업이다.
 
-## 3. 선택 전 두 코드 기준과 버전
+## 3. 역사적 두 코드 기준과 버전
 
 | 항목 | main 9e312bb4 | 후보 8aa184e3 | 준비 규칙 |
 |---|---|---|---|
@@ -68,7 +77,7 @@ GitHub 설정은 “다시 배포할 수 있는 구성 흔적”이며, 현재 �
 | Logto Dart SDK lock | 3.0.0 | 같음 | 기존 SDK·gateway 유지 |
 | 추가 후보 의존성 | 기기 TTS·open-map asset 추가 없음 | flutter_tts·open-map asset 추가 | 선택한 코드 기준에 맞춰 준비 |
 
-근거는 각 SHA의 .python-version, .github/workflows/ci.yml, 앱 pubspec.yaml·pubspec.lock이다. 코드상 저장 API·SavedPlacesPage·TripLibraryRemote는 두 기준에서 동일하다. TripLibraryStore에는 후보의 로딩 Future zone 보완이 있다. 자세한 계약은 [구조 예제](09-mvvm-and-api-contracts.md)를 본다.
+이 표는 2026-09의 통합 선택 근거다. 근거는 각 SHA의 .python-version, .github/workflows/ci.yml, 앱 pubspec.yaml·pubspec.lock이다. 코드상 저장 API·SavedPlacesPage·TripLibraryRemote는 두 기준에서 동일했고, TripLibraryStore에는 후보의 로딩 Future zone 보완이 있었다. 현재 버전과 실행 경로는 `origin/main`에서 다시 확인하며 자세한 계약은 [구조 예제](09-mvvm-and-api-contracts.md)를 본다.
 
 ## 4. 역할별 접근
 
@@ -89,9 +98,9 @@ DB_DSN, 서버 Naver Search 비밀, AWS 자격증명, AI·Speech 키, 서버 API
 
 fixture는 단위·widget·오류 상태 검사에만 사용한다. 공용 API나 DB가 준비되지 않은 상태에서 fixture 성공을 통합 검증 통과로 보고하지 않는다.
 
-서버 api/worker 프로필은 AWS Secrets Manager 경로를 사용한다. ci는 제공된 환경값만 사용하며 local은 환경값 우선·AWS 명시 opt-in이다. dotenv 로딩은 명시 local 조건을 확인한다. 근거는 [런타임 계약](../../operations/aws-secrets-manager-runtime-contract.md)과 후보 core/runtime_secrets.py다.
+서버 api/worker 프로필은 AWS Secrets Manager 경로를 사용한다. ci는 제공된 환경값만 사용하며 local은 환경값 우선·AWS 명시 opt-in이다. dotenv 로딩은 명시 local 조건을 확인한다. 근거는 [런타임 계약](../../operations/aws-secrets-manager-runtime-contract.md)과 현재 `apps/api/app/core/runtime_secrets.py`다.
 
-Flutter 공개 설정 wrapper는 이미 설정된 값을 먼저 채택하는 경로가 있고, 승인된 map ID에 operator-supplied Parameter Store mapping → Secrets Manager → 신뢰된 로컬 파일 fallback을 지원한다. 항상 SSM이 최우선이라고 일반화하지 않는다. 항목의 부재(absent), 접근 거부(denied), 일시 불가(unavailable), 형식 오류(invalid)를 분리하며 권한·리전 차이를 비밀 누락으로 단정하지 않는다.
+Flutter 공개 설정 wrapper는 이미 주입된 공개값을 먼저 채택한다. `NAVER_MAP_CLIENT_ID`가 비어 있을 때만 operator가 지정한 Parameter Store mapping을 확인하고, 이어 승인된 Secrets Manager 항목과 신뢰된 로컬 파일을 확인한다. 다른 공개 Logto 항목은 이미 주입된 값 → 승인된 Secrets Manager 항목 → 신뢰된 로컬 파일 순서다. 항상 SSM이 최우선이라고 일반화하지 않는다. 항목의 부재(absent), 접근 거부(denied), 일시 불가(unavailable), 형식 오류(invalid)를 분리하며 권한·리전 차이를 비밀 누락으로 단정하지 않는다.
 
 사용자 인계에 기존 로컬 환경 파일도 있다는 단서가 있다. 이번에는 값을 열거나 새 키 발급·재입력을 요구하지 않았다. AI 경로는 Standard OpenAI이며 Azure OpenAI로 바꾸지 않는다. Azure Speech는 별도 선택적 음성 의존성이다. 설정 확인을 위한 유료 호출은 하지 않는다.
 
@@ -177,10 +186,24 @@ scripts/unix/start_api.sh --runtime-profile local --host-name 127.0.0.1 --port 8
 
 local 프로필은 dotenv를 읽을 수 있다. 기본 .env를 무조건 복사하거나 기존 운영 .env를 불러오지 않는다. 서버 구동, 실제 DB 적용, live AI·Speech는 check-only와 별개다.
 
+### 격리 데스크톱 로컬 개발 경로
+
+현재 `main`에서는 수동으로 운영 설정을 조합하기보다 [데스크톱 로컬 개발 절차](../../operations/desktop-local-development.md)의 runner를 우선 검토한다.
+
+~~~text
+python scripts/local_dev.py setup
+python scripts/local_dev.py serve
+python scripts/local_dev.py check
+~~~
+
+위 명령은 경로 식별용이며 이번 문서 갱신에서 실행하지 않았다. `setup`은 격리 Docker DB 생성, canonical SQL 적용과 fixture seed 쓰기를 수행하므로 읽기 전용 조사가 아니다. `serve`와 `check`는 `setup`이 준비한 전용 DB·API를 전제로 한다. 프론트엔드 전원이 이 환경을 설치할 필요는 없으며 공용 개발 API가 준비되면 공용 환경을 우선한다.
+
+로컬 API는 loopback에 바인딩되고 운영 RDS나 production 데이터를 가져오지 않는다. 수원이 아닌 지역에서 장소 결과가 비는 것은 정상일 수 있다. 지도 공개 키·허용 origin, 브라우저 위치, Logto callback은 DB readiness와 별도 인수 항목이다. 로컬 runner 성공을 실 Logto·운영 데이터·공용 API 통합 성공으로 보고하지 않는다.
+
 ## 7. 장애와 개발 기준 선택
 
 - 공용 API 장애 시: 프론트는 fixture 기반 표시·상태 검사, 백엔드는 단위·계약 검사까지 진행한다. 저장·동기화·지도·음성 통합 결과는 대기한다.
-- 화면 자료와 독립적으로 후보 통합 추천을 채택해 제품 코드 기준을 main `e64ed058`로 고정했다. 화면 자료 수령 후에는 최종 MVP 범위에 비춰 노출 항목을 다시 확인한다.
+- 화면 자료와 독립적으로 후보 통합 추천을 채택해 당시 제품 코드 기준을 main `e64ed058`로 고정했다. 2026-10-03 현재 구현 기준은 `origin/main` `2d17a1ee`이며, 화면 자료 수령 후에는 최종 MVP 범위에 비춰 노출 항목을 다시 확인한다.
 - 과거 로컬의 5개 커밋은 일괄 cherry-pick하지 않았다. 원래 문서 브랜치도 제품 코드 기준으로 사용하지 않는다.
 - 70개 추가 커밋 전체가 실증 범위가 되는 것은 아니다. 보류 기능은 보존하되 실증 완료 범위와 분리한다.
 - 후속 병합·배포 전에는 필수 리뷰·CI·검증 SHA·DB 호환성·readiness·복구 담당을 합의한다. 운영 주소를 개발 API의 대체값으로 사용하지 않는다.

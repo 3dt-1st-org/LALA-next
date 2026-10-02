@@ -1,3 +1,7 @@
+import 'package:go_router/go_router.dart';
+import 'package:lala_next_app/features/place/widgets/featured_place_panel.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -16,7 +20,6 @@ import 'package:lala_next_app/core/state/selected_place_store.dart';
 import 'package:lala_next_app/core/state/slot_visit_store.dart';
 import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
 import 'package:lala_next_app/features/local_signals/presentation/pages/local_signals_page.dart';
-import 'package:lala_next_app/features/map/widgets/map_bottom_dock.dart';
 import 'package:lala_next_app/features/map/widgets/top_map_chrome.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/plan/presentation/pages/plan_page.dart';
@@ -28,11 +31,14 @@ import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   // RegionContextStore and the Lane 1 cross-tab holders (SelectedPlaceStore,
   // PlanContextStore) are process-local singletons; reset them before each test
   // so a selection/plan/region made in one test cannot leak into another tab's
   // state. Mirrors the existing region reset for the new sibling holders.
-  setUp(() {
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    await TravelPreferencesStore.instance.clear();
     RegionContextStore.clear();
     SelectedPlaceStore.clear();
     PlanContextStore.clear();
@@ -340,26 +346,40 @@ void main() {
     await tester.tap(addToPlanButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('하루 일정'), findsAtLeastNWidgets(1));
+    expect(find.byType(PlanPage), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
     expect(find.textContaining('화성행궁'), findsAtLeastNWidgets(1));
 
-    await tester.tap(find.byTooltip('닫기').first);
+    GoRouter.of(tester.element(find.byType(PlanPage))).go('/map-route');
     await tester.pumpAndSettle();
 
     await expandMapDockIfCollapsed(tester);
 
-    final evidenceButton = find.widgetWithText(TextButton, '점수/근거');
+    final evidenceButton = find.byKey(
+      const ValueKey('open-full-place-details'),
+    );
     await tester.ensureVisible(evidenceButton);
     await tester.tap(evidenceButton);
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('detail-place-hero-image')), findsNothing);
+    expect(find.byKey(const ValueKey('place-detail-page')), findsOneWidget);
+    final evidenceToggle = find.byKey(
+      const ValueKey('place-detail-toggle-evidence'),
+    );
+    await tester.ensureVisible(evidenceToggle);
+    await tester.tap(evidenceToggle);
+    await tester.pumpAndSettle();
     expect(find.text('로컬 점수'), findsOneWidget);
     expect(find.text('내국인 소비'), findsOneWidget);
     expect(find.text('수요 분산'), findsOneWidget);
     expect(find.text('문화 연계'), findsOneWidget);
     expect(find.text('날씨 적합'), findsOneWidget);
     expect(find.text('86'), findsAtLeastNWidgets(1));
+    await tester.drag(
+      find.byKey(const ValueKey('place-detail-scroll')),
+      const Offset(0, -400),
+    );
+    await tester.pumpAndSettle();
     expect(find.text('한국관광공사'), findsOneWidget);
     expect(find.text('카드 소비'), findsOneWidget);
     expect(find.text('문화행사 데이터'), findsOneWidget);
@@ -388,7 +408,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('장소 상세'), findsAtLeastNWidgets(1));
+    expect(find.byType(FeaturedPlacePanel), findsOneWidget);
     expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
 
     await tester.tap(find.byTooltip('저장').first);
@@ -402,7 +422,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('하루 일정'), findsAtLeastNWidgets(1));
+    expect(find.byType(PlanPage), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
     expect(find.textContaining('화성행궁'), findsAtLeastNWidgets(1));
   });
 
@@ -439,7 +460,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('장소 상세'), findsAtLeastNWidgets(1));
+      expect(find.byType(FeaturedPlacePanel), findsOneWidget);
       expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
       expect(find.text('현재 지도 결과에서 연결된 장소를 찾지 못했어요.'), findsNothing);
       expect(
@@ -454,7 +475,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('하루 일정'), findsAtLeastNWidgets(1));
+      expect(find.byType(PlanPage), findsOneWidget);
+      expect(find.byType(BottomSheet), findsNothing);
       expect(find.text('현재 지도 결과에서 연결된 장소를 찾지 못했어요.'), findsNothing);
 
       actions.dispatch(
@@ -1022,7 +1044,7 @@ void main() {
       find.byKey(const ValueKey('map-bottom-dock')),
     );
     final autoToggleRect = tester.getRect(autoToggle);
-    final dockDocentPreview = find.byKey(const ValueKey('dock-docent-preview'));
+    final dockDocentPreview = find.byType(FeaturedPlacePanel);
     final dockDocentPreviewRect = tester.getRect(dockDocentPreview);
     expect(autoToggleRect.bottom, lessThan(bottomDockRect.top));
     expect(dockDocentPreview, findsOneWidget);
@@ -1241,7 +1263,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('장소 상세'), findsOneWidget);
+    expect(find.byType(FeaturedPlacePanel), findsOneWidget);
     expect(find.text('행궁동 카페거리 도슨트'), findsAtLeastNWidgets(1));
   });
 
@@ -1261,9 +1283,10 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('intervention-toast-plan')));
     await tester.pumpAndSettle();
-    expect(find.text('하루 일정'), findsAtLeastNWidgets(1));
+    expect(find.byType(PlanPage), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
 
-    await tester.tap(find.byIcon(Icons.close).last);
+    GoRouter.of(tester.element(find.byType(PlanPage))).go('/map-route');
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('intervention-toast-close')));
     await tester.pumpAndSettle();
@@ -1292,7 +1315,7 @@ void main() {
     },
   );
 
-  testWidgets('planner sheet shows weather header and regenerates plan', (
+  testWidgets('planner action opens the plan tab and regenerates plan', (
     tester,
   ) async {
     final backend = FakeBackend(
@@ -1318,10 +1341,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('planner-regenerate')));
     await tester.pumpAndSettle();
-    expect(find.text('하루 일정 재생성'), findsOneWidget);
-
-    await tester.tap(find.widgetWithText(FilledButton, '다시 생성'));
-    await tester.pumpAndSettle();
+    expect(find.byType(PlanPage), findsOneWidget);
     expect(backend.dailyPlanRequests, 2);
   });
 
@@ -1342,8 +1362,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('장소 상세'), findsOneWidget);
-    expect(find.text('화성행궁 도슨트'), findsAtLeastNWidgets(1));
+    expect(find.byKey(const ValueKey('place-detail-page')), findsOneWidget);
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('auto docent on keeps the nearest place in map guidance', (
@@ -1541,15 +1561,7 @@ void main() {
     await tester.tap(find.text('수원화성'));
     await tester.pumpAndSettle();
 
-    expect(find.text('장소 상세'), findsOneWidget);
-    expect(find.text('수원화성 도슨트'), findsAtLeastNWidgets(1));
-
-    await tester.tapAt(const Offset(20, 20));
-    await tester.pumpAndSettle();
-
-    await expandMapDockIfCollapsed(tester);
-
-    expect(find.text('장소 상세'), findsNothing);
+    expect(find.byType(FeaturedPlacePanel), findsOneWidget);
     expect(find.text('수원화성 도슨트'), findsAtLeastNWidgets(1));
 
     await tester.tap(find.byKey(const ValueKey('location-refresh')));
@@ -1607,7 +1619,7 @@ void main() {
     await tester.tap(find.text('수원화성'));
     await tester.pumpAndSettle();
 
-    expect(find.text('장소 상세'), findsOneWidget);
+    expect(find.byType(FeaturedPlacePanel), findsOneWidget);
     expect(
       find.byKey(const ValueKey('lala-map-fallback-center-37.2870-127.0110')),
       findsOneWidget,
@@ -1631,8 +1643,8 @@ void main() {
     await expandMapDockIfCollapsed(tester);
 
     expect(find.text('장소 상세'), findsNothing);
-    expect(find.text('화성행궁 도슨트'), findsAtLeastNWidgets(1));
-    expect(find.text('수원화성 도슨트'), findsNothing);
+    expect(find.byType(FeaturedPlacePanel), findsOneWidget);
+    expect(find.text('수원화성 도슨트'), findsAtLeastNWidgets(1));
   });
 
   testWidgets(
@@ -2107,15 +2119,17 @@ void main() {
       TestLalaApp(
         backendFactory: FakeBackend.new,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
-        authControllerFactory: (_) =>
-            _widgetTestAuthController(gateway: gateway, accountApi: WidgetTestAccountApi(
-              getMeError: const LalaApiException(
-                code: 'UNAUTHORIZED',
-                message: 'jwt rejected for legacy-scope-internal-detail',
-                statusCode: 401,
-                retryable: false,
-              ),
-            )),
+        authControllerFactory: (_) => _widgetTestAuthController(
+          gateway: gateway,
+          accountApi: WidgetTestAccountApi(
+            getMeError: const LalaApiException(
+              code: 'UNAUTHORIZED',
+              message: 'jwt rejected for legacy-scope-internal-detail',
+              statusCode: 401,
+              retryable: false,
+            ),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -2171,9 +2185,9 @@ void main() {
         .getSize(find.byKey(const ValueKey('map-utility-control-row')))
         .width;
 
-    expect(dockWidth, lessThanOrEqualTo(760));
+    expect(dockWidth, 1440);
     expect(railWidth, lessThanOrEqualTo(780));
-    expect(utilityWidth, lessThanOrEqualTo(760));
+    expect(utilityWidth, 1440 - 32);
   });
 
   testWidgets(
@@ -2220,42 +2234,45 @@ void main() {
     },
   );
 
-  testWidgets('mobile map dock expands from the 84dp B2 slim summary', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(393, 852);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    await tester.pumpWidget(
-      TestLalaApp(
-        backendFactory: FakeBackend.new,
-        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final dock = find.byKey(const ValueKey('map-bottom-dock'));
-    expect(tester.getSize(dock).height, MapBottomDock.mobileCollapsedHeight);
-    expect(
-      find.byKey(const ValueKey('map-dock-expand-toggle')),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('map-dock-expand-toggle')));
-    await tester.pumpAndSettle();
-
-    expect(tester.getSize(dock).height, 196);
-    expect(
-      find.byKey(const ValueKey('map-dock-collapse-toggle')),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('map-dock-collapse-toggle')));
-    await tester.pumpAndSettle();
-    expect(tester.getSize(dock).height, MapBottomDock.mobileCollapsedHeight);
-  });
+  testWidgets(
+    'unified place dock expands, dismisses and reopens on selection',
+    (tester) async {
+      tester.view.physicalSize = const Size(393, 852);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: FakeBackend.new,
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final dock = find.byKey(const ValueKey('map-bottom-dock'));
+      expect(tester.getSize(dock).width, 393);
+      final initialHeight = tester.getSize(dock).height;
+      await tester.dragFrom(
+        tester.getTopLeft(dock) + const Offset(196, 24),
+        const Offset(0, -600),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getSize(dock).height, greaterThan(initialHeight));
+      await tester.dragFrom(
+        tester.getTopLeft(dock) + const Offset(196, 24),
+        const Offset(0, 900),
+      );
+      await tester.pumpAndSettle();
+      expect(dock, findsNothing);
+      await tester.tap(
+        find.byKey(const ValueKey('map-rail-place-card-hwaseong-haenggung')),
+      );
+      await tester.pumpAndSettle();
+      expect(dock, findsOneWidget);
+      expect(find.byType(FeaturedPlacePanel), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('map-dock-close')));
+      await tester.pumpAndSettle();
+      expect(dock, findsNothing);
+    },
+  );
 
   // P6F §13.5 반응형 code-conformance: 360/430/768dp 에서 5 칩+설정 접근 가능,
   // 지도 컨트롤 스택과 하단 dock 의 세로 영역이 겹치지 않는다(동작 규칙만 고정).
@@ -2505,7 +2522,7 @@ void main() {
     ) async {
       await pumpTabAt(tester, 360, planTab());
       expect(find.text('오늘 일정'), findsOneWidget);
-      expect(find.byTooltip('달력'), findsOneWidget);
+      expect(find.byTooltip('새로고침'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('plan-slot-hwaseong-haenggung')),
         findsOneWidget,
@@ -2517,7 +2534,7 @@ void main() {
     ) async {
       await pumpTabAt(tester, 430, planTab());
       expect(find.text('오늘 일정'), findsOneWidget);
-      expect(find.byTooltip('달력'), findsOneWidget);
+      expect(find.byTooltip('새로고침'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('plan-slot-hwaseong-haenggung')),
         findsOneWidget,
@@ -2529,7 +2546,7 @@ void main() {
     ) async {
       await pumpTabAt(tester, 768, planTab());
       expect(find.text('오늘 일정'), findsOneWidget);
-      expect(find.byTooltip('달력'), findsOneWidget);
+      expect(find.byTooltip('새로고침'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('plan-slot-hwaseong-haenggung')),
         findsOneWidget,
@@ -2687,17 +2704,19 @@ void main() {
 
     await expandMapDockIfCollapsed(tester);
 
-    await tester.tap(find.widgetWithText(TextButton, '상세'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('장소 상세'), findsOneWidget);
-    expect(find.byIcon(Icons.favorite_border), findsOneWidget);
+    expect(find.text('장소 상세'), findsNothing);
+    expect(find.byKey(const ValueKey('map-bottom-dock')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('open-full-place-details')),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.bookmark_border), findsOneWidget);
     expect(find.byTooltip('저장'), findsOneWidget);
 
     await tester.tap(find.byTooltip('저장'));
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(Icons.favorite), findsOneWidget);
+    expect(find.byIcon(Icons.bookmark), findsOneWidget);
     expect(find.byTooltip('저장됨'), findsOneWidget);
   });
 
@@ -2800,7 +2819,7 @@ void main() {
     expect(find.textContaining('화성행궁'), findsNothing);
     expect(find.textContaining('경기도'), findsNothing);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Details'));
+    expect(find.byType(FeaturedPlacePanel), findsOneWidget);
     await tester.pumpAndSettle();
 
     expect(find.text('Details'), findsWidgets);
@@ -2810,18 +2829,23 @@ void main() {
     expect(find.text('1 linked events'), findsOneWidget);
     expect(find.text('Card spend KRW 14,000,000'), findsNothing);
 
-    final showSignalsButton = find.widgetWithText(
-      OutlinedButton,
-      'Show signals',
+    final showSignalsButton = find.byKey(
+      const ValueKey('open-full-place-details'),
     );
     await tester.ensureVisible(showSignalsButton);
     await tester.pumpAndSettle();
     await tester.tap(showSignalsButton);
     await tester.pumpAndSettle();
 
+    final evidenceToggle = find.byKey(
+      const ValueKey('place-detail-toggle-evidence'),
+    );
+    await tester.ensureVisible(evidenceToggle);
+    await tester.tap(evidenceToggle);
+    await tester.pumpAndSettle();
     expect(find.text('Card spend KRW 14,000,000'), findsOneWidget);
     expect(find.text('Local score'), findsOneWidget);
-    expect(find.text('LALA recommendation score'), findsOneWidget);
+    expect(find.text('86'), findsAtLeastNWidgets(1));
     expect(find.textContaining('화성행궁'), findsNothing);
     expect(find.textContaining('경기도'), findsNothing);
     expect(find.textContaining('snapshot'), findsNothing);
@@ -2877,8 +2901,7 @@ void main() {
       // remediation C2: photo-forward 레일 카드는 이름 오버레이만(행사 상태 라벨은 상세에서).
       expect(find.text('화성행궁 야간 산책'), findsWidgets);
 
-      await tester.tap(find.widgetWithText(TextButton, '상세'));
-      await tester.pumpAndSettle();
+      expect(find.byType(FeaturedPlacePanel), findsOneWidget);
 
       expect(find.text('행사 정보'), findsOneWidget);
       expect(find.text('진행 중'), findsOneWidget);
@@ -2887,7 +2910,9 @@ void main() {
       expect(find.text('로컬 점수'), findsNothing);
       expect(find.text('내국인 소비'), findsNothing);
 
-      final evidenceButton = find.widgetWithText(OutlinedButton, '점수/근거 보기');
+      final evidenceButton = find.byKey(
+        const ValueKey('open-full-place-details'),
+      );
       await tester.scrollUntilVisible(
         evidenceButton,
         180,
@@ -2921,11 +2946,10 @@ void main() {
     expect(find.textContaining('Official data'), findsNothing);
     expect(find.textContaining('snapshot'), findsNothing);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Details'));
+    expect(find.byType(FeaturedPlacePanel), findsOneWidget);
     await tester.pumpAndSettle();
-    final showSignalsButton = find.widgetWithText(
-      OutlinedButton,
-      'Show signals',
+    final showSignalsButton = find.byKey(
+      const ValueKey('open-full-place-details'),
     );
     await tester.scrollUntilVisible(
       showSignalsButton,
@@ -2959,7 +2983,7 @@ void main() {
 
     await expandMapDockIfCollapsed(tester);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Details'));
+    expect(find.byType(FeaturedPlacePanel), findsOneWidget);
     await tester.pumpAndSettle();
 
     expect(find.text('Event info'), findsOneWidget);
@@ -2968,7 +2992,9 @@ void main() {
     expect(find.text('Open event details'), findsOneWidget);
     expect(find.textContaining('행사'), findsNothing);
 
-    final evidenceButton = find.widgetWithText(OutlinedButton, 'Show signals');
+    final evidenceButton = find.byKey(
+      const ValueKey('open-full-place-details'),
+    );
     await tester.scrollUntilVisible(
       evidenceButton,
       180,
@@ -3002,7 +3028,7 @@ void main() {
       expect(find.textContaining('호반아트리움'), findsNothing);
       expect(find.textContaining('경기도'), findsNothing);
 
-      await tester.tap(find.widgetWithText(TextButton, 'Details'));
+      expect(find.byType(FeaturedPlacePanel), findsOneWidget);
       await tester.pumpAndSettle();
 
       expect(find.text('Nearby area'), findsAtLeastNWidgets(1));
@@ -3029,8 +3055,7 @@ void main() {
       expect(find.textContaining('Hoam Art Museum'), findsNothing);
       expect(find.textContaining('Everland-ro'), findsNothing);
 
-      await tester.tap(find.widgetWithText(TextButton, '상세'));
-      await tester.pumpAndSettle();
+      expect(find.byType(FeaturedPlacePanel), findsOneWidget);
 
       expect(find.text('주변 지역'), findsAtLeastNWidgets(1));
       expect(find.textContaining('Hoam Art Museum'), findsNothing);
@@ -3102,7 +3127,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('화성행궁 산책'), findsAtLeastNWidgets(1));
     expect(find.textContaining('Hwaseong walk'), findsNothing);
-    await tester.tap(find.byIcon(Icons.close).last);
+    GoRouter.of(tester.element(find.byType(PlanPage))).go('/map-route');
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('settings-button')));
@@ -4025,7 +4050,10 @@ class FakeBackend implements LalaBackend {
   }
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async {
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
+    String? selectedPlaceId,
+    LalaPlanPreferenceContext? preferenceContext,
+  }) async {
     dailyPlanRequests += 1;
     dailyPlanRequestConfigs.add(config);
     await _delayIfNeeded(dailyPlanDelay);
@@ -4204,7 +4232,10 @@ class SnapshotFallbackBackend extends FakeBackend {
   }
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async {
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
+    String? selectedPlaceId,
+    LalaPlanPreferenceContext? preferenceContext,
+  }) async {
     final place = _offlineFallbackPlace();
     return _envelope(
       LalaDailyPlan(
@@ -4248,7 +4279,10 @@ class BilingualInterventionBackend extends FakeBackend {
   }
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async {
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
+    String? selectedPlaceId,
+    LalaPlanPreferenceContext? preferenceContext,
+  }) async {
     dailyPlanRequests += 1;
     final place = (places ?? [_bilingualPlace()]).first;
     return _envelope(

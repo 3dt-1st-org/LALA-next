@@ -1,13 +1,20 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, Request, Response
+from fastapi import APIRouter, Path, Query, Request, Response
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.rate_limit import enforce_public_contest_paid_route_limit
 from apps.api.app.core.responses import ensure_request_id, success_envelope
 from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
+from apps.api.app.schemas.places import PLACE_ID_MAX_LENGTH, PlaceLookupRequest
 from apps.api.app.schemas.planner import DailyPlanRequest
-from apps.api.app.services import docent_service, places_service, planner_service, weather_service
+from apps.api.app.services import (
+    docent_service,
+    place_lookup_service,
+    places_service,
+    planner_service,
+    weather_service,
+)
 
 router = APIRouter()
 
@@ -44,6 +51,58 @@ def places(
     )
     return success_envelope(
         request=request, data=payload, meta={"source": payload.get("source", "computed")}
+    )
+
+
+@router.post("/places/lookup")
+def lookup_places(
+    request: Request,
+    body: PlaceLookupRequest,
+    lang: str = Query("ko"),
+    language: str | None = Query(None),
+    include_scores: bool = Query(False),
+) -> dict:
+    result = place_lookup_service.lookup_places(
+        place_ids=body.place_ids,
+        language=language or lang,
+        include_scores=include_scores,
+    )
+    data = {
+        "places": result.places,
+        "missing_place_ids": result.missing_place_ids,
+        "query": {
+            "place_ids": result.place_ids,
+            "language": result.language,
+            "include_scores": result.include_scores,
+        },
+        "source": result.source,
+        "data_as_of": result.data_as_of,
+    }
+    return success_envelope(request=request, data=data, meta={"source": result.source})
+
+
+@router.get("/places/{place_id:path}")
+def get_place(
+    request: Request,
+    place_id: str = Path(min_length=1, max_length=PLACE_ID_MAX_LENGTH),
+    lang: str = Query("ko"),
+    language: str | None = Query(None),
+    include_scores: bool = Query(False),
+) -> dict:
+    place, result = place_lookup_service.require_place(
+        place_id=place_id,
+        language=language or lang,
+        include_scores=include_scores,
+    )
+    return success_envelope(
+        request=request,
+        data=place,
+        meta={
+            "source": result.source,
+            "language": result.language,
+            "include_scores": result.include_scores,
+            "data_as_of": result.data_as_of,
+        },
     )
 
 

@@ -83,11 +83,16 @@ def extract():
             else:
                 constraint(table, con, node.colname)
 
-    for path in sorted((ROOT / "sql/canonical").glob("*.sql")):
-        raw = path.read_bytes()
-        relative = path.relative_to(ROOT).as_posix()
-        tracked = subprocess.check_output(["git", "show", f"{BASELINE}:{relative}"], cwd=ROOT)
-        assert raw == tracked, f"Source differs from fixed baseline: {relative}"
+    baseline_paths = subprocess.check_output(
+        ["git", "ls-tree", "-r", "--name-only", BASELINE, "--", "sql/canonical"],
+        cwd=ROOT,
+        text=True,
+    ).splitlines()
+    if not baseline_paths:
+        raise ValueError(f"No canonical SQL files at fixed baseline {BASELINE}")
+
+    for relative in baseline_paths:
+        raw = subprocess.check_output(["git", "show", f"{BASELINE}:{relative}"], cwd=ROOT)
         sources.append({"path": relative, "sha256": hashlib.sha256(raw).hexdigest()})
         for statement in parse_sql(raw.decode()):
             node = statement.stmt

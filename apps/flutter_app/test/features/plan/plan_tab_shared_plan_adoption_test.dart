@@ -222,7 +222,7 @@ void main() {
     },
   );
 
-  testWidgets('explicit refresh (calendar) regenerates over the adopted plan', (
+  testWidgets('explicit refresh regenerates over the adopted plan', (
     tester,
   ) async {
     PlanContextStore.set(_sharedPlan());
@@ -232,7 +232,7 @@ void main() {
     expect(find.text('공유 플랜 명소'), findsOneWidget);
 
     // 달력 액션 = 명시적 새로고침 → 새 플랜 생성(재게시)이 허용된다.
-    await tester.tap(find.byTooltip('달력'));
+    await tester.tap(find.byTooltip('새로고침'));
     await tester.pumpAndSettle();
 
     expect(backend.planRequestCount, 1);

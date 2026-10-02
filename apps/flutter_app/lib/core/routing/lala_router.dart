@@ -8,6 +8,8 @@
 //   미완료 시 메인 라우트 접근을 /onboarding/splash 로 차단하고,
 //   완료(OnboardingState.markCompleted) 시 /map-route 로 전환한다.
 import 'package:flutter/widgets.dart';
+import '../../features/home/discovery_page.dart';
+import '../../features/onboarding/local_onboarding_page.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
@@ -50,6 +52,7 @@ import 'package:lala_next_app/features/docent/experience/docent_experience_contr
 import 'package:lala_next_app/features/docent/presentation/pages/docent_player_page.dart';
 
 GoRouter createLalaRouter({
+  bool useLocalDesign = false,
   required LalaBackendFactory backendFactory,
   required LalaAppConfig initialConfig,
   required LalaLocationProvider locationProvider,
@@ -66,7 +69,9 @@ GoRouter createLalaRouter({
   final signalActionController =
       localSignalActionController ?? LocalSignalActionController();
   return GoRouter(
-    initialLocation: LalaRoutePaths.mapRoute,
+    initialLocation: useLocalDesign
+        ? LalaRoutePaths.home
+        : LalaRoutePaths.mapRoute,
     refreshListenable: OnboardingState.completedListenable,
     redirect: (BuildContext context, GoRouterState state) {
       final completed = OnboardingState.isCompleted;
@@ -79,7 +84,14 @@ GoRouter createLalaRouter({
       }
       // 완료 후 온보딩 라우트 잔류 시 메인 쉘로 정리(뒤로가기로 온보딩에 머무는 것 방지).
       if (completed && isOnboarding) {
-        return LalaRoutePaths.mapRoute;
+        return useLocalDesign ? LalaRoutePaths.home : LalaRoutePaths.mapRoute;
+      }
+      if (useLocalDesign &&
+          (state.uri.path == '/local-signals' ||
+              state.uri.path.startsWith('/local-signals/') ||
+              state.uri.path == '/community' ||
+              state.uri.path.startsWith('/community/'))) {
+        return LalaRoutePaths.home;
       }
       return null;
     },
@@ -87,8 +99,12 @@ GoRouter createLalaRouter({
       // --- 온보딩(풀스크린, 하단바 없음) ---
       GoRoute(
         path: LalaRoutePaths.onboardingSplash,
-        builder: (BuildContext context, GoRouterState state) =>
-            const OnboardingSplashPage(),
+        builder: (BuildContext context, GoRouterState state) => useLocalDesign
+            ? LocalOnboardingPage(
+                locationProvider: locationProvider,
+                authController: authController,
+              )
+            : const OnboardingSplashPage(),
       ),
       GoRoute(
         path: LalaRoutePaths.onboardingStart,
@@ -124,12 +140,22 @@ GoRouter createLalaRouter({
             ) {
               return LalaMainShell(
                 navigationShell: navigationShell,
+                useLocalDesign: useLocalDesign,
                 docentExperienceController: docentExperienceController,
               );
             },
         branches: <StatefulShellBranch>[
           StatefulShellBranch(
             routes: <RouteBase>[
+              if (useLocalDesign)
+                GoRoute(
+                  path: LalaRoutePaths.home,
+                  builder: (context, state) => DiscoveryPage(
+                    backendFactory: backendFactory,
+                    initialConfig: initialConfig,
+                    locationProvider: locationProvider,
+                  ),
+                ),
               GoRoute(
                 path: LalaRoutePaths.search,
                 builder: (BuildContext context, GoRouterState state) =>
@@ -165,6 +191,8 @@ GoRouter createLalaRouter({
                 path: LalaRoutePaths.plan,
                 builder: (BuildContext context, GoRouterState state) =>
                     PlanPage(
+                      backendFactory: backendFactory,
+                      locationProvider: locationProvider,
                       initialConfig: initialConfig,
                       docentExperienceController: docentExperienceController,
                     ),
@@ -286,6 +314,11 @@ GoRouter createLalaRouter({
           builder: (BuildContext context, GoRouterState state) =>
               AccountPage(authController: authController),
         ),
+      GoRoute(
+        path: LalaRoutePaths.profileSettings,
+        builder: (context, state) =>
+            ProfilePage(authController: authController, settingsOnly: true),
+      ),
       GoRoute(
         path: LalaRoutePaths.travelPreferences,
         builder: (BuildContext context, GoRouterState state) =>

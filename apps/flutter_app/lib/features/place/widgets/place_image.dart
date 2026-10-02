@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../place_helpers.dart';
+import '../../../app/lala_visual_tokens.dart';
 
 /// 장소 이미지(C3 추출 — main.dart 의 _PlaceImage).
 class PlaceImage extends StatelessWidget {
@@ -26,9 +27,20 @@ class PlaceImage extends StatelessWidget {
         height: height,
         fit: BoxFit.cover,
         webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
-        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+        errorBuilder: (_, _, _) => _placeholder(),
       );
     }
-    return const SizedBox.shrink();
+    return _placeholder();
   }
+
+  Widget _placeholder() => SizedBox(
+    width: width,
+    height: height,
+    child: const ColoredBox(
+      color: LalaVisualColors.cardSoft,
+      child: Center(
+        child: Icon(Icons.image_outlined, color: LalaVisualColors.primary),
+      ),
+    ),
+  );
 }

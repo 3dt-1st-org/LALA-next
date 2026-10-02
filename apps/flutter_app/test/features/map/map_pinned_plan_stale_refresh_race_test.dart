@@ -5,6 +5,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -21,7 +22,6 @@ import 'package:lala_next_app/features/docent/experience/docent_experience_contr
 import 'package:lala_next_app/features/home/home_page.dart';
 import 'package:lala_next_app/features/map_route/presentation/pages/map_route_page.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
-import 'package:lala_next_app/features/planner/widgets/planner_sheet_content.dart';
 
 import '../docent/inert_docent_audio_player.dart';
 
@@ -166,7 +166,7 @@ class _RaceBackend implements LalaBackend {
   Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
     String? selectedPlaceId,
     LalaPlanPreferenceContext? preferenceContext,
-    }) {
+  }) {
     if (selectedPlaceId == null) {
       unpinnedPlanCalls++;
       return unpinnedPlanCompleter.future;
@@ -223,7 +223,7 @@ void main() {
       final docentController = _docentController();
       addTearDown(docentController.dispose);
       await tester.pumpWidget(
-        MaterialApp(
+        _routedApp(
           home: MapRoutePage(
             backendFactory: (config) {
               final backend = _RaceBackend(config);
@@ -257,7 +257,10 @@ void main() {
       backends[1].unpinnedPlanCompleter.complete(_envelope(_unpinnedPlan()));
       await tester.pump(const Duration(milliseconds: 50));
       await tester.pump();
-      expect(PlanContextStore.current?.cacheKey, 'daily_plan:unpinned-race-test');
+      expect(
+        PlanContextStore.current?.cacheKey,
+        'daily_plan:unpinned-race-test',
+      );
 
       // 2) The RACED unpinned refresh begins first: places resolve so it passes
       //    the mid-refresh epoch guard (loading=false) and fires its unpinned
@@ -292,7 +295,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 20));
       expect(PlanContextStore.current?.cacheKey, 'daily_plan:pinned-race-test');
-      expect(find.byType(PlannerSheetContent), findsOneWidget);
+      expect(find.text('plan-tab'), findsOneWidget);
 
       // 5) The OLDER unpinned request completes LAST — it must be discarded
       //    before it can touch state or the store.
@@ -312,8 +315,13 @@ void main() {
       // Selected place survives too.
       expect(SelectedPlaceStore.current, 'pin-restaurant');
       // UI: planner sheet still shows the pinned place, never the unpinned slot.
-      expect(find.byType(PlannerSheetContent), findsOneWidget);
-      expect(find.text('고정 맛집'), findsWidgets);
+      expect(find.text('plan-tab'), findsOneWidget);
+      expect(
+        PlanContextStore.current!.slots.any(
+          (slot) => slot.place?.name == '고정 맛집',
+        ),
+        isTrue,
+      );
       expect(find.text('대체 안맞는 장소'), findsNothing);
       // The epoch bump must not leave the loading indicator stuck.
       expect(LalaHomePage.placesStateForTesting(context).loading, isFalse);
@@ -327,4 +335,34 @@ void main() {
       await tester.pump();
     },
   );
+}
+
+// Keep the map branch mounted, as in the real shell, while opening the plan tab.
+Widget _routedApp({required Widget home}) {
+  final router = GoRouter(
+    initialLocation: '/map-route',
+    routes: [
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, shell) => shell,
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/map-route', builder: (context, state) => home),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/plan',
+                builder: (context, state) =>
+                    const Scaffold(body: Text('plan-tab')),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ],
+  );
+  addTearDown(router.dispose);
+  return MaterialApp.router(routerConfig: router);
 }

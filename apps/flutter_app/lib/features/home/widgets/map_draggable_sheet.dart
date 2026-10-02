@@ -1,3 +1,5 @@
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
+import 'dart:ui' show PointerDeviceKind;
 // C3 최종: main.dart 에서 이관. 본문 불변(이동만).
 import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
@@ -130,118 +132,139 @@ class MapDraggableSheet extends StatelessWidget {
             child: ColoredBox(color: Colors.black.withValues(alpha: 0.18)),
           ),
         ),
-        DraggableScrollableSheet(
-          initialChildSize: initialSize,
-          minChildSize: 0.30,
-          maxChildSize: 0.92,
-          builder: (context, scrollController) {
-            return DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.98),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(28),
-                ),
-                boxShadow: const [
-                  BoxShadow(
-                    blurRadius: 32,
-                    offset: Offset(0, -12),
-                    color: Color(0x26000000),
-                  ),
-                ],
-              ),
-              child: ListView(
-                controller: scrollController,
-                padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
-                children: [
-                  Center(
-                    child: Container(
-                      width: 46,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFCBD5E0),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
+        NotificationListener<DraggableScrollableNotification>(
+          onNotification: (notification) {
+            if (activeSheet == ActiveMapSheet.planner &&
+                notification.extent <= notification.minExtent + 0.001) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (context.mounted) onClose();
+              });
+            }
+            return false;
+          },
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(
+              dragDevices: {
+                ...ScrollConfiguration.of(context).dragDevices,
+                PointerDeviceKind.mouse,
+              },
+            ),
+            child: DraggableScrollableSheet(
+              key: ValueKey(activeSheet),
+              initialChildSize: initialSize,
+              minChildSize: activeSheet == ActiveMapSheet.planner ? 0.08 : 0.30,
+              maxChildSize: activeSheet == ActiveMapSheet.planner ? 1.0 : 0.92,
+              builder: (context, scrollController) {
+                return DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.98),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(28),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Icon(icon, color: const Color(0xFF2B6CB0)),
-                      const SizedBox(width: 8),
-                      Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: const Color(0xFF111827),
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        tooltip: lalaCopyMulti(
-                          language,
-                          ko: '닫기',
-                          en: 'Close',
-                          ja: '閉じる',
-                          zhHans: '关闭',
-                          zhHant: '關閉',
-                        ),
-                        onPressed: onClose,
-                        icon: const Icon(Icons.close),
+                    boxShadow: const [
+                      BoxShadow(
+                        blurRadius: 32,
+                        offset: Offset(0, -12),
+                        color: Color(0x26000000),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  switch (activeSheet) {
-                    ActiveMapSheet.detail => FeaturedPlacePanel(
-                      place: place,
-                      language: language,
-                      weather: weather,
-                      intervention: intervention,
-                      dailyPlan: dailyPlan,
-                      docentScript: docentScript,
-                      docentAudio: docentAudio,
-                      audioLoading: audioLoading,
-                      audioError: audioError,
-                      liveSpeechEnabled: liveSpeechEnabled,
-                      source: source,
-                      showEvidence: showEvidence,
-                      savedPlaceIds: savedPlaceIds,
-                      detailDocentPlayedPlaceIds: detailDocentPlayedPlaceIds,
-                      onToggleEvidence: onToggleEvidence,
-                      onToggleSavedPlace: onToggleSavedPlace,
-                      onAddToPlan: onAddToPlan,
-                      onFetchAudio: onFetchAudio,
-                      onOpenFullDetails: onOpenFullDetails,
-                    ),
-                    ActiveMapSheet.planner => PlannerSheetContent(
-                      language: language,
-                      weather: weather,
-                      dailyPlan: dailyPlan,
-                      intervention: intervention,
-                      loading: loading,
-                      onRegenerate: onRefresh,
-                      onSelectPlace: onSelectPlace,
-                    ),
-                    ActiveMapSheet.weather => WeatherSheetContent(
-                      language: language,
-                      weather: weather,
-                    ),
-                    ActiveMapSheet.tour => TourSheetContent(
-                      places: places,
-                      language: language,
-                      tourAudio: tourAudio,
-                      audioLoading: tourAudioLoading,
-                      audioError: tourAudioError,
-                      liveSpeechEnabled: liveSpeechEnabled,
-                      onFetchAudio: onFetchTourAudio,
-                      onSelectPlace: onSelectPlace,
-                    ),
-                  },
-                ],
-              ),
-            );
-          },
+                  child: ListView(
+                    controller: scrollController,
+                    padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 46,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFCBD5E0),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Icon(icon, color: LalaVisualColors.primary),
+                          const SizedBox(width: 8),
+                          Text(
+                            title,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  color: LalaVisualColors.ink,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            tooltip: lalaCopyMulti(
+                              language,
+                              ko: '닫기',
+                              en: 'Close',
+                              ja: '閉じる',
+                              zhHans: '关闭',
+                              zhHant: '關閉',
+                            ),
+                            onPressed: onClose,
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      switch (activeSheet) {
+                        ActiveMapSheet.detail => FeaturedPlacePanel(
+                          place: place,
+                          language: language,
+                          weather: weather,
+                          intervention: intervention,
+                          dailyPlan: dailyPlan,
+                          docentScript: docentScript,
+                          docentAudio: docentAudio,
+                          audioLoading: audioLoading,
+                          audioError: audioError,
+                          liveSpeechEnabled: liveSpeechEnabled,
+                          source: source,
+                          showEvidence: showEvidence,
+                          savedPlaceIds: savedPlaceIds,
+                          detailDocentPlayedPlaceIds:
+                              detailDocentPlayedPlaceIds,
+                          onToggleEvidence: onToggleEvidence,
+                          onToggleSavedPlace: onToggleSavedPlace,
+                          onAddToPlan: onAddToPlan,
+                          onFetchAudio: onFetchAudio,
+                          onOpenFullDetails: onOpenFullDetails,
+                        ),
+                        ActiveMapSheet.planner => PlannerSheetContent(
+                          language: language,
+                          weather: weather,
+                          dailyPlan: dailyPlan,
+                          intervention: intervention,
+                          loading: loading,
+                          onRegenerate: onRefresh,
+                          onSelectPlace: onSelectPlace,
+                        ),
+                        ActiveMapSheet.weather => WeatherSheetContent(
+                          language: language,
+                          weather: weather,
+                        ),
+                        ActiveMapSheet.tour => TourSheetContent(
+                          places: places,
+                          language: language,
+                          tourAudio: tourAudio,
+                          audioLoading: tourAudioLoading,
+                          audioError: tourAudioError,
+                          liveSpeechEnabled: liveSpeechEnabled,
+                          onFetchAudio: onFetchTourAudio,
+                          onSelectPlace: onSelectPlace,
+                        ),
+                      },
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
         ),
       ],
     );

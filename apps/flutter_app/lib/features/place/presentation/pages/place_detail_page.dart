@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_product_scope.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -110,7 +111,7 @@ class _PlaceDetailPageState extends State<PlaceDetailPage> {
         lookupBackend = widget.backendFactory(
           widget.initialConfig.copyWith(category: 'all', lang: language),
         );
-        final response = await lookupBackend.getPlaces();
+        final response = await lookupBackend.lookupPlaces([widget.placeId]);
         final payload = response.data;
         if (!response.ok || payload == null) {
           throw StateError('place lookup unavailable');
@@ -296,7 +297,9 @@ class _PlaceDetailPageState extends State<PlaceDetailPage> {
                 },
                 onMap: () =>
                     _handoffToMap(place, LocalSignalPlaceAction.viewPlace),
-                onRestaurantHelp: place.category.toLowerCase() == 'restaurant'
+                onRestaurantHelp:
+                    !LalaProductScope.isMeetingMvp(context) &&
+                        place.category.toLowerCase() == 'restaurant'
                     ? () => _showRestaurantHelp(language)
                     : null,
               ),
@@ -308,7 +311,8 @@ class _PlaceDetailPageState extends State<PlaceDetailPage> {
                 source: source,
                 showEvidence: _showEvidence,
               ),
-              if (place.category.toLowerCase() == 'restaurant') ...<Widget>[
+              if (!LalaProductScope.isMeetingMvp(context) &&
+                  place.category.toLowerCase() == 'restaurant') ...<Widget>[
                 const SizedBox(height: 12),
                 RestaurantCommunicationEntryCard(
                   language: language,

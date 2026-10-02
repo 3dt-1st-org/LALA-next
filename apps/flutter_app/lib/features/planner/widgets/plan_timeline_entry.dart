@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:flutter/material.dart';
 
 /// Connects plan cards into one readable day flow without changing slot data.
@@ -18,7 +19,7 @@ class PlanTimelineEntry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const line = Color(0xFFCBD5E1);
-    const accent = Color(0xFF0B67D8);
+    const accent = LalaVisualColors.primary;
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,

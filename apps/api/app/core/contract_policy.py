@@ -47,6 +47,16 @@ EXACT_PATH_POLICIES: dict[str, OperationContractPolicy] = {
         timeout_seconds=12,
         success_schema="PlacesSuccessEnvelope",
     ),
+    "/api/v1/places/lookup": OperationContractPolicy(
+        auth="client",
+        timeout_seconds=12,
+        success_schema="PlaceBatchLookupSuccessEnvelope",
+    ),
+    "/api/v1/places/{place_id}": OperationContractPolicy(
+        auth="client",
+        timeout_seconds=12,
+        success_schema="PlaceLookupSuccessEnvelope",
+    ),
     "/api/v1/weather": OperationContractPolicy(
         auth="client",
         timeout_seconds=12,

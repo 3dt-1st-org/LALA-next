@@ -141,7 +141,10 @@ class _ScriptedBackend implements LalaBackend {
   }
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async {
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
+    String? selectedPlaceId,
+    LalaPlanPreferenceContext? preferenceContext,
+  }) async {
     throw UnimplementedError();
   }
 }
@@ -359,7 +362,10 @@ class _StepBackend implements LalaBackend {
   }
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) {
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
+    String? selectedPlaceId,
+    LalaPlanPreferenceContext? preferenceContext,
+  }) {
     throw UnimplementedError();
   }
 }
@@ -469,7 +475,7 @@ void main() {
     expect(find.textContaining('생성'), findsNothing);
   });
 
-  testWidgets('nameKo 가 있으면 운전기사 유틸리티가 한국어 이름을 보여준다', (tester) async {
+  testWidgets('한국어 장소명은 유지하고 중복 주소 시트는 제공하지 않는다', (tester) async {
     OnboardingState.selectLanguage('en');
     final backend = _ScriptedBackend(script: 'Local docent script in English.');
     final player = _RecordingFakePlayer();
@@ -492,73 +498,11 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('행궁동 카페거리'), findsOneWidget);
-    final driverButton = find.byKey(
-      const ValueKey('docent-driver-name-button'),
-    );
-    expect(driverButton, findsOneWidget);
-    await tester.dragUntilVisible(
-      driverButton,
-      find.byType(ListView),
-      const Offset(0, -200),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(driverButton);
-    await tester.pumpAndSettle();
-    // 시트에는 한국어 원문을 그대로 크게 — 번역/변형 금지.
     expect(
-      find.descendant(
-        of: find.byType(BottomSheet),
-        matching: find.text('행궁동 카페거리'),
-      ),
-      findsOneWidget,
+      find.byKey(const ValueKey('docent-driver-name-button')),
+      findsNothing,
     );
-    expect(find.text('Korean name'), findsOneWidget);
-    // 실제 주소가 있으면 기사님 시트에 함께 노출한다.
-    expect(find.text('테스트 주소'), findsOneWidget);
-  });
-
-  testWidgets('주소가 없는 장소의 기사님 시트는 주소 줄을 만들지 않는다', (tester) async {
-    OnboardingState.selectLanguage('en');
-    final backend = _ScriptedBackend(script: 'Local docent script in English.');
-    final player = _RecordingFakePlayer();
-    final controller = DocentExperienceController(
-      backendFactory: (_) => backend,
-      baseConfig: const LalaAppConfig(baseUri: 'http://api.test'),
-      player: player,
-      languageReader: () => 'en',
-    );
-    await controller.playPlace(
-      _place(
-        name: 'Haenggung-dong Cafe Street',
-        nameKo: '행궁동 카페거리',
-        address: '',
-      ),
-    );
-    addTearDown(controller.dispose);
-
-    await tester.pumpWidget(wrapApp(DocentPlayerPage(controller: controller)));
-    await tester.pumpAndSettle();
-
-    final driverButton = find.byKey(
-      const ValueKey('docent-driver-name-button'),
-    );
-    await tester.dragUntilVisible(
-      driverButton,
-      find.byType(ListView),
-      const Offset(0, -200),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(driverButton);
-    await tester.pumpAndSettle();
-
-    expect(
-      find.descendant(
-        of: find.byType(BottomSheet),
-        matching: find.text('행궁동 카페거리'),
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('테스트 주소'), findsNothing);
+    expect(find.byType(BottomSheet), findsNothing);
   });
 
   testWidgets('정지 버튼은 세션을 끝내고 이전 화면으로 pop 한다(빈 Scaffold 잔류 금지)', (
@@ -783,9 +727,7 @@ void main() {
     );
   });
 
-  testWidgets('unavailable 에서는 정지 컨트롤 자체를 만들지 않는다(잔류 사각형 제거)', (
-    tester,
-  ) async {
+  testWidgets('unavailable 에서는 정지 컨트롤 자체를 만들지 않는다(잔류 사각형 제거)', (tester) async {
     OnboardingState.selectLanguage('ko');
     final backend = _StepBackend(speechEnabled: false);
     final player = _RecordingFakePlayer();
@@ -805,9 +747,7 @@ void main() {
     expect(retryButton, findsOneWidget);
   });
 
-  testWidgets('큐 진행 중 unavailable 은 정지(=큐 취소) 컨트롤을 유지한다', (
-    tester,
-  ) async {
+  testWidgets('큐 진행 중 unavailable 은 정지(=큐 취소) 컨트롤을 유지한다', (tester) async {
     OnboardingState.selectLanguage('ko');
     final backend = _StepBackend(speechEnabled: false);
     final player = _RecordingFakePlayer();
@@ -832,8 +772,7 @@ void main() {
       routes: <RouteBase>[
         GoRoute(
           path: '/',
-          builder: (context, state) =>
-              DocentPlayerPage(controller: controller),
+          builder: (context, state) => DocentPlayerPage(controller: controller),
         ),
       ],
     );

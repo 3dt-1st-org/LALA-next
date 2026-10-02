@@ -22,6 +22,20 @@ import 'package:lala_next_app/features/map/widgets/map_toast.dart';
 import 'package:lala_next_app/features/map/widgets/top_map_chrome.dart';
 
 void main() {
+  testWidgets(
+    'successful empty lookup shows no results, not loading or failure',
+    (tester) async {
+      await _pump(
+        tester,
+        const EmptyDockContent(language: 'ko', emptyResultsConfirmed: true),
+      );
+      expect(find.text('이 주변에 조건에 맞는 장소가 없어요'), findsOneWidget);
+      expect(find.text('추천을 준비 중입니다'), findsNothing);
+      expect(find.text('서버에 연결할 수 없어요'), findsNothing);
+      expect(find.text('지금 다시 시도'), findsNothing);
+    },
+  );
+
   // ---- loading (preparing): no error -> preparing copy, never failure copy ----
   testWidgets('preparing state shows preparing copy, distinct from any failure',
       (tester) async {

@@ -1,6 +1,6 @@
 # 기준 코드와 실제 DB 대조
 
-> 이 대조는 `765570a2`의 SQL 000~068을 대상으로 한다. 현재 main `41468b01`에는 SQL 069~071이 추가됐으며 운영 DB 적용 여부를 아직 다시 대조하지 않았다.
+> 이 대조는 `765570a2`의 SQL 000~068을 대상으로 한다. 9월 15일 당시 main `41468b01`에 SQL 069~071이 추가됐으며, 이 PR에서는 운영 DB 적용 여부를 다시 대조하지 않았다. 2026-10-03 `origin/main` `59bb3ef0`의 현재 DB 상태를 뜻하지 않는다.
 
 ## 기준 카드
 
@@ -50,7 +50,7 @@ SQL 068의 추가 구조가 없다는 사실은 확인했다. **DDL 실행 이�
 
 ## 재현 방법과 근거
 
-정적 추출은 DB 접속 없이 누적 CREATE/ALTER를 해석한다. 각 SQL 내용이 고정 SHA의 Git 객체와 동일한지 검사하고, 지원하지 않는 문장은 실패 처리한다.
+정적 추출은 DB 접속 없이 고정 SHA의 Git 트리에서 해당 시점의 SQL 파일만 읽어 누적 CREATE/ALTER를 해석한다. 따라서 현재 checkout에 후속 SQL이 추가되어도 조사 스냅샷은 변하지 않는다. 지원하지 않는 문장은 실패 처리한다.
 
 ```bash
 uv run --no-project --with pglast==8.4 python docs/planning/db-meeting-preparation-20260915/tools/extract_schema.py

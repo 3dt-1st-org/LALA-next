@@ -64,7 +64,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('trip-settings-page')), findsOneWidget);
-      expect(find.text('이번 여행 설정'), findsOneWidget);
+      expect(find.text('이번 일정 조건'), findsOneWidget);
       await tester.tap(find.text('알차게'));
       await tester.drag(find.byType(ListView), const Offset(0, -1200));
       await tester.pumpAndSettle();
@@ -217,7 +217,18 @@ const LalaPlace _place = LalaPlace(
   upstreamSource: 'tour_api',
 );
 
-class _SavedPlaceBackend implements LalaBackend {
+class _SavedPlaceBackend implements LalaBackend, LalaPlaceLookupBackend {
+  @override
+  Future<LalaEnvelope<LalaPlaceLookup>> lookupPlaces(List<String> ids) async =>
+      _envelope(
+        LalaPlaceLookup(
+          places: ids.contains(_place.placeId) ? [_place] : [],
+          missingPlaceIds: ids.where((id) => id != _place.placeId).toList(),
+          source: 'db',
+          dataAsOf: '2026-09-03T09:00:00Z',
+        ),
+      );
+
   @override
   Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() async => _envelope(
     const LalaPlacesResponse(

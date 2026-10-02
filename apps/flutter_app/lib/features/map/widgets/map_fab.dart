@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:flutter/material.dart';
 
 /// 지도 플로팅 액션 버튼(음성/내 위치 등)(C3 추출 — main.dart 의 _MapFab).
@@ -31,7 +32,7 @@ class MapFab extends StatelessWidget {
           alignment: Alignment.topRight,
           backgroundColor: active
               ? const Color(0xFFF5C842)
-              : const Color(0xFF64748B),
+              : LalaVisualColors.muted,
           textColor: active ? const Color(0xFF1A202C) : Colors.white,
           label: statusLabel == null
               ? null
@@ -48,7 +49,7 @@ class MapFab extends StatelessWidget {
             style: IconButton.styleFrom(
               fixedSize: const Size.square(46),
               backgroundColor: active
-                  ? const Color(0xFF2B6CB0)
+                  ? LalaVisualColors.primary
                   : const Color(0xFF1A202C).withValues(alpha: 0.82),
               foregroundColor: Colors.white,
               shape: CircleBorder(

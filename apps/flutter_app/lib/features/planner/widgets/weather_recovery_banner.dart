@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:flutter/material.dart';
 
 /// 날씨 recovery 배너(P6A §03 Screen 04).
@@ -30,11 +31,11 @@ class WeatherRecoveryBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final isRestored = _mode == _WeatherRecoveryMode.restored;
     final accentColor = isRestored
-        ? const Color(0xFF64748B)
-        : const Color(0xFF2B6CB0);
+        ? LalaVisualColors.muted
+        : LalaVisualColors.primary;
     final bgColor = isRestored
-        ? const Color(0xFFF1F5F9)
-        : const Color(0xFFEBF4FE);
+        ? LalaVisualColors.cardSoft
+        : LalaVisualColors.primarySoft;
     final ko = language == 'ko';
     final title = isRestored
         ? (ko ? '이전 일정을 복원했어요.' : 'Restored your previous plan.')

@@ -1,3 +1,4 @@
+import 'package:lala_next_app/app/lala_product_scope.dart';
 import 'package:flutter/material.dart';
 
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
@@ -33,6 +34,7 @@ class _RestaurantCommunicationEntryCardState
 
   @override
   Widget build(BuildContext context) {
+    if (LalaProductScope.isMeetingMvp(context)) return const SizedBox.shrink();
     return AnimatedBuilder(
       animation: _store,
       builder: (context, _) {

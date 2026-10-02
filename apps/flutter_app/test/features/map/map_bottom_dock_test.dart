@@ -33,6 +33,7 @@ const LalaPlace _place = LalaPlace(
 Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 MapBottomDock _dock({
+  Widget? placeContent,
   bool isWide = false,
   String? dataAsOf,
   String uiLanguage = 'ko',
@@ -42,8 +43,11 @@ MapBottomDock _dock({
   bool expanded = true,
   double height = 240,
   VoidCallback? onToggleExpanded,
+  VoidCallback? onClose,
+  VoidCallback? onDetail,
 }) {
   return MapBottomDock(
+    placeContent: placeContent,
     isWide: isWide,
     places: const <LalaPlace>[_place],
     source: source,
@@ -65,7 +69,8 @@ MapBottomDock _dock({
     recommendationRecoveryPending: false,
     onFetchAudio: () {},
     onAddToPlan: () {},
-    onOpenDetail: () {},
+    onOpenDetail: onDetail ?? () {},
+    onClose: onClose,
     onRefresh: () {},
     onToggleEvidence: () {},
     onToggleExpanded: onToggleExpanded,
@@ -73,6 +78,43 @@ MapBottomDock _dock({
 }
 
 void main() {
+  testWidgets('unified content replaces the summary and its detail entry', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        _dock(
+          placeContent: const Text('Unified place information'),
+          onClose: () {},
+        ),
+      ),
+    );
+    expect(find.text('Unified place information'), findsOneWidget);
+    expect(find.byType(DockDocentPreview), findsNothing);
+    expect(find.byKey(const ValueKey('map-dock-detail')), findsNothing);
+    expect(find.byKey(const ValueKey('map-dock-close')), findsOneWidget);
+  });
+
+  testWidgets('detail replaces signals and close has a separate action', (
+    tester,
+  ) async {
+    var details = 0;
+    var closed = 0;
+    await tester.pumpWidget(
+      _wrap(
+        _dock(height: 600, onClose: () => closed++, onDetail: () => details++),
+      ),
+    );
+    expect(find.text('점수/근거'), findsNothing);
+    expect(find.text('상세'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('map-dock-detail')));
+    expect(details, 1);
+    expect(closed, 0);
+    await tester.tap(find.byKey(const ValueKey('map-dock-close')));
+    expect(closed, 1);
+    expect(details, 1);
+  });
+
   testWidgets(
     'freshness label shows the snapshot date when dataAsOf is present',
     (tester) async {

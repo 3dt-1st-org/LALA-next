@@ -117,11 +117,11 @@ class FeaturedPlacePanel extends StatelessWidget {
             label: Text(
               lalaCopyMulti(
                 language,
-                ko: '전체 상세 보기',
-                en: 'Open full details',
-                ja: '詳細を全画面で見る',
-                zhHans: '查看完整详情',
-                zhHant: '查看完整詳情',
+                ko: '상세',
+                en: 'Details',
+                ja: '詳細',
+                zhHans: '详情',
+                zhHant: '詳情',
               ),
             ),
           ),
@@ -131,38 +131,39 @@ class FeaturedPlacePanel extends StatelessWidget {
           EventInfoCard(place: currentPlace, language: language),
         ],
         const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            onPressed: onToggleEvidence,
-            icon: Icon(
-              showEvidence ? Icons.visibility_off : Icons.insights_outlined,
-            ),
-            label: Text(
-              showEvidence
-                  ? lalaCopyMulti(
-                      language,
-                      ko: '점수/근거 숨기기',
-                      en: 'Hide signals',
-                      ja: 'スコア・根拠を隠す',
-                      zhHans: '隐藏评分和依据',
-                      zhHant: '隱藏評分和依據',
-                    )
-                  : lalaCopyMulti(
-                      language,
-                      ko: '점수/근거 보기',
-                      en: 'Show signals',
-                      ja: 'スコア・根拠を見る',
-                      zhHans: '查看评分和依据',
-                      zhHant: '查看評分和依據',
-                    ),
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF1A202C),
-              side: const BorderSide(color: Color(0xFFD7E3F5)),
+        if (onOpenFullDetails == null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: onToggleEvidence,
+              icon: Icon(
+                showEvidence ? Icons.visibility_off : Icons.insights_outlined,
+              ),
+              label: Text(
+                showEvidence
+                    ? lalaCopyMulti(
+                        language,
+                        ko: '점수·추천 근거 접기',
+                        en: 'Hide recommendation evidence',
+                        ja: '詳細を閉じる',
+                        zhHans: '收起详情',
+                        zhHant: '收合詳情',
+                      )
+                    : lalaCopyMulti(
+                        language,
+                        ko: '점수·추천 근거',
+                        en: 'Recommendation evidence',
+                        ja: '詳細',
+                        zhHans: '详情',
+                        zhHant: '詳情',
+                      ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF1A202C),
+                side: const BorderSide(color: Color(0xFFD7E3F5)),
+              ),
             ),
           ),
-        ),
         if (showEvidence) ...[
           const SizedBox(height: 12),
           SignalGrid(
