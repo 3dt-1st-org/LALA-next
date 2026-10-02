@@ -1220,8 +1220,13 @@ def _insert_quarantine_entries(
 ) -> int:
     """Persist typed quarantine rows, deduped by the partial unique index.
 
-    Returns the number actually inserted so run accounting stays stable when a
-    failed batch is retried (re-running does not double-count dead-letter rows).
+    Returns the number of rows actually inserted (0 for rows already present
+    from a prior attempt) so callers can observe dead-letter churn without
+    double-inserting. Run accounting deliberately does NOT use this value:
+    ``quarantined_count`` counts records *classified* into quarantine by this
+    batch (``len(quarantined)``), which is the retry-stable choice -- a resumed
+    run re-classifies the same records and converges to the same absolute
+    counters, whereas the inserted count would drop to 0 on retry.
     Only code-backed reason text and typed metadata are written.
     """
     if not entries:
