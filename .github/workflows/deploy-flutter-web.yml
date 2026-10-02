@@ -1,0 +1,134 @@
+name: Deploy Flutter web to Vercel
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flutter-web-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      ${{ vars.LALA_WEB_DEPLOY_ENABLED == 'true' &&
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      NAVER_MAP_CLIENT_ID: ${{ vars.NAVER_MAP_CLIENT_ID }}
+      LOGTO_ENDPOINT: ${{ vars.LOGTO_ENDPOINT }}
+      LOGTO_API_AUDIENCE: ${{ vars.LOGTO_API_AUDIENCE }}
+      LOGTO_WEB_APP_ID: ${{ vars.LOGTO_WEB_APP_ID }}
+      LALA_API_BASE_URL: https://api.lala-next.cloud
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Check exact main and required configuration
+        id: head
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          for name in VERCEL_ORG_ID VERCEL_PROJECT_ID VERCEL_TOKEN NAVER_MAP_CLIENT_ID LOGTO_ENDPOINT LOGTO_API_AUDIENCE LOGTO_WEB_APP_ID; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::$name is not configured"
+              exit 1
+            fi
+          done
+          if [[ "$LOGTO_ENDPOINT" != https://* || "$LOGTO_API_AUDIENCE" != https://* || "${LOGTO_API_AUDIENCE%/}" == "${LOGTO_ENDPOINT%/}/api" ]]; then
+            echo "::error::Invalid public Logto build configuration"
+            exit 1
+          fi
+          if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then
+            echo "::error::Checkout does not match successful CI head"
+            exit 1
+          fi
+          if [[ "$(git ls-remote origin refs/heads/main | cut -f1)" != "$HEAD_SHA" ]]; then
+            echo "::notice::Superseded by a newer main commit; skipping deploy"
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "current=true" >> "$GITHUB_OUTPUT"
+          echo "BUILD_SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+      - uses: subosito/flutter-action@v2
+        if: steps.head.outputs.current == 'true'
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build Flutter web
+        if: steps.head.outputs.current == 'true'
+        working-directory: apps/flutter_app
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter build web --release --pwa-strategy=none \
+            "--dart-define=LALA_API_BASE_URL=$LALA_API_BASE_URL" \
+            "--dart-define=NAVER_MAP_CLIENT_ID=$NAVER_MAP_CLIENT_ID" \
+            "--dart-define=LOGTO_ENDPOINT=$LOGTO_ENDPOINT" \
+            "--dart-define=LOGTO_API_AUDIENCE=$LOGTO_API_AUDIENCE" \
+            "--dart-define=LOGTO_WEB_APP_ID=$LOGTO_WEB_APP_ID" \
+            "--dart-define=LALA_BUILD_SHA=$BUILD_SHA"
+
+      - name: Stage isolated static deployment
+        if: steps.head.outputs.current == 'true'
+        run: |
+          for name in NAVER_MAP_CLIENT_ID LOGTO_ENDPOINT LOGTO_API_AUDIENCE LOGTO_WEB_APP_ID; do
+            if ! grep -Fq -- "${!name}" apps/flutter_app/build/web/main.dart.js; then
+              echo "::error::$name was not compiled into the Flutter bundle"
+              exit 1
+            fi
+          done
+          python3 scripts/prepare_flutter_vercel_static_output.py
+          python3 scripts/prepare_flutter_vercel_static_output.py --verify-project-binding
+
+      - uses: actions/setup-node@v4
+        if: steps.head.outputs.current == 'true'
+        with:
+          node-version: "22"
+
+      - name: Deploy static build
+        id: production
+        if: steps.head.outputs.current == 'true'
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$(git ls-remote origin refs/heads/main | cut -f1)" != "$HEAD_SHA" ]]; then
+            echo "::notice::Main advanced during build; skipping deploy"
+            echo "deployed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          npm install --global vercel@56.5.0
+          vercel deploy static-output --prod --non-interactive --token "$VERCEL_TOKEN"
+          echo "deployed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify production bundle SHA
+        if: steps.production.outputs.deployed == 'true'
+        run: |
+          set -euo pipefail
+          for ((attempt = 1; attempt <= 12; attempt++)); do
+            if curl --fail --silent --show-error --location --compressed \
+              https://lala-next.cloud/main.dart.js | grep -F "$BUILD_SHA" >/dev/null; then
+              echo "Production bundle contains expected build SHA"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Production bundle did not expose the expected build SHA"
+          exit 1

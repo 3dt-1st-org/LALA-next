@@ -83,7 +83,39 @@ curl -fsS 'https://api.lala-next.cloud/api/v1/places?lat=37.2636&lng=127.0286&ra
 
 ## Frontend
 
-Use the guarded deploy script for every production frontend deploy. It fails
+### Automatic deployment from GitHub Actions
+
+The `lala-next` Vercel project is deployed as a staged Flutter static site, not
+from the repository root. Do not connect the project directly to the root Git
+integration: the root `vercel.json` still routes to the legacy Python API.
+
+`.github/workflows/deploy-flutter-web.yml` deploys only after the `CI` workflow
+succeeds on a push to `main`. It checks out that exact CI head, skips a superseded
+head, builds Flutter web with public client configuration, verifies the staged
+static Vercel contract, and checks the production bundle SHA after deployment.
+PR CI and failed `main` CI cannot deploy. The workflow is disabled unless the
+repository variable `LALA_WEB_DEPLOY_ENABLED` is exactly `true`.
+
+Configure the GitHub repository before enabling the workflow:
+
+- Store a dedicated, expiring Vercel token scoped to the owning team as the
+  `VERCEL_TOKEN` repository secret. Never copy a personal CLI login token.
+- Set `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` repository variables from the
+  existing Flutter project's `.vercel/project.json` binding.
+- Set the public, domain-restricted build variables `NAVER_MAP_CLIENT_ID`,
+  `LOGTO_ENDPOINT`, `LOGTO_API_AUDIENCE`, and `LOGTO_WEB_APP_ID` as repository
+  variables. These values are compiled into the browser bundle; no server API
+  secret belongs in these variables. The workflow uses the production API URL.
+- Set `LALA_WEB_DEPLOY_ENABLED=true` only after those settings have been checked.
+  Leave it unset or set it to `false` to stop automatic deployment without
+  removing the workflow.
+
+The first enabled run requires a new successful `main` CI run; enabling the
+variable alone does not replay an older CI event. Compare its checkout SHA,
+Vercel deployment status, and the `lala-next.cloud` bundle SHA before treating
+auto-deploy as verified. Keep the manual guarded script below for recovery.
+
+For manual production frontend deploys, use the guarded script. It fails
 before uploading anything if the Naver Dynamic Map client id is absent or was not
 compiled into the bundle. This prevents the app from silently switching to the
 map-unavailable fallback.
