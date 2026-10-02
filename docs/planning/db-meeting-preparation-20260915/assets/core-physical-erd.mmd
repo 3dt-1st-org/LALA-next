@@ -1,0 +1,81 @@
+erDiagram
+  identity_users {
+    uuid id PK
+    text issuer UK
+    text subject UK
+    text status
+    timestamptz created_at
+    timestamptz last_seen_at
+  }
+  profile_user_travel_preferences {
+    text issuer PK,FK
+    text subject PK,FK
+    bigint revision
+    jsonb payload
+  }
+  planning_user_saved_places {
+    text issuer PK,FK
+    text subject PK,FK
+    text place_id PK
+    timestamptz saved_at
+  }
+  planning_user_plans {
+    text issuer PK,FK
+    text subject PK,FK
+    date plan_date PK
+    integer schema_version
+    jsonb envelope
+  }
+  planning_trip_preference_overrides {
+    text issuer PK,FK
+    text subject PK,FK
+    date plan_date PK
+    bigint revision
+    jsonb payload
+  }
+  planning_slot_visits {
+    text issuer PK,FK
+    text subject PK,FK
+    date plan_date PK
+    text slot_period PK
+    text place_id
+    text status
+    text reason_code
+    boolean use_for_recommendations
+    timestamptz confirmed_at
+  }
+  travel_places {
+    uuid id PK
+    text place_id UK
+    text name_ko
+    text category
+  }
+  travel_place_enrichments {
+    uuid id PK
+    text place_id FK
+    jsonb attributes
+  }
+  rag_knowledge_chunks {
+    uuid id PK
+    text place_id FK
+    vector embedding
+  }
+  travel_docent_scripts {
+    uuid id PK
+    text place_id
+    text category
+    text language
+    text mode
+    text script
+  }
+  identity_deleted_users {
+    bytea identity_digest UK
+    timestamptz deleted_at
+  }
+  identity_users ||--o| profile_user_travel_preferences : "issuer + subject"
+  identity_users ||--o{ planning_user_saved_places : "owner CASCADE"
+  identity_users ||--o{ planning_user_plans : "owner CASCADE"
+  identity_users ||--o{ planning_trip_preference_overrides : "owner CASCADE"
+  identity_users ||--o{ planning_slot_visits : "owner CASCADE"
+  travel_places ||--o{ travel_place_enrichments : "place_id / NO ACTION"
+  travel_places |o--o{ rag_knowledge_chunks : "nullable place_id / NO ACTION"

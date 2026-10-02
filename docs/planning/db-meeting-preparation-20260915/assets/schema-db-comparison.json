@@ -1,0 +1,165 @@
+{
+  "baseline_sha": "765570a21ff5ab5207c627d3659e8051be6dbd98",
+  "server_checkout_sha": "765570a21ff5ab5207c627d3659e8051be6dbd98",
+  "checked_at": "2026-09-14 22:48:04.908681+00",
+  "server_version": "15.18",
+  "read_scope": "catalog metadata only; repeatable read/read only; no user rows",
+  "code_counts": {
+    "tables": 53,
+    "columns": 471,
+    "views": 7
+  },
+  "db_counts": {
+    "r": 50,
+    "v": 7
+  },
+  "extensions": [
+    {
+      "name": "pgcrypto",
+      "version": "1.3"
+    },
+    {
+      "name": "postgis",
+      "version": "3.4.6"
+    },
+    {
+      "name": "vector",
+      "version": "0.8.2"
+    }
+  ],
+  "missing_tables": [
+    "community.chat_room_members",
+    "community.chat_ws_tickets",
+    "community.idempotency_keys"
+  ],
+  "missing_views": [],
+  "extra_relations": [],
+  "column_differences": [
+    {
+      "table": "community.chat_rooms",
+      "column": "visibility",
+      "difference": "missing"
+    },
+    {
+      "table": "community.chat_rooms",
+      "column": "created_by_issuer",
+      "difference": "missing"
+    },
+    {
+      "table": "community.chat_rooms",
+      "column": "created_by_subject",
+      "difference": "missing"
+    }
+  ],
+  "extra_columns": [
+    {
+      "table": "rag.knowledge_chunks",
+      "column": "embedding_generation",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+    }
+  ],
+  "constraint_differences": [
+    {
+      "table": "community.chat_rooms",
+      "name": "chat_rooms_visibility_check",
+      "kind": "CHECK",
+      "columns": []
+    },
+    {
+      "table": "community.chat_rooms",
+      "name": "fk_chat_rooms_creator",
+      "kind": "FOREIGN",
+      "columns": [
+        "created_by_issuer",
+        "created_by_subject"
+      ]
+    }
+  ],
+  "missing_explicit_indexes": [
+    {
+      "table": "community.chat_rooms",
+      "name": "idx_chat_rooms_visibility"
+    },
+    {
+      "table": "community.chat_room_members",
+      "name": "idx_chat_room_members_member"
+    },
+    {
+      "table": "community.idempotency_keys",
+      "name": "idx_idempotency_keys_expiry"
+    },
+    {
+      "table": "community.chat_ws_tickets",
+      "name": "idx_chat_ws_tickets_actor_expiry"
+    }
+  ],
+  "table_status": {
+    "identity.users": "column_and_key_shape_matched",
+    "identity.deleted_users": "column_and_key_shape_matched",
+    "travel.places": "column_and_key_shape_matched",
+    "travel.place_enrichments": "column_and_key_shape_matched",
+    "travel.weather_observations": "column_and_key_shape_matched",
+    "travel.docent_scripts": "column_and_key_shape_matched",
+    "travel.place_events": "column_and_key_shape_matched",
+    "community.keyword_watchlist": "column_and_key_shape_matched",
+    "community.ingest_runs": "column_and_key_shape_matched",
+    "community.ingest_tasks": "column_and_key_shape_matched",
+    "community.posts": "column_and_key_shape_matched",
+    "community.place_mentions_weekly": "column_and_key_shape_matched",
+    "ingest.source_files": "column_and_key_shape_matched",
+    "culture.events": "column_and_key_shape_matched",
+    "economy.card_spending_area_monthly": "column_and_key_shape_matched",
+    "economy.card_spending_demographics": "column_and_key_shape_matched",
+    "economy.franchise_brands": "column_and_key_shape_matched",
+    "economy.franchise_locations": "column_and_key_shape_matched",
+    "analytics.place_business_identity": "column_and_key_shape_matched",
+    "analytics.place_score_snapshots": "column_and_key_shape_matched",
+    "rag.knowledge_chunks": "column_and_key_shape_matched",
+    "ops.job_runs": "column_and_key_shape_matched",
+    "ops.dependency_checks": "column_and_key_shape_matched",
+    "ops.daily_costs": "column_and_key_shape_matched",
+    "community.user_posts": "column_and_key_shape_matched",
+    "community.post_comments": "column_and_key_shape_matched",
+    "community.post_likes": "column_and_key_shape_matched",
+    "community.user_follows": "column_and_key_shape_matched",
+    "community.chat_rooms": "difference",
+    "community.chat_messages": "column_and_key_shape_matched",
+    "ingest.review_sources": "column_and_key_shape_matched",
+    "ingest.review_ingest_receipts": "column_and_key_shape_matched",
+    "community.ingest_quarantine": "column_and_key_shape_matched",
+    "community.local_signals": "column_and_key_shape_matched",
+    "community.local_signal_places": "column_and_key_shape_matched",
+    "community.local_signal_routes": "column_and_key_shape_matched",
+    "community.local_signal_translations": "column_and_key_shape_matched",
+    "community.local_signal_reactions": "column_and_key_shape_matched",
+    "community.local_signal_comments": "column_and_key_shape_matched",
+    "community.local_signal_saves": "column_and_key_shape_matched",
+    "community.local_signal_reports": "column_and_key_shape_matched",
+    "community.local_signal_moderation_actions": "column_and_key_shape_matched",
+    "community.local_signal_capabilities": "column_and_key_shape_matched",
+    "community.local_signal_aggregate_eligibility": "column_and_key_shape_matched",
+    "planning.user_saved_places": "column_and_key_shape_matched",
+    "planning.user_plans": "column_and_key_shape_matched",
+    "planning.slot_visits": "column_and_key_shape_matched",
+    "profile.user_travel_preferences": "column_and_key_shape_matched",
+    "planning.trip_preference_overrides": "column_and_key_shape_matched",
+    "community.post_reports": "column_and_key_shape_matched",
+    "community.chat_room_members": "missing",
+    "community.idempotency_keys": "missing",
+    "community.chat_ws_tickets": "missing"
+  },
+  "matched_column_shape_count": 447,
+  "matched_key_signature_count": 103,
+  "matched_named_check_presence_count": 67,
+  "not_tested": [
+    "CHECK/default expression equivalence",
+    "view/index full semantics",
+    "DDL execution history",
+    "roles/RLS/grants",
+    "business records",
+    "API/Flutter runtime",
+    "migration execution"
+  ]
+}

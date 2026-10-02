@@ -1,0 +1,11 @@
+flowchart LR
+  A["게스트 기기 저장"] -. "계정 연결·합집합" .-> S["저장 장소 ID 집합"]
+  P["장소 목록 DTO / public_places"] -. "place_id로 정보 결합" .-> S
+  S -. "정보 없는 ID도 보존" .-> L["저장 목록 화면"]
+  P -. "slots 안 장소 사본" .-> E["user_plans.envelope"]
+  E -. "같은 owner + plan_date" .-> V["slot_visits"]
+  T["기본 취향"] -. "허용 항목만 override" .-> O["여행별 설정"]
+  O -. "일정 생성용 soft allowlist" .-> E
+  P -. "장소·출처 근거" .-> G["도슨트 생성·음성 요청"]
+  R["RAG knowledge_chunks"] -. "조회 근거" .-> G
+  C["docent_scripts"] -. "조건부 캐시 읽기" .-> G
