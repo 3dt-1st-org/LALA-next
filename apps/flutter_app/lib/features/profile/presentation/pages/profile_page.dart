@@ -654,7 +654,7 @@ class _PreferenceSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final interests = preferences.interests.take(3).toList(growable: false);
     return Material(
-      color: const Color(0xFF31786C),
+      color: LalaVisualColors.primary,
       borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
       child: InkWell(
         key: const ValueKey('profile-travel-preferences-entry'),

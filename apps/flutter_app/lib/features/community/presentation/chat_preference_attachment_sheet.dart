@@ -143,7 +143,7 @@ class ChatPreferenceAttachmentSheet extends StatelessWidget {
               _AttachmentOption(
                 key: const ValueKey('chat-attach-travel-summary'),
                 icon: Icons.tune_rounded,
-                color: const Color(0xFF0B67D8),
+                color: LalaVisualColors.primary,
                 title: lalaCopyMulti(
                   language,
                   ko: '여행 취향 요약',

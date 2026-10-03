@@ -350,8 +350,11 @@ class _RestaurantCommunicationSheetState
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   key: const ValueKey('restaurant-large-text-mode'),
-                  onPressed: () =>
-                      _showLargeRestaurantCard(context, koreanCard, widget.language),
+                  onPressed: () => _showLargeRestaurantCard(
+                    context,
+                    koreanCard,
+                    widget.language,
+                  ),
                   icon: const Icon(Icons.text_fields_rounded),
                   label: Text(
                     _copy(
@@ -366,8 +369,8 @@ class _RestaurantCommunicationSheetState
                   ),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(0, 48),
-                    foregroundColor: const Color(0xFF0B67D8),
-                    side: const BorderSide(color: Color(0xFF9CC5F3)),
+                    foregroundColor: LalaVisualColors.primary,
+                    side: const BorderSide(color: LalaVisualColors.line),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -391,7 +394,7 @@ class _RestaurantCommunicationSheetState
                 _RequestCard(
                   key: const ValueKey('restaurant-visitor-request-card'),
                   text: visitorCard,
-                  accent: const Color(0xFF0B67D8),
+                  accent: LalaVisualColors.primary,
                 ),
               ],
               if (!hasRestaurantCommunicationContent(widget.preferences)) ...[
@@ -467,7 +470,8 @@ class _RestaurantCommunicationSheetState
             // scaling; minimumSize keeps the visual height but grows.
             child: FilledButton.icon(
               key: const ValueKey('copy-korean-restaurant-card'),
-              onPressed: () => _copyToClipboard(context, koreanCard, widget.language),
+              onPressed: () =>
+                  _copyToClipboard(context, koreanCard, widget.language),
               icon: const Icon(Icons.copy_outlined),
               label: Text(
                 _copy(
@@ -481,7 +485,7 @@ class _RestaurantCommunicationSheetState
                 style: const TextStyle(fontWeight: FontWeight.w900),
               ),
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF0B67D8),
+                backgroundColor: LalaVisualColors.primary,
                 minimumSize: const Size(0, 48),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -513,7 +517,7 @@ class _LanguageLabel extends StatelessWidget {
       header: true,
       child: Row(
         children: [
-          Icon(icon, size: 18, color: const Color(0xFF0B67D8)),
+          Icon(icon, size: 18, color: LalaVisualColors.primary),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
@@ -643,7 +647,7 @@ class _Notice extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: const Color(0xFF0B67D8)),
+          Icon(icon, size: 20, color: LalaVisualColors.primary),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -843,9 +847,8 @@ String _koreanCardText(TravelPreferences preferences) {
     sections.add(_spiceKoreanRequest(spiceLevel));
   }
   if (preferences.orderRequests.isNotEmpty) {
-    final labels = preferences.orderRequests
-        .map(_orderRequestKoreanPhrase)
-        .toList()
+    final labels =
+        preferences.orderRequests.map(_orderRequestKoreanPhrase).toList()
           ..sort();
     sections.add('요청 사항: ${labels.join(' · ')}');
   }
@@ -874,7 +877,7 @@ String _orderRequestKoreanPhrase(RestaurantOrderRequest value) =>
       RestaurantOrderRequest.smallPortion => '양을 조금 적게 부탁드립니다',
       RestaurantOrderRequest.quietTable => '가능하다면 조용한 자리를 부탁드립니다',
       RestaurantOrderRequest.takeout => '남은 음식을 포장해 주시면 감사하겠습니다',
-};
+    };
 
 String _visitorCardText(String language, TravelPreferences preferences) {
   if (language == 'ko') {
@@ -1084,7 +1087,10 @@ String _spiceVisitorRequest(String language, SpicePreference value) {
   return _localizedList(language, labels);
 }
 
-String _orderRequestVisitorPhrase(String language, RestaurantOrderRequest value) {
+String _orderRequestVisitorPhrase(
+  String language,
+  RestaurantOrderRequest value,
+) {
   final labels = switch (value) {
     RestaurantOrderRequest.staffRecommendation => [
       '추천 메뉴를 부탁드립니다',

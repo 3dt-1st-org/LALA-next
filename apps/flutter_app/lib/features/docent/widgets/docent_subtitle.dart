@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../app/lala_visual_tokens.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../../shared/l10n/lala_copy.dart';
@@ -63,7 +64,7 @@ class DocentSubtitle extends StatelessWidget {
             color: Colors.white.withValues(alpha: 0.98),
             borderRadius: BorderRadius.circular(16),
             border: const Border(
-              left: BorderSide(color: Color(0xFF2B6CB0), width: 4),
+              left: BorderSide(color: LalaVisualColors.primary, width: 4),
             ),
             boxShadow: const [
               BoxShadow(
@@ -82,12 +83,12 @@ class DocentSubtitle extends StatelessWidget {
                     width: 34,
                     height: 34,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
+                      color: LalaVisualColors.primarySoft,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
                       Icons.record_voice_over_outlined,
-                      color: Color(0xFF2B6CB0),
+                      color: LalaVisualColors.primary,
                       size: 20,
                     ),
                   ),
@@ -195,7 +196,7 @@ class DocentSubtitle extends StatelessWidget {
                     const Icon(
                       Icons.route_outlined,
                       size: 15,
-                      color: Color(0xFF2B6CB0),
+                      color: LalaVisualColors.primary,
                     ),
                     const SizedBox(width: 6),
                     Expanded(
@@ -267,8 +268,8 @@ class DocentSubtitle extends StatelessWidget {
                     lalaCopy(language, ko: '하루 일정 보기', en: 'View plan'),
                   ),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF2B6CB0),
-                    side: const BorderSide(color: Color(0xFF2B6CB0)),
+                    foregroundColor: LalaVisualColors.primary,
+                    side: const BorderSide(color: LalaVisualColors.primary),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   onPressed: onAddToPlan,
@@ -360,7 +361,7 @@ class _DocentPlaybackRow extends StatelessWidget {
                           isPlaying
                               ? Icons.pause_rounded
                               : Icons.play_arrow_rounded,
-                          color: const Color(0xFF2B6CB0),
+                          color: LalaVisualColors.primary,
                         ),
                   padding: EdgeInsets.zero,
                   tooltip: toggleLabel,
@@ -418,7 +419,7 @@ class _DocentPlaybackRow extends StatelessWidget {
                     onPressed: controller.stop,
                     icon: const Icon(
                       Icons.stop_rounded,
-                      color: Color(0xFF2B6CB0),
+                      color: LalaVisualColors.primary,
                     ),
                     padding: EdgeInsets.zero,
                     tooltip: lalaCopy(language, ko: '정지', en: 'Stop'),

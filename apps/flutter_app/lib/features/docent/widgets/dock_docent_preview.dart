@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../app/lala_visual_tokens.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../../shared/l10n/lala_copy.dart';
@@ -74,7 +75,7 @@ class DockDocentPreview extends StatelessWidget {
                   ),
                   child: const Icon(
                     Icons.record_voice_over_outlined,
-                    color: Color(0xFF2B6CB0),
+                    color: LalaVisualColors.primary,
                     size: 19,
                   ),
                 ),
@@ -221,8 +222,8 @@ class DockDocentPreview extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF2B6CB0),
-                      side: const BorderSide(color: Color(0xFF2B6CB0)),
+                      foregroundColor: LalaVisualColors.primary,
+                      side: const BorderSide(color: LalaVisualColors.primary),
                       padding: const EdgeInsets.symmetric(vertical: 11),
                     ),
                   ),
@@ -241,7 +242,7 @@ class DockDocentPreview extends StatelessWidget {
                     icon: const Icon(Icons.keyboard_arrow_up),
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFF2B6CB0),
+                      foregroundColor: LalaVisualColors.primary,
                       side: const BorderSide(color: Color(0xFFD7E3F5)),
                     ),
                   ),

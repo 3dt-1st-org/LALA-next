@@ -1,6 +1,7 @@
 // C3 최종: main.dart 에서 이관. 본문 불변(이동만).
 // C3 최종: main.dart 에서 이관. V6: 방문객 로케일 번역 추가.
 import 'package:flutter/material.dart';
+import '../../../app/lala_visual_tokens.dart';
 
 import '../../../shared/l10n/lala_copy.dart';
 
@@ -53,7 +54,7 @@ class LocationConsentOverlay extends StatelessWidget {
                   ),
                   child: const Icon(
                     Icons.location_off_outlined,
-                    color: Color(0xFF2B6CB0),
+                    color: LalaVisualColors.primary,
                     size: 30,
                   ),
                 ),
@@ -131,8 +132,8 @@ class LocationConsentOverlay extends StatelessWidget {
                   ),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size.fromHeight(48),
-                    foregroundColor: const Color(0xFF2B6CB0),
-                    side: const BorderSide(color: Color(0xFFB9D4F3)),
+                    foregroundColor: LalaVisualColors.primary,
+                    side: const BorderSide(color: LalaVisualColors.line),
                   ),
                 ),
               ],

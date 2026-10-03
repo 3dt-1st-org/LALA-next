@@ -966,7 +966,7 @@ class _SearchFailureView extends StatelessWidget {
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 label: Text(retryLabel),
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF2B6CB0),
+                  backgroundColor: LalaVisualColors.primary,
                   foregroundColor: Colors.white,
                   textStyle: const TextStyle(fontWeight: FontWeight.w900),
                   minimumSize: const Size.fromHeight(44),
@@ -1061,8 +1061,8 @@ class _SearchEmptyView extends StatelessWidget {
                   icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
                   label: Text(actionLabel),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF2B6CB0),
-                    side: const BorderSide(color: Color(0xFFB9D4F3)),
+                    foregroundColor: LalaVisualColors.primary,
+                    side: const BorderSide(color: LalaVisualColors.line),
                     textStyle: const TextStyle(fontWeight: FontWeight.w900),
                     minimumSize: const Size.fromHeight(44),
                     padding: const EdgeInsets.symmetric(horizontal: 20),

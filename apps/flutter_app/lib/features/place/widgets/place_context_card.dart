@@ -1,6 +1,7 @@
 // C3 최종: main.dart 에서 이관. 본문 불변(이동만).
 import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 
 import 'package:lala_next_app/features/home/home_view_helpers.dart';
 import 'package:lala_next_app/features/place/widgets/context_fact_chip.dart';
@@ -46,12 +47,12 @@ class PlaceContextCard extends StatelessWidget {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEAF2FB),
+                  color: LalaVisualColors.primarySoft,
                   borderRadius: BorderRadius.circular(11),
                 ),
                 child: Icon(
                   placeContextIcon(place.category),
-                  color: const Color(0xFF2B6CB0),
+                  color: LalaVisualColors.primary,
                   size: 19,
                 ),
               ),

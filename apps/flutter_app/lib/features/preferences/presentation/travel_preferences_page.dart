@@ -79,8 +79,8 @@ class _TravelPreferencesSettingsSectionState
                   children: [
                     const _LeadingIcon(
                       icon: Icons.favorite_outline,
-                      color: Color(0xFF0B67D8),
-                      background: Color(0xFFEAF3FF),
+                      color: LalaVisualColors.primary,
+                      background: LalaVisualColors.primarySoft,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -712,7 +712,7 @@ class _TravelPreferencesPageState extends State<TravelPreferencesPage> {
                           _PreferenceMenuRow(
                             key: const ValueKey('docent-preferences-entry'),
                             icon: Icons.headphones_outlined,
-                            color: const Color(0xFF0B67D8),
+                            color: LalaVisualColors.primary,
                             title: _text(
                               widget.language,
                               ko: '도슨트 설정',
@@ -1463,7 +1463,7 @@ class _FoodPreferencesPageState extends State<FoodPreferencesPage> {
                 style: const TextStyle(fontWeight: FontWeight.w900),
               ),
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF0B67D8),
+                backgroundColor: LalaVisualColors.primary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -2673,7 +2673,7 @@ class _AccountSyncCard extends StatelessWidget {
       TravelPreferencesSyncStatus.checking => (
         Icons.sync,
         LalaVisualColors.primaryBlue,
-        const Color(0xFFEAF3FF),
+        LalaVisualColors.primarySoft,
         _text(
           language,
           ko: '계정 취향 확인 중',
