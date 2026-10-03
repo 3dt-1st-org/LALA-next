@@ -6,7 +6,7 @@ from time import perf_counter
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.database import close_database_pools
@@ -51,6 +51,15 @@ def create_app() -> FastAPI:
         description="FastAPI edge for the Flutter-facing LALA-next contract.",
         lifespan=lifespan,
     )
+
+    @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
+    async def web_entry() -> RedirectResponse:
+        return RedirectResponse(
+            url="https://lala-next.cloud/",
+            status_code=307,
+            headers={"Cache-Control": "no-store"},
+        )
+
     app.state.metrics = RuntimeMetrics()
     app.add_middleware(RequestBodyLimitMiddleware)
     if settings.cors_allow_origins:
