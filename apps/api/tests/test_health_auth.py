@@ -3,6 +3,15 @@ from __future__ import annotations
 import pytest
 
 
+@pytest.mark.parametrize("method", ["get", "head"])
+def test_api_root_returns_to_web_app_without_caching(client, method):
+    response = getattr(client, method)("/", follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "https://lala-next.cloud/"
+    assert response.headers["cache-control"] == "no-store"
+
+
 def test_healthz_is_public(client):
     response = client.get("/healthz")
 
