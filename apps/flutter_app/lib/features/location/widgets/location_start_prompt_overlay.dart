@@ -1,11 +1,12 @@
 // C3 최종: main.dart 에서 이관. 본문 불변(이동만).
 import 'package:flutter/material.dart';
+import '../../../app/lala_visual_tokens.dart';
 
 import '../../../shared/l10n/lala_copy.dart';
 
-
 class LocationStartPromptOverlay extends StatelessWidget {
-  const LocationStartPromptOverlay({super.key,
+  const LocationStartPromptOverlay({
+    super.key,
     required this.language,
     required this.onStartLocation,
   });
@@ -51,7 +52,7 @@ class LocationStartPromptOverlay extends StatelessWidget {
                   ),
                   child: const Icon(
                     Icons.my_location_outlined,
-                    color: Color(0xFF2B6CB0),
+                    color: LalaVisualColors.primary,
                     size: 30,
                   ),
                 ),
@@ -109,7 +110,7 @@ class LocationStartPromptOverlay extends StatelessWidget {
                   ),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(50),
-                    backgroundColor: const Color(0xFF2B6CB0),
+                    backgroundColor: LalaVisualColors.primary,
                     foregroundColor: Colors.white,
                   ),
                 ),

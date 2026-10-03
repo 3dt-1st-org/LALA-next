@@ -1,11 +1,11 @@
 // C3 최종: main.dart 에서 이관. 본문 불변(이동만).
 import 'package:flutter/material.dart';
+import '../../../app/lala_visual_tokens.dart';
 
 import '../../../shared/l10n/lala_copy.dart';
 
-
 class LocationStartupOverlay extends StatelessWidget {
-  const LocationStartupOverlay({super.key,required this.language});
+  const LocationStartupOverlay({super.key, required this.language});
 
   final String language;
 
@@ -47,7 +47,7 @@ class LocationStartupOverlay extends StatelessWidget {
                   ),
                   child: const Icon(
                     Icons.my_location_outlined,
-                    color: Color(0xFF2B6CB0),
+                    color: LalaVisualColors.primary,
                     size: 30,
                   ),
                 ),
@@ -108,7 +108,7 @@ class LocationStartupOverlay extends StatelessWidget {
                               )
                             : '위치 권한 확인 중',
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: const Color(0xFF2B6CB0),
+                          color: LalaVisualColors.primary,
                           fontWeight: FontWeight.w900,
                         ),
                       ),

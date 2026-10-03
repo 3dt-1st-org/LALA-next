@@ -167,33 +167,20 @@ class _LalaAppState extends State<LalaApp> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme =
-        ColorScheme.fromSeed(
-          seedColor: LalaVisualColors.primaryBlue,
-          brightness: Brightness.light,
-        ).copyWith(
-          primary: LalaVisualColors.primaryBlue,
-          onPrimary: Colors.white,
-          primaryContainer: LalaVisualColors.primarySoft,
-          onPrimaryContainer: LalaVisualColors.ink,
-          secondary: LalaVisualColors.culture,
-          tertiary: LalaVisualColors.attraction,
-          surface: LalaVisualColors.surface,
-          surfaceContainerLowest: Colors.white,
-          outline: LalaVisualColors.line,
-          outlineVariant: LalaVisualColors.line,
-        );
+    final baseTheme = ThemeData(
+      colorScheme: LalaDesignTheme.colorScheme,
+      scaffoldBackgroundColor: LalaVisualColors.surface,
+      useMaterial3: true,
+      fontFamily: LalaDesignTheme.fontFamily,
+    );
 
     return MaterialApp.router(
       title: 'LALA',
       builder: (context, child) =>
           LalaProductScope(meetingMvp: widget.useLocalDesign, child: child!),
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: colorScheme,
-        scaffoldBackgroundColor: LalaVisualColors.surface,
-        useMaterial3: true,
-        fontFamily: 'Pretendard',
+      theme: baseTheme.copyWith(
+        textTheme: LalaDesignTheme.textTheme(baseTheme.textTheme),
         cardTheme: const CardThemeData(
           elevation: 0,
           margin: EdgeInsets.zero,

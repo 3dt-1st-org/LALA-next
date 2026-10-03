@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../app/lala_visual_tokens.dart';
 
 import '../../../shared/l10n/lala_copy.dart';
 
@@ -56,13 +57,13 @@ class PrivacyDetailsSheet extends StatelessWidget {
                   Expanded(
                     child: Text(
                       lalaCopyMulti(
-      language,
-      ko: '개인정보 동의 안내',
-      en: 'Privacy notice',
-      ja: 'プライバシーに関するお知らせ',
-      zhHans: '隐私须知',
-      zhHant: '隱私須知',
-    ),
+                        language,
+                        ko: '개인정보 동의 안내',
+                        en: 'Privacy notice',
+                        ja: 'プライバシーに関するお知らせ',
+                        zhHans: '隐私须知',
+                        zhHant: '隱私須知',
+                      ),
                       style: const TextStyle(
                         color: Color(0xFF111827),
                         fontSize: 18,
@@ -85,13 +86,13 @@ class PrivacyDetailsSheet extends StatelessWidget {
               PrivacyDetailRow(
                 icon: Icons.my_location_outlined,
                 title: lalaCopyMulti(
-      language,
-      ko: '위치 기반 추천',
-      en: 'Location context',
-      ja: '位置情報に基づくおすすめ',
-      zhHans: '基于位置的推荐',
-      zhHant: '基於位置的推薦',
-    ),
+                  language,
+                  ko: '위치 기반 추천',
+                  en: 'Location context',
+                  ja: '位置情報に基づくおすすめ',
+                  zhHans: '基于位置的推荐',
+                  zhHant: '基於位置的推薦',
+                ),
                 body: lalaCopyMulti(
                   language,
                   ko: '현재 화면의 지도 중심과 반경을 사용해 가까운 장소, 날씨, 일정을 계산합니다.',
@@ -158,10 +159,10 @@ class PrivacyDetailRow extends StatelessWidget {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
+              color: LalaVisualColors.primarySoft,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: const Color(0xFF2B6CB0), size: 20),
+            child: Icon(icon, color: LalaVisualColors.primary, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(

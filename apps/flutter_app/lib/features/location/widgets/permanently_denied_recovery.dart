@@ -8,6 +8,7 @@
 // the user to change it in their browser/site settings — no fake action is ever
 // shown. The flow stays usable because the manual path is always present.
 import 'package:flutter/material.dart';
+import '../../../app/lala_visual_tokens.dart';
 
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
@@ -80,7 +81,7 @@ class PermanentlyDeniedRecovery extends StatelessWidget {
                 ),
                 child: const Icon(
                   Icons.location_off_outlined,
-                  color: Color(0xFF2B6CB0),
+                  color: LalaVisualColors.primary,
                   size: 24,
                 ),
               ),
@@ -168,8 +169,8 @@ class PermanentlyDeniedRecovery extends StatelessWidget {
               ),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
-                foregroundColor: const Color(0xFF2B6CB0),
-                side: const BorderSide(color: Color(0xFFB9D4F3)),
+                foregroundColor: LalaVisualColors.primary,
+                side: const BorderSide(color: LalaVisualColors.line),
               ),
             ),
             const SizedBox(height: 10),
@@ -193,7 +194,7 @@ class PermanentlyDeniedRecovery extends StatelessWidget {
               ),
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
-                backgroundColor: const Color(0xFF2B6CB0),
+                backgroundColor: LalaVisualColors.primary,
                 foregroundColor: Colors.white,
               ),
             )
@@ -214,9 +215,9 @@ class PermanentlyDeniedRecovery extends StatelessWidget {
               ),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
-                foregroundColor: const Color(0xFF2B6CB0),
+                foregroundColor: LalaVisualColors.primary,
                 side: BorderSide(
-                  color: const Color(0xFF2B6CB0).withValues(alpha: 0.55),
+                  color: LalaVisualColors.primary.withValues(alpha: 0.55),
                 ),
                 textStyle: const TextStyle(fontWeight: FontWeight.w800),
               ),

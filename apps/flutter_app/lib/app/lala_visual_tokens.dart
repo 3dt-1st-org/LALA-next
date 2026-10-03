@@ -90,3 +90,39 @@ abstract final class LalaVisualColors {
   /// 식당 노랑 표면 위 텍스트 색(대비 확보를 위해 어둡게).
   static const Color restaurantInk = Color(0xFF1A202C);
 }
+
+/// Shared typography and palette extracted from the home and onboarding UI.
+/// Screen-specific TextStyles may adjust size/weight while inheriting these
+/// font and text colors throughout the app.
+abstract final class LalaDesignTheme {
+  const LalaDesignTheme._();
+
+  static const fontFamily = 'Pretendard';
+  static const fontFamilyFallback = <String>['NotoSansCJK'];
+
+  static ColorScheme get colorScheme =>
+      ColorScheme.fromSeed(
+        seedColor: LalaVisualColors.primary,
+        brightness: Brightness.light,
+      ).copyWith(
+        primary: LalaVisualColors.primary,
+        onPrimary: Colors.white,
+        primaryContainer: LalaVisualColors.primarySoft,
+        onPrimaryContainer: LalaVisualColors.ink,
+        secondary: LalaVisualColors.culture,
+        tertiary: LalaVisualColors.attraction,
+        surface: LalaVisualColors.surface,
+        surfaceContainerLowest: Colors.white,
+        onSurface: LalaVisualColors.ink,
+        onSurfaceVariant: LalaVisualColors.muted,
+        outline: LalaVisualColors.line,
+        outlineVariant: LalaVisualColors.line,
+      );
+
+  static TextTheme textTheme(TextTheme base) => base.apply(
+    fontFamily: fontFamily,
+    fontFamilyFallback: fontFamilyFallback,
+    bodyColor: LalaVisualColors.ink,
+    displayColor: LalaVisualColors.ink,
+  );
+}

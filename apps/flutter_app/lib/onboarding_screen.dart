@@ -5,6 +5,7 @@ import 'manual_location_options.dart';
 import 'settings_confirmation_dialog.dart';
 
 import 'package:flutter/material.dart';
+import 'app/lala_visual_tokens.dart';
 
 enum OnboardingLocationStatus { granted, denied, unavailable }
 
@@ -65,10 +66,10 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  static const _jade = Color(0xFF31786C);
-  static const _ink = Color(0xFF292725);
-  static const _muted = Color(0xFF70736F);
-  static const _line = Color(0xFFDCE9E4);
+  static const _jade = LalaVisualColors.primary;
+  static const _ink = LalaVisualColors.ink;
+  static const _muted = LalaVisualColors.muted;
+  static const _line = LalaVisualColors.line;
   static const _countries = [
     ('KR', 'ko', 'Korea', '한국 · 한국어'),
     ('US', 'en', 'United States', '미국 · English'),
@@ -320,16 +321,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     final localTheme = Theme.of(context).copyWith(
       brightness: Brightness.light,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: _jade,
-        brightness: Brightness.light,
-      ),
-      textTheme: Theme.of(context).textTheme.apply(
-        fontFamily: 'Pretendard',
-        fontFamilyFallback: const ['NotoSansCJK'],
-        bodyColor: _ink,
-        displayColor: _ink,
-      ),
+      colorScheme: LalaDesignTheme.colorScheme,
+      textTheme: LalaDesignTheme.textTheme(Theme.of(context).textTheme),
     );
     return Theme(
       data: localTheme,

@@ -2617,7 +2617,7 @@ void main() {
   });
 
   testWidgets(
-    'bottom navigation uses a crisp white surface and blue selection',
+    'bottom navigation uses a crisp white surface and jade selection',
     (tester) async {
       await tester.pumpWidget(
         TestLalaApp(
@@ -2656,6 +2656,25 @@ void main() {
       );
     },
   );
+
+  testWidgets('other tabs inherit the home and onboarding design theme', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final theme = Theme.of(tester.element(find.byType(NavigationBar)));
+    expect(theme.colorScheme.primary, LalaVisualColors.primary);
+    expect(theme.colorScheme.onSurface, LalaVisualColors.ink);
+    expect(theme.scaffoldBackgroundColor, LalaVisualColors.surface);
+    expect(theme.textTheme.bodyMedium?.fontFamily, 'Pretendard');
+    expect(theme.textTheme.bodyMedium?.fontFamilyFallback, ['NotoSansCJK']);
+  });
 
   testWidgets('bottom navigation caps the iPhone safe-area gap', (
     tester,

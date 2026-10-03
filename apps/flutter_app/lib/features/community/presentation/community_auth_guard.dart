@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../app/lala_visual_tokens.dart';
 
 import 'package:lala_next_app/auth/auth_controller.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
@@ -193,7 +194,7 @@ class CommunityAuthenticationView extends StatelessWidget {
             const Icon(
               Icons.lock_person_outlined,
               size: 44,
-              color: Color(0xFF2B6CB0),
+              color: LalaVisualColors.primary,
             ),
             const SizedBox(height: 14),
             Text(

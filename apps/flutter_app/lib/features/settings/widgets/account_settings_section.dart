@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../app/lala_visual_tokens.dart';
 
 import '../../../auth/auth_controller.dart';
 import '../../../shared/l10n/lala_copy.dart';
@@ -44,13 +45,13 @@ class AccountSettingsSection extends StatelessWidget {
                 const SizedBox(width: 6),
                 Text(
                   lalaCopyMulti(
-                      language,
-                      ko: '계정 로그인을 사용할 수 없어요',
-                      en: 'Sign-in unavailable',
-                      ja: 'ログインは利用できません',
-                      zhHans: '登录不可用',
-                      zhHant: '登入不可用',
-                    ),
+                    language,
+                    ko: '계정 로그인을 사용할 수 없어요',
+                    en: 'Sign-in unavailable',
+                    ja: 'ログインは利用できません',
+                    zhHans: '登录不可用',
+                    zhHant: '登入不可用',
+                  ),
                   style: const TextStyle(
                     color: Color(0xFF64748B),
                     fontSize: 12,
@@ -63,13 +64,13 @@ class AccountSettingsSection extends StatelessWidget {
         }
         return SettingsSection(
           title: lalaCopyMulti(
-              language,
-              ko: '계정',
-              en: 'Account',
-              ja: 'アカウント',
-              zhHans: '账户',
-              zhHant: '帳戶',
-            ),
+            language,
+            ko: '계정',
+            en: 'Account',
+            ja: 'アカウント',
+            zhHans: '账户',
+            zhHant: '帳戶',
+          ),
           child: Container(
             key: const ValueKey('account-panel'),
             constraints: const BoxConstraints(minHeight: 72),
@@ -121,13 +122,13 @@ class AccountSettingsSection extends StatelessWidget {
                 child: AccountStatusRow(
                   icon: Icons.person_outline,
                   label: lalaCopyMulti(
-                      language,
-                      ko: '게스트로 이용 중',
-                      en: 'Using LALA as a guest',
-                      ja: 'ゲストとして利用中',
-                      zhHans: '正在以访客身份使用',
-                      zhHant: '正在以訪客身分使用',
-                    ),
+                    language,
+                    ko: '게스트로 이용 중',
+                    en: 'Using LALA as a guest',
+                    ja: 'ゲストとして利用中',
+                    zhHans: '正在以访客身份使用',
+                    zhHant: '正在以訪客身分使用',
+                  ),
                 ),
               ),
               TextButton.icon(
@@ -135,15 +136,15 @@ class AccountSettingsSection extends StatelessWidget {
                 onPressed: controller.signIn,
                 icon: const Icon(Icons.login, size: 20),
                 label: Text(
-              lalaCopyMulti(
-                language,
-                ko: '로그인',
-                en: 'Sign in',
-                ja: 'ログイン',
-                zhHans: '登录',
-                zhHant: '登入',
-              ),
-            ),
+                  lalaCopyMulti(
+                    language,
+                    ko: '로그인',
+                    en: 'Sign in',
+                    ja: 'ログイン',
+                    zhHans: '登录',
+                    zhHant: '登入',
+                  ),
+                ),
               ),
             ],
           ),
@@ -160,7 +161,10 @@ class AccountSettingsSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Icon(Icons.account_circle_outlined, color: Color(0xFF2B6CB0)),
+            const Icon(
+              Icons.account_circle_outlined,
+              color: LalaVisualColors.primary,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -169,13 +173,13 @@ class AccountSettingsSection extends StatelessWidget {
                   Text(
                     state.profile?.name ??
                         lalaCopyMulti(
-              language,
-              ko: '로그인됨',
-              en: 'Signed in',
-              ja: 'ログイン済み',
-              zhHans: '已登录',
-              zhHant: '已登入',
-            ),
+                          language,
+                          ko: '로그인됨',
+                          en: 'Signed in',
+                          ja: 'ログイン済み',
+                          zhHans: '已登录',
+                          zhHant: '已登入',
+                        ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -200,13 +204,13 @@ class AccountSettingsSection extends StatelessWidget {
             IconButton(
               key: const ValueKey('account-sign-out'),
               tooltip: lalaCopyMulti(
-              language,
-              ko: '로그아웃',
-              en: 'Sign out',
-              ja: 'ログアウト',
-              zhHans: '退出登录',
-              zhHant: '登出',
-            ),
+                language,
+                ko: '로그아웃',
+                en: 'Sign out',
+                ja: 'ログアウト',
+                zhHans: '退出登录',
+                zhHant: '登出',
+              ),
               onPressed: controller.signOut,
               icon: const Icon(Icons.logout),
             ),
@@ -239,14 +243,14 @@ class AccountSettingsSection extends StatelessWidget {
         ],
         if (state.me != null)
           TextButton(
-          key: const ValueKey('account-delete'),
-          onPressed: () => _confirmDelete(context),
-          style: TextButton.styleFrom(
-            padding: EdgeInsets.zero,
-            foregroundColor: const Color(0xFFB42318),
-            textStyle: const TextStyle(fontWeight: FontWeight.w900),
-          ),
-          child: Text(
+            key: const ValueKey('account-delete'),
+            onPressed: () => _confirmDelete(context),
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              foregroundColor: const Color(0xFFB42318),
+              textStyle: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+            child: Text(
               lalaCopyMulti(
                 language,
                 ko: '계정 삭제',
@@ -256,7 +260,7 @@ class AccountSettingsSection extends StatelessWidget {
                 zhHant: '刪除帳戶',
               ),
             ),
-        ),
+          ),
       ],
     );
   }
@@ -267,24 +271,24 @@ class AccountSettingsSection extends StatelessWidget {
       builder: (context) => AlertDialog(
         key: const ValueKey('account-delete-dialog'),
         title: Text(
-            lalaCopyMulti(
-              language,
-              ko: '계정을 삭제할까요?',
-              en: 'Delete account?',
-              ja: 'アカウントを削除しますか？',
-              zhHans: '要删除账户吗？',
-              zhHant: '要刪除帳戶嗎？',
-            ),
+          lalaCopyMulti(
+            language,
+            ko: '계정을 삭제할까요?',
+            en: 'Delete account?',
+            ja: 'アカウントを削除しますか？',
+            zhHans: '要删除账户吗？',
+            zhHant: '要刪除帳戶嗎？',
           ),
+        ),
         content: Text(
           lalaCopyMulti(
-              language,
-              ko: '계정과 연결된 데이터가 삭제되며 되돌릴 수 없습니다.',
-              en: 'Your account data will be deleted and cannot be restored.',
-              ja: 'アカウントに関連するデータが削除され、元に戻せません。',
-              zhHans: '与账户关联的数据将被删除且无法恢复。',
-              zhHant: '與帳戶相關的資料將被刪除且無法復原。',
-            ),
+            language,
+            ko: '계정과 연결된 데이터가 삭제되며 되돌릴 수 없습니다.',
+            en: 'Your account data will be deleted and cannot be restored.',
+            ja: 'アカウントに関連するデータが削除され、元に戻せません。',
+            zhHans: '与账户关联的数据将被删除且无法恢复。',
+            zhHant: '與帳戶相關的資料將被刪除且無法復原。',
+          ),
         ),
         actions: [
           TextButton(
@@ -378,8 +382,7 @@ class AccountErrorText extends StatelessWidget {
       LalaAccountSyncErrorCategory.configuration => lalaCopyMulti(
         language,
         ko: '계정 연결 설정을 사용할 수 없어요. 지도·검색·일정은 계속 이용할 수 있어요.',
-        en:
-            'Account linking is unavailable in this build. Maps, search, and plans keep working.',
+        en: 'Account linking is unavailable in this build. Maps, search, and plans keep working.',
         ja: 'アカウント連携の設定が利用できません。地図・検索・日程は引き続き利用できます。',
         zhHans: '账户关联配置不可用。地图、搜索和行程仍可继续使用。',
         zhHant: '帳戶連結設定無法使用。地圖、搜尋和行程仍可繼續使用。',

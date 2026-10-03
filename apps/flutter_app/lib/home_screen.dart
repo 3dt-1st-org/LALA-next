@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
+import 'app/lala_visual_tokens.dart';
 import 'manual_location_options.dart';
 import 'features/place/widgets/place_image.dart';
 import 'shared/l10n/place_labels.dart';
 part 'lala_guide.dart';
 
-const _homeJade = Color(0xFF39766A);
-const _homeInk = Color(0xFF203832);
+const _homeJade = LalaVisualColors.primary;
+const _homeInk = LalaVisualColors.ink;
 
 class DiscoveryHome extends StatefulWidget {
   const DiscoveryHome({
@@ -351,14 +352,8 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
         .toList();
     return Theme(
       data: Theme.of(context).copyWith(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: _homeJade,
-          primary: _homeJade,
-          surface: Colors.white,
-        ),
-        textTheme: Theme.of(
-          context,
-        ).textTheme.apply(bodyColor: _homeInk, displayColor: _homeInk),
+        colorScheme: LalaDesignTheme.colorScheme,
+        textTheme: LalaDesignTheme.textTheme(Theme.of(context).textTheme),
       ),
       child: ColoredBox(
         color: Colors.white,

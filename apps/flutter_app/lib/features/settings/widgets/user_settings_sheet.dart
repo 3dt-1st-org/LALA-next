@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../app/lala_visual_tokens.dart';
 
 import '../../../auth/auth_controller.dart';
 import '../../../features/preferences/presentation/travel_preferences_page.dart';
@@ -145,7 +146,7 @@ class UserSettingsSheet extends StatelessWidget {
                           showPrivacyDetailsSheet(context, uiLanguage),
                       style: TextButton.styleFrom(
                         padding: EdgeInsets.zero,
-                        foregroundColor: const Color(0xFF2B6CB0),
+                        foregroundColor: LalaVisualColors.primary,
                         textStyle: const TextStyle(fontWeight: FontWeight.w900),
                       ),
                       child: Text(
@@ -210,7 +211,7 @@ class UserSettingsSheet extends StatelessWidget {
                   showSelectedIcon: false,
                   style: SegmentedButton.styleFrom(
                     backgroundColor: Colors.white,
-                    selectedBackgroundColor: const Color(0xFF2B6CB0),
+                    selectedBackgroundColor: LalaVisualColors.primary,
                     selectedForegroundColor: Colors.white,
                   ),
                 ),
