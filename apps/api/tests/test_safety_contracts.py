@@ -458,37 +458,6 @@ def test_public_repo_does_not_contain_live_resource_identifiers():
     assert findings == []
 
 
-def test_azure_dev_deploy_uses_oidc_and_dev_branch_only():
-    workflow = (ROOT / ".github" / "workflows" / "azure-dev-deploy.yml").read_text(encoding="utf-8")
-
-    assert "branches:\n      - dev" in workflow
-    assert "id-token: write" in workflow
-    assert "uses: azure/login@v2" in workflow
-    assert "AZURE_CREDENTIALS" not in workflow
-    assert "client-id: ${{ vars.AZURE_CLIENT_ID }}" in workflow
-    assert "subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}" in workflow
-    assert "AZURE_DEPLOY_PRINCIPAL_OBJECT_ID" in workflow
-    assert 'deploymentPrincipalObjectId="$AZURE_DEPLOY_PRINCIPAL_OBJECT_ID"' in workflow
-    assert "enableRoleAssignments=false" in workflow
-    assert "LALA_PUBLIC_CONTEST_ACCESS" in workflow
-    assert "vars.LALA_PUBLIC_CONTEST_ACCESS || 'true'" in workflow
-    assert 'publicContestAccess="$LALA_PUBLIC_CONTEST_ACCESS"' in workflow
-    assert "staticSnapshotFallback=false" in workflow
-    assert "secrets.AZURE_POSTGRES_ADMIN_PASSWORD" in workflow
-    assert "secrets.AZURE_API_BEARER_TOKEN" not in workflow
-    assert 'apiBearerToken="$API_BEARER_TOKEN"' not in workflow
-    assert "ALLOW_CANONICAL_SQL_APPLY" not in workflow
-    assert "apply_canonical_sql" not in workflow
-    assert "verify_db_schema" not in workflow
-    assert "az postgres flexible-server firewall-rule" not in workflow
-    assert 'SMOKE_BASE_URL="https://${API_FQDN}"' in workflow
-    assert 'scripts/unix/smoke_api.sh --base-url "$SMOKE_BASE_URL"' in workflow
-    assert (
-        'scripts/unix/smoke_api_matrix.sh --base-url "$SMOKE_BASE_URL" --timeout 25 --profile deploy'
-        in workflow
-    )
-
-
 def test_deployed_web_smoke_runs_public_location_flow():
     workflow = (ROOT / ".github" / "workflows" / "deployed-web-smoke.yml").read_text(
         encoding="utf-8"
@@ -533,7 +502,11 @@ def test_azure_container_build_excludes_local_secrets():
     assert "param staticSnapshotFallback bool = false" in bicep
     assert "param apiBearerToken string = ''" in bicep
     assert "name: 'api-bearer-token'" in bicep
-    assert "uriComponent(postgresAdminPassword)" in bicep
+    assert "uriComponent(postgresAppPassword)" in bicep
+    assert "${postgresAppLogin}:${encodedPostgresAppPassword}" in bicep
+    assert "${postgresAdminLogin}:" not in bicep
+    assert "publicNetworkAccess: 'Disabled'" in bicep
+    assert "postgresAllowAzureServices" not in bicep
     assert "name: 'LALA_STATIC_SNAPSHOT_FALLBACK'" in bicep
     assert "value: string(staticSnapshotFallback)" in bicep
 

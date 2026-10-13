@@ -22,9 +22,17 @@ output
 runtime
 *.egg-info
 *.zip
-apps/flutter_app
+# The API region catalog reads this one shared source file at startup.
+apps/flutter_app/*
+!apps/flutter_app/lib
+apps/flutter_app/lib/*
+!apps/flutter_app/lib/manual_location_options.dart
 clients/flutter
 docs
 legacy-lala-reference
 infra/local-postgres
 lala-macbook-usb-local-artifacts-*.zip
+outputs
+tmp
+_workspace
+LALA-next-azure

@@ -381,13 +381,19 @@ scripts/unix/inspect_access_log.sh runtime/api-access.jsonl --request-id <reques
 
 ## Azure Resources
 
+For the new managed environment, start with the
+[prepayment readiness and rollout boundary](docs/operations/azure-managed-prepayment-readiness.md).
+The former Azure dev lane is retired; historical deployment records are not
+proof of the new environment. Production remains unchanged by preparation PRs.
+
 Live Azure resource names, subscription ids, and service endpoints are not
 recorded in this public repo. Keep them in ignored local environment files,
 deployment settings, or the team-private runbook.
 
-Set `KEY_VAULT_URL` to the LALA-owned Key Vault URL only when the process should
-load secrets from Azure. If the runtime needs a stricter host gate, set
-`LALA_ALLOWED_KEY_VAULT_HOSTS` to a comma-separated list of allowed vault hosts.
+For operational Azure runtimes, explicitly select `LALA_SECRET_BACKEND=azure`
+and a LALA-owned `KEY_VAULT_URL`; `LALA_ALLOWED_KEY_VAULT_HOSTS` is mandatory.
+See the [runtime contract](docs/operations/azure-runtime-secret-candidate.md).
+Omitting the backend retains AWS for operational profiles.
 Do not point LALA at ONMU runtime vaults. The only ONMU-derived value currently
 considered reusable is the optional CORS origin list copied into LALA as
 `cors-allow-origins`; ONMU DB, token, OAuth provider, Redis, and MinIO secrets

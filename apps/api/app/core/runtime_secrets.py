@@ -1,7 +1,7 @@
-"""Runtime secret profiles and the AWS Secrets Manager contract.
+"""Runtime secret profiles and explicit cloud backend selection.
 
 The API and worker profiles intentionally do not read dotenv, process secret
-values, or the legacy Azure Key Vault.  Only the explicit local profile may
+values, or the legacy Azure local fallback. Only the explicit local profile may
 load a developer dotenv file.  Error and status objects contain logical
 secret names only; secret values and resource identifiers never cross this
 module's observability boundary.
@@ -14,7 +14,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from apps.api.app.core import aws_secrets
+from apps.api.app.core import aws_secrets, azure_runtime_secrets
 from apps.api.app.core.aws_secrets import AwsSecretLookupError
 
 RUNTIME_PROFILES = frozenset({"local", "ci", "api", "worker"})
@@ -139,6 +139,19 @@ def resolve_runtime_secret(
     profile = get_runtime_profile(env)
 
     if profile in {"api", "worker"}:
+        if get_runtime_secret_backend(env) == "azure":
+            result = azure_runtime_secrets.get_azure_runtime_secret_structured(
+                spec.secret_name, environ=env
+            )
+            if required and result.outcome != "found":
+                raise RuntimeSecretLookupError(
+                    f"Required runtime secret {result.outcome}: {spec.secret_name}."
+                )
+            if required and not _usable_secret(result.value):
+                raise RuntimeSecretLookupError(
+                    f"Required runtime secret is unavailable: {spec.secret_name}."
+                )
+            return result.value.strip()
         try:
             value = aws_secrets.get_aws_sm_secret(spec.secret_name, required=required)
         except AwsSecretLookupError as exc:
@@ -163,7 +176,7 @@ def resolve_runtime_secret(
         value = aws_secrets.get_aws_sm_secret(spec.secret_name)
         if value:
             return value.strip()
-    # Key Vault fallback is only for local/ci profiles when explicitly allowed
+    # Key Vault fallback is only for the local profile when explicitly allowed.
     # Operational profiles (api/worker) pass key_vault_loader=None to prevent fallback
     if key_vault_loader is not None:
         return (
@@ -200,6 +213,14 @@ def required_secret_names(
     return tuple(dict.fromkeys(names))
 
 
+def get_runtime_secret_backend(environ: Mapping[str, str] | None = None) -> str:
+    env = environ if environ is not None else os.environ
+    backend = (env.get("LALA_SECRET_BACKEND") or "aws").strip().lower()
+    if backend not in {"aws", "azure"}:
+        raise RuntimeSecretContractError("LALA_SECRET_BACKEND must be aws or azure.")
+    return backend
+
+
 def validate_secret_contract(
     profile: str,
     values: Mapping[str, object],
@@ -209,6 +230,8 @@ def validate_secret_contract(
 ) -> SecretContractStatus:
     if profile not in {"api", "worker"}:
         return SecretContractStatus(profile, "not_required")
+
+    backend = get_runtime_secret_backend(environ)
 
     required = required_secret_names(profile, worker_job_id=worker_job_id, values=values)
     configured = []
@@ -225,7 +248,7 @@ def validate_secret_contract(
         # Check if value exists and is usable
         # Settings exposes snake_case field names while lower-level callers may
         # provide canonical environment names. Accept both without re-querying
-        # AWS for a value that was already resolved by the runtime loader.
+        # the provider for a value already resolved by the runtime loader.
         raw_value = values.get(env_name, values.get(env_name.lower(), ""))
         value = "" if raw_value is None else str(raw_value)
         if _usable_secret(value):
@@ -233,14 +256,21 @@ def validate_secret_contract(
             continue
 
         # A caller-supplied non-empty placeholder is an invalid contract, not
-        # an absent value that AWS is allowed to replace or reclassify.
+        # an absent value that the provider may replace or reclassify.
         if value.strip():
             invalid.append(env_name)
             continue
 
-        # Use structured AWS lookup to classify the failure
-        result = aws_secrets.get_aws_sm_secret_structured(spec.secret_name)
+        # Use only the selected backend; never fall back to another provider.
+        if backend == "azure":
+            result = azure_runtime_secrets.get_azure_runtime_secret_structured(
+                spec.secret_name, environ=environ
+            )
+        else:
+            result = aws_secrets.get_aws_sm_secret_structured(spec.secret_name)
         outcome = result.outcome
+        if outcome == "found" and not _usable_secret(result.value):
+            outcome = "invalid"
 
         if outcome == "found":
             configured.append(env_name)

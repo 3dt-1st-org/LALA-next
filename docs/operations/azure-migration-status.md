@@ -1,4 +1,7 @@
-# Azure Migration Status
+# Azure Migration Status — historical record
+
+> 이전 dev 환경의 기록이다. 현재 배포 상태나 실행 절차로 사용하지 않는다.
+> 새 환경의 기준은 [관리형 이관 준비](azure-managed-prepayment-readiness.md)다.
 
 Last updated: 2026-06-21 KST
 

@@ -5,16 +5,18 @@ targetScope = 'resourceGroup'
 @maxLength(12)
 param appName string = 'lala'
 
-@description('Deployment environment name. The GitHub workflow uses dev.')
-@minLength(2)
-@maxLength(12)
-param environmentName string = 'dev'
+@description('New managed environment; independent from the retired dev tenant.')
+@allowed(['staging', 'prod'])
+param environmentName string = 'staging'
 
 @description('Azure region for all resources.')
 param location string = resourceGroup().location
 
-@description('Initial API container image. The workflow updates this image after build and push.')
-param containerImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+@description('Keep false for infrastructure bootstrap. Enable only after DB roles, schema, auth and image checks.')
+param deployApi bool = false
+
+@description('Reviewed immutable ACR image (registry/lala-api@sha256:digest). Never use a demo image.')
+param containerImage string = ''
 
 @description('Comma-separated frontend origins allowed by the FastAPI CORS layer.')
 param corsAllowOrigins string = 'https://lala-next.cloud,https://www.lala-next.cloud'
@@ -25,27 +27,53 @@ param publicContestAccess bool = false
 @description('Switch for unauthenticated static snapshot fallback. Keep false for Azure dev/prod/review runtimes.')
 param staticSnapshotFallback bool = false
 
-@description('Enable Azure OpenAI-backed docent script generation when OpenAI secrets are present in the LALA Key Vault.')
+@description('Enable OpenAI-backed docent generation only after separate paid-use approval.')
 param enableLiveAI bool = false
 
 @description('Enable Azure Speech MP3 generation when Speech secrets are present in the LALA Key Vault. Keep false unless paid speech smoke is intended.')
 param enableLiveSpeech bool = false
 
-@description('Object id of the GitHub OIDC service principal. Used for ACR push and Key Vault secret migration access.')
+@description('Object id of the GitHub OIDC service principal. Used for ACR push only; secret bootstrap is a separate operator responsibility.')
 param deploymentPrincipalObjectId string = ''
 
 @description('Create RBAC role assignments. Use true for the first local deployment by an owner; use false from GitHub OIDC if role assignment write is not delegated.')
 param enableRoleAssignments bool = true
 
-@description('PostgreSQL administrator login. Keep this as an operational account for dev.')
+@description('PostgreSQL administrator login for bootstrap only; never used by the API.')
 param postgresAdminLogin string = 'lalaadmin'
 
 @secure()
-@description('PostgreSQL administrator password. The value is stored only as a secure deployment parameter and Key Vault secret.')
+@description('PostgreSQL administrator password. Keep outside command arguments and source files.')
 param postgresAdminPassword string
 
+@description('Separate least-privilege application database login; create this role before API rollout.')
+param postgresAppLogin string = 'lala_api'
+
 @secure()
-@description('Static transition bearer token for API client authentication. The value is stored only as a secure deployment parameter and Key Vault secret.')
+@description('Application password. Keep outside command arguments and source files.')
+param postgresAppPassword string
+
+@description('Match the source major version for initial migration; upgrade separately.')
+param postgresVersion string = '15'
+
+@description('Non-overlapping VNet prefix; confirm against existing networks before applying.')
+param vnetPrefix string = '10.90.0.0/16'
+param containerAppsSubnetPrefix string = '10.90.0.0/23'
+param postgresSubnetPrefix string = '10.90.2.0/24'
+
+@minValue(7)
+@maxValue(35)
+param backupRetentionDays int = 14
+
+@minValue(0)
+@maxValue(10)
+param apiMinReplicas int = 1
+@minValue(1)
+@maxValue(10)
+param apiMaxReplicas int = 3
+
+@secure()
+@description('Static transition bearer token for API client authentication. Keep outside command arguments and source files.')
 param apiBearerToken string = ''
 
 @description('Optional API custom domain hostname. Leave empty for local/ephemeral deployments.')
@@ -91,12 +119,11 @@ var keyVaultName = take('${appName}-${environmentName}-kv-${suffix}', 24)
 var postgresServerName = take('${appName}-${environmentName}-pg-${suffix}', 63)
 var keyVaultHost = replace(replace(keyVault.properties.vaultUri, 'https://', ''), '/', '')
 var dbScheme = 'postgresql://'
-var encodedPostgresAdminPassword = uriComponent(postgresAdminPassword)
-var dbDsn = '${dbScheme}${postgresAdminLogin}:${encodedPostgresAdminPassword}@${postgres.properties.fullyQualifiedDomainName}:5432/${postgresDatabaseName}?sslmode=require'
+var encodedPostgresAppPassword = uriComponent(postgresAppPassword)
+var dbDsn = '${dbScheme}${postgresAppLogin}:${encodedPostgresAppPassword}@${postgres.properties.fullyQualifiedDomainName}:5432/${postgresDatabaseName}?sslmode=require'
 var acrPullRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
 var acrPushRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '8311e382-0749-4cb8-b61a-304f252e45ec')
 var keyVaultSecretsUserRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
-var keyVaultSecretsOfficerRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7')
 var apiIngressBase = {
   external: true
   allowInsecure: false
@@ -190,17 +217,50 @@ resource kvSecretsUserRoleAssignment 'Microsoft.Authorization/roleAssignments@20
   }
 }
 
-resource deployKvSecretsOfficerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableRoleAssignments && !empty(deploymentPrincipalObjectId)) {
-  name: guid(keyVault.id, deploymentPrincipalObjectId, 'deploy-key-vault-secrets-officer')
-  scope: keyVault
+resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' = {
+  name: '${baseName}-vnet'
+  location: location
+  tags: tags
   properties: {
-    roleDefinitionId: keyVaultSecretsOfficerRoleDefinitionId
-    principalId: deploymentPrincipalObjectId
-    principalType: 'ServicePrincipal'
+    addressSpace: {
+      addressPrefixes: [vnetPrefix]
+    }
+    subnets: [
+      {
+        name: 'containerapps'
+        properties: {
+          addressPrefix: containerAppsSubnetPrefix
+          delegations: [{name: 'containerapps', properties: {serviceName: 'Microsoft.App/environments'}}]
+        }
+      }
+      {
+        name: 'postgres'
+        properties: {
+          addressPrefix: postgresSubnetPrefix
+          delegations: [{name: 'postgres', properties: {serviceName: 'Microsoft.DBforPostgreSQL/flexibleServers'}}]
+        }
+      }
+    ]
   }
 }
 
-resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2023-12-01-preview' = {
+resource privateDns 'Microsoft.Network/privateDnsZones@2024-06-01' = {
+  name: '${baseName}.postgres.database.azure.com'
+  location: 'global'
+  tags: tags
+}
+
+resource privateDnsLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = {
+  parent: privateDns
+  name: '${baseName}-link'
+  location: 'global'
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {id: vnet.id}
+  }
+}
+
+resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
   name: postgresServerName
   location: location
   tags: tags
@@ -209,14 +269,14 @@ resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2023-12-01-preview'
     tier: postgresSkuTier
   }
   properties: {
-    version: '16'
+    version: postgresVersion
     administratorLogin: postgresAdminLogin
     administratorLoginPassword: postgresAdminPassword
     storage: {
       storageSizeGB: postgresStorageSizeGB
     }
     backup: {
-      backupRetentionDays: 7
+      backupRetentionDays: backupRetentionDays
       geoRedundantBackup: 'Disabled'
     }
     highAvailability: {
@@ -226,16 +286,13 @@ resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2023-12-01-preview'
       activeDirectoryAuth: 'Disabled'
       passwordAuth: 'Enabled'
     }
+    network: {
+      publicNetworkAccess: 'Disabled'
+      delegatedSubnetResourceId: resourceId('Microsoft.Network/virtualNetworks/subnets', vnet.name, 'postgres')
+      privateDnsZoneArmResourceId: privateDns.id
+    }
   }
-}
-
-resource postgresAllowAzureServices 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2023-12-01-preview' = {
-  parent: postgres
-  name: 'AllowAzureServices'
-  properties: {
-    startIpAddress: '0.0.0.0'
-    endIpAddress: '0.0.0.0'
-  }
+  dependsOn: [privateDnsLink]
 }
 
 resource postgresExtensions 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2023-12-01-preview' = {
@@ -311,6 +368,11 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01'
   location: location
   tags: tags
   properties: {
+    vnetConfiguration: {
+      infrastructureSubnetId: resourceId('Microsoft.Network/virtualNetworks/subnets', vnet.name, 'containerapps')
+      internal: false
+    }
+    workloadProfiles: [{name: 'Consumption', workloadProfileType: 'Consumption'}]
     appLogsConfiguration: {
       destination: 'log-analytics'
       logAnalyticsConfiguration: {
@@ -321,7 +383,7 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01'
   }
 }
 
-resource apiContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
+resource apiContainerApp 'Microsoft.App/containerApps@2024-03-01' = if (deployApi) {
   name: apiContainerAppName
   location: location
   tags: tags
@@ -333,6 +395,7 @@ resource apiContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
   }
   properties: {
     managedEnvironmentId: containerAppsEnvironment.id
+    workloadProfileName: 'Consumption'
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: union(apiIngressBase, apiIngressCustomDomain)
@@ -349,6 +412,14 @@ resource apiContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'api'
           image: containerImage
           env: [
+            {
+              name: 'LALA_RUNTIME_PROFILE'
+              value: 'api'
+            }
+            {
+              name: 'LALA_SECRET_BACKEND'
+              value: 'azure'
+            }
             {
               name: 'PORT'
               value: '8000'
@@ -386,6 +457,29 @@ resource apiContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: string(enableLiveSpeech)
             }
           ]
+          probes: [
+            {
+              type: 'Startup'
+              httpGet: {path: '/healthz', port: 8000}
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 30
+            }
+            {
+              type: 'Liveness'
+              httpGet: {path: '/healthz', port: 8000}
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 3
+            }
+            {
+              type: 'Readiness'
+              httpGet: {path: '/readyz', port: 8000}
+              periodSeconds: 30
+              timeoutSeconds: 10
+              failureThreshold: 6
+            }
+          ]
           resources: {
             cpu: json('0.5')
             memory: '1Gi'
@@ -393,8 +487,8 @@ resource apiContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
         }
       ]
       scale: {
-        minReplicas: 1
-        maxReplicas: 2
+        minReplicas: apiMinReplicas
+        maxReplicas: apiMaxReplicas
         rules: [
           {
             name: 'http-scale'
@@ -413,14 +507,12 @@ resource apiContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
     corsSecret
     dbDsnSecret
     deployAcrPushRoleAssignment
-    deployKvSecretsOfficerRoleAssignment
     kvSecretsUserRoleAssignment
-    postgresAllowAzureServices
   ]
 }
 
-output apiContainerAppName string = apiContainerApp.name
-output apiFqdn string = apiContainerApp.properties.configuration.ingress.fqdn
+output apiContainerAppName string = apiContainerAppName
+output apiFqdn string = deployApi ? apiContainerApp!.properties.configuration.ingress.fqdn : ''
 output containerRegistryName string = acr.name
 output containerRegistryLoginServer string = acr.properties.loginServer
 output keyVaultName string = keyVault.name

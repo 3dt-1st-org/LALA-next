@@ -358,16 +358,15 @@ def resolve_openai_base_url_host(base_url: str | None) -> str:
 def _env_or_secret(env_name: str, secret_name: str, key_vault_url: str = "") -> str:
     profile = get_runtime_profile()
 
-    # For operational profiles (api/worker), never use Key Vault fallback
-    # This ensures fail-closed behavior - secrets must come from AWS Secrets Manager
+    # Operational profiles use an explicit cloud backend, without local fallback.
     if profile in {"api", "worker"}:
         return resolve_runtime_secret(
             env_name,
             secret_name,
-            key_vault_loader=None,  # No Key Vault for operational profiles
+            key_vault_loader=None,
         )
 
-    # Local/ci profiles can use Key Vault as fallback for developer convenience
+    # Only local can use the legacy Key Vault loader; ci returns explicit test env values.
     return resolve_runtime_secret(
         env_name,
         secret_name,

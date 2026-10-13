@@ -13,13 +13,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  gate:
+    name: Check CI commit and deployment intent
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      deploy: ${{ steps.intent.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Evaluate current main and skip marker without cloud credentials
+        id: intent
+        run: |
+          python3 scripts/production_deploy_gate.py \
+            --event-file "$GITHUB_EVENT_PATH" --repository "$GITHUB_REPOSITORY" \
+            --main-sha "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   deploy:
-    if: >-
-      ${{ vars.LALA_WEB_DEPLOY_ENABLED == 'true' &&
-          github.event.workflow_run.conclusion == 'success' &&
-          github.event.workflow_run.event == 'push' &&
-          github.event.workflow_run.head_branch == 'main' &&
-          github.event.workflow_run.head_repository.full_name == github.repository }}
+    needs: gate
+    if: needs.gate.outputs.deploy == 'true' && vars.LALA_WEB_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:

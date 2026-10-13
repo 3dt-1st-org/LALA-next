@@ -13,6 +13,47 @@ env:
   LALA_RUNTIME_PROFILE: ci
 
 jobs:
+  azure-preparation:
+    name: Azure template and container build (no deployment)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile Bicep without Azure login
+        run: az bicep build --file infra/azure/main.bicep --outfile "$RUNNER_TEMP/azure-main.json"
+      - name: Build API image without cloud credentials
+        run: docker build --platform linux/amd64 --file infra/azure/api.Dockerfile --tag lala-api:ci .
+      - name: Smoke the built image without external networking
+        run: |
+          set -euo pipefail
+          cleanup() {
+            result=$?
+            if [ "$result" -ne 0 ]; then
+              docker logs lala-api-ci || true
+              docker inspect --format '{{json .State}}' lala-api-ci || true
+            fi
+            docker rm -f lala-api-ci >/dev/null 2>&1 || true
+            exit "$result"
+          }
+          trap cleanup EXIT
+          docker run --detach --name lala-api-ci --network none --env LALA_RUNTIME_PROFILE=ci lala-api:ci
+          docker exec -i lala-api-ci python - <<'PYCODE'
+          import json
+          import time
+          import urllib.request
+          for attempt in range(30):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:8000/healthz", timeout=2) as response:
+                      assert json.load(response)["data"]["service"] == "lala-next-api"
+                  break
+              except OSError:
+                  if attempt == 29:
+                      raise
+                  time.sleep(1)
+          print("Built API image answered healthz in network-isolated CI mode.")
+          PYCODE
+
   postgres-regressions:
     name: Local PostgreSQL production regressions
     runs-on: ubuntu-latest

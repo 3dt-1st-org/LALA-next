@@ -1,0 +1,57 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "staging"
+    },
+    "location": {
+      "value": "koreacentral"
+    },
+    "postgresVersion": {
+      "value": "15"
+    },
+    "postgresSkuName": {
+      "value": "Standard_B1ms"
+    },
+    "postgresSkuTier": {
+      "value": "Burstable"
+    },
+    "postgresStorageSizeGB": {
+      "value": 32
+    },
+    "backupRetentionDays": {
+      "value": 7
+    },
+    "apiMinReplicas": {
+      "value": 0
+    },
+    "apiMaxReplicas": {
+      "value": 1
+    },
+    "vnetPrefix": {
+      "value": "10.90.0.0/16"
+    },
+    "containerAppsSubnetPrefix": {
+      "value": "10.90.0.0/23"
+    },
+    "postgresSubnetPrefix": {
+      "value": "10.90.2.0/24"
+    },
+    "publicContestAccess": {
+      "value": false
+    },
+    "staticSnapshotFallback": {
+      "value": false
+    },
+    "enableLiveAI": {
+      "value": false
+    },
+    "enableLiveSpeech": {
+      "value": false
+    },
+    "deployApi": {
+      "value": false
+    }
+  }
+}
