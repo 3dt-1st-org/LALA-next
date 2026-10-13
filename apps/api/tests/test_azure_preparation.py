@@ -58,7 +58,7 @@ def test_production_deploy_gate_denies_non_release_events(patch):
 
 def test_deploy_gate_cli_fails_closed_for_bad_payload(tmp_path):
     event_file = tmp_path / "event.json"
-    event_file.write_text("invalid JSON with private provider data")
+    event_file.write_text("invalid JSON with private provider data", encoding="utf-8")
     result = subprocess.run(
         [
             sys.executable,
@@ -75,6 +75,33 @@ def test_deploy_gate_cli_fails_closed_for_bad_payload(tmp_path):
         check=True,
     )
     assert result.stdout.strip() == "deploy=false"
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "message,expected", [("feat: 검토한 변경", "true"), ("준비 완료 [skip deploy]", "false")]
+)
+def test_deploy_gate_reads_korean_commit_message_as_utf8(tmp_path, message, expected):
+    payload = successful_ci()
+    payload["workflow_run"]["head_commit"]["message"] = message
+    event_file = tmp_path / "event.json"
+    event_file.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts/production_deploy_gate.py"),
+            "--event-file",
+            str(event_file),
+            "--repository",
+            REPOSITORY,
+            "--main-sha",
+            SHA,
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.strip() == f"deploy={expected}"
     assert result.stderr == ""
 
 
@@ -128,7 +155,7 @@ def test_workflow_wiring_has_no_automatic_azure_or_unguarded_production_lane():
     # Inspect the wiring as well as executing the actual gate above: a correct
     # function is useless if a deployment job can bypass it.
     def workflow(name):
-        return yaml.safe_load((ROOT / ".github/workflows" / name).read_text())
+        return yaml.safe_load((ROOT / ".github/workflows" / name).read_text(encoding="utf-8"))
 
     for name in ("deploy.yml", "deploy-flutter-web.yml"):
         config = workflow(name)

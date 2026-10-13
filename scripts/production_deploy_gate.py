@@ -36,7 +36,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         permitted = should_deploy(
-            json.loads(args.event_file.read_text()),
+            json.loads(args.event_file.read_text(encoding="utf-8")),
             repository=args.repository,
             current_main_sha=args.main_sha,
         )
