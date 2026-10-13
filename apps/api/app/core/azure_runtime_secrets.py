@@ -67,8 +67,10 @@ def _client(vault_url: str, client_id: str):
     from azure.identity import ManagedIdentityCredential
     from azure.keyvault.secrets import SecretClient
 
-    for name in ("azure.core.pipeline.policies.http_logging_policy", "azure.identity"):
-        logging.getLogger(name).setLevel(logging.WARNING)
+    # Provider diagnostics can contain resource identifiers or response bodies.
+    # The resolver returns safe outcome categories instead.
+    for name in ("azure.core", "azure.identity", "azure.keyvault"):
+        logging.getLogger(name).setLevel(logging.CRITICAL)
     options = {"connection_timeout": 5, "read_timeout": 10, "retry_total": 1}
     credential = ManagedIdentityCredential(
         **({"client_id": client_id} if client_id else {}), **options

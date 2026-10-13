@@ -33,7 +33,8 @@ docker build --platform linux/amd64 --file infra/azure/api.Dockerfile --tag lala
 ```
 
 Bicep 컴파일과 Docker 빌드는 Azure 로그인이나 유료 Azure 리소스를 요구하지 않는다.
-Docker가 없는 PC에서는 CI의 컨테이너 빌드 결과를 확인한다. 템플릿 컴파일은 RBAC,
+Docker가 없는 PC에서는 CI의 컨테이너 빌드 결과를 확인한다. API가 시작할 때 읽는
+`manual_location_options.dart` 하나는 이미지에 포함하며, Flutter 빌드/환경 파일은 제외한다. 템플릿 컴파일은 RBAC,
 구독 상태, 정책, 할당량, 서비스 가용성 검증을 대신하지 않는다.
 
 CI는 API/Unix/Flutter, 격리된 PostgreSQL 회귀 검사와 Azure 템플릿·이미지 빌드/네트워크 차단 기동 검사를 수행한다.
