@@ -27,7 +27,16 @@ jobs:
       - name: Smoke the built image without external networking
         run: |
           set -euo pipefail
-          trap 'docker rm -f lala-api-ci >/dev/null 2>&1 || true' EXIT
+          cleanup() {
+            result=$?
+            if [ "$result" -ne 0 ]; then
+              docker logs lala-api-ci || true
+              docker inspect --format '{{json .State}}' lala-api-ci || true
+            fi
+            docker rm -f lala-api-ci >/dev/null 2>&1 || true
+            exit "$result"
+          }
+          trap cleanup EXIT
           docker run --detach --name lala-api-ci --network none --env LALA_RUNTIME_PROFILE=ci lala-api:ci
           docker exec -i lala-api-ci python - <<'PYCODE'
           import json

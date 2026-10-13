@@ -6,7 +6,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000
 
 WORKDIR /app
-ENV LALA_RUNTIME_PROFILE=api LALA_SECRET_BACKEND=azure
+# The Azure template selects its backend explicitly; other runtimes retain AWS.
+ENV LALA_RUNTIME_PROFILE=api
 
 RUN python -m pip install --upgrade pip \
     && python -m pip install uv
