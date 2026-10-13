@@ -34,19 +34,24 @@ API를 변경할 때는 서버 스키마, OpenAPI, 생성 Dart 패키지, 수동
 
 ## 비밀·환경·API 경계
 
-비밀 작업의 상세 기준은 다음 두 문서가 단일 기준이다.
+비밀 작업의 상세 기준은 다음 문서와 실제 선택한 backend의 계약이 기준이다.
 
 - `docs/operations/aws-secrets-manager-runtime-contract.md`
 - `docs/operations/aws-secrets-manager-team-handoff.md`
+- `docs/operations/azure-runtime-secret-candidate.md`
+- `docs/operations/azure-managed-prepayment-readiness.md`
 
 충돌이 있으면 런타임 계약과 현재 코드의 `apps/api/app/core/runtime_secrets.py`를
 우선 확인한다.
 
 ### 런타임 프로필
 
-- `api`와 `worker`는 프로세스 IAM 역할과 AWS Secrets Manager만 사용한다. 운영
-  런타임에 개발자 dotenv나 개인 AWS 자격증명을 복사하지 않는다.
-- `ci`는 명시적으로 주입된 테스트 환경값만 사용한다. AWS나 dotenv를 조회하지
+- `api`와 `worker`는 명시적인 `LALA_SECRET_BACKEND`를 사용한다. 미지정 또는
+  `aws`는 기존 프로세스 IAM 역할과 AWS Secrets Manager 계약을 유지한다.
+  `azure`는 `docs/operations/azure-runtime-secret-candidate.md`의 관리 ID·Key Vault
+  계약을 사용한다. 공급자 간 fallback은 금지하며 운영에 개발자 dotenv나 개인
+  클라우드 자격증명을 복사하지 않는다.
+- `ci`는 명시적으로 주입된 테스트 환경값만 사용한다. AWS·Azure나 dotenv를 조회하지
   않는다.
 - `local`만 명시적인 로컬 dotenv를 사용할 수 있다. 로컬에서 AWS 비밀을 읽는
   동작은 `LALA_LOCAL_USE_AWS_SECRETS`를 통한 명시적 opt-in이다.

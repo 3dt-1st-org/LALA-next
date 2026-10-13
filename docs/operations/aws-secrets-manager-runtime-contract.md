@@ -5,11 +5,16 @@ It is separate from PR #76's team handoff and local synchronization/build
 helpers: those documents describe operator preparation, while this document
 defines what a running process is allowed to read.
 
+An explicitly selected Azure operational backend follows
+[the Azure runtime contract](azure-runtime-secret-candidate.md). It never
+falls back to AWS or local credentials. Adding the code does not switch production.
+
 ## Profiles
 
 `LALA_RUNTIME_PROFILE` is one of `local`, `ci`, `api`, or `worker`.
 
-- `api` and `worker` use the process IAM role and AWS Secrets Manager only.
+- With the default `LALA_SECRET_BACKEND=aws`, `api` and `worker` use the
+  process IAM role and AWS Secrets Manager only.
   They do not use dotenv, process-provided secret values, or the legacy Azure
   Key Vault path. Lookup errors fail the required startup/readiness/batch
   contract.

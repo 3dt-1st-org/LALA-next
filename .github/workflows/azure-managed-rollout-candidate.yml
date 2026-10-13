@@ -1,0 +1,136 @@
+name: Azure Managed API Rollout
+
+# Manual only. Environment approval + explicit readiness flag are prerequisites.
+# This workflow never provisions infrastructure, changes RBAC/secrets, or migrates DBs.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Protected GitHub environment
+        type: choice
+        options: [staging, prod]
+        default: staging
+        required: true
+      source_sha:
+        description: Full main commit SHA with successful CI; prod must match staging acceptance
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: azure-managed-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  rollout:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.target }}
+    env:
+      LALA_RUNTIME_PROFILE: ci
+      AZURE_MANAGED_INFRA_READY: ${{ vars.AZURE_MANAGED_INFRA_READY }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_CONTAINER_APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME }}
+      AZURE_REGISTRY_NAME: ${{ vars.AZURE_REGISTRY_NAME }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      ROLLOUT_TARGET: ${{ inputs.target }}
+      AZURE_STAGING_VERIFIED_SHA: ${{ vars.AZURE_STAGING_VERIFIED_SHA }}
+      AZURE_STAGING_VERIFIED_IMAGE: ${{ vars.AZURE_STAGING_VERIFIED_IMAGE }}
+      AZURE_STAGING_REGISTRY_ID: ${{ vars.AZURE_STAGING_REGISTRY_ID }}
+    steps:
+      - name: Require explicit readiness before checkout or cloud login
+        run: |
+          set -euo pipefail
+          test "$AZURE_MANAGED_INFRA_READY" = true
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+      - name: Require successful main CI for the selected commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&branch=main&per_page=100" \
+            --jq '.workflow_runs | any(.conclusion == "success")' | grep -qx true
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require reviewed main history and valid rollout inputs
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main
+          python3 scripts/validate_azure_rollout.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@v5
+      - name: Test selected code without operational secrets
+        run: |
+          uv sync --extra dev --frozen
+          uv run --frozen pytest apps/api/tests -q
+      - name: Login with environment-specific OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Resolve existing target registry
+        run: |
+          set -euo pipefail
+          registry_server=$(az acr show --name "$AZURE_REGISTRY_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --query loginServer -o tsv)
+          [[ "$registry_server" =~ ^[a-z0-9-]+\.azurecr\.io$ ]]
+          printf 'AZURE_TARGET_REGISTRY_SERVER=%s\n' "$registry_server" >> "$GITHUB_ENV"
+      - name: Build and push reviewed staging image
+        if: inputs.target == 'staging'
+        run: |
+          set -euo pipefail
+          image="$AZURE_TARGET_REGISTRY_SERVER/lala-api:$SOURCE_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          az acr login --name "$AZURE_REGISTRY_NAME" --output none
+          docker build --platform linux/amd64 --file infra/azure/api.Dockerfile --tag "$image" .
+          docker push "$image"
+          digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$image")
+          test "${digest%@*}" = "$AZURE_TARGET_REGISTRY_SERVER/lala-api"
+          [[ "${digest##*@}" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf 'AZURE_ROLLOUT_IMAGE=%s\n' "$digest" >> "$GITHUB_ENV"
+      - name: Copy staging-accepted digest into the production registry
+        if: inputs.target == 'prod'
+        run: |
+          set -euo pipefail
+          source_server=$(az acr show --ids "$AZURE_STAGING_REGISTRY_ID" --query loginServer -o tsv)
+          test "${AZURE_STAGING_VERIFIED_IMAGE%/lala-api@*}" = "$source_server"
+          digest="${AZURE_STAGING_VERIFIED_IMAGE##*@}"
+          # Same-tenant Entra permissions; no registry passwords or rebuild.
+          az acr import --name "$AZURE_REGISTRY_NAME" --resource-group "$AZURE_RESOURCE_GROUP" \
+            --registry "$AZURE_STAGING_REGISTRY_ID" --source "lala-api@$digest" \
+            --image "lala-api:accepted-$SOURCE_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --output none
+          imported=$(az acr repository show --name "$AZURE_REGISTRY_NAME" \
+            --image "lala-api:accepted-$SOURCE_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --query digest -o tsv)
+          test "$imported" = "$digest"
+          printf 'AZURE_ROLLOUT_IMAGE=%s/lala-api@%s\n' "$AZURE_TARGET_REGISTRY_SERVER" "$digest" >> "$GITHUB_ENV"
+      - name: Roll out API only to the existing Container App
+        run: |
+          set -euo pipefail
+          az containerapp update --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_CONTAINER_APP_NAME" --image "$AZURE_ROLLOUT_IMAGE" --output none
+      - name: Check the actual Azure app health and DB readiness
+        run: |
+          set -euo pipefail
+          fqdn=$(az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_CONTAINER_APP_NAME" --query properties.configuration.ingress.fqdn -o tsv)
+          [[ "$fqdn" =~ ^[a-z0-9.-]+\.azurecontainerapps\.io$ ]]
+          for endpoint in healthz readyz; do
+            curl --fail --silent --show-error --output /dev/null --retry 8 --retry-delay 10 \
+              --connect-timeout 10 --max-time 30 "https://$fqdn/$endpoint"
+          done
+          {
+            printf '### Azure API rollout\n\n'
+            # shellcheck disable=SC2016
+            printf 'Target: `%s`\n\nSource: `%s`\n\nDigest: `%s`\n\n' "$ROLLOUT_TARGET" "$SOURCE_SHA" "${AZURE_ROLLOUT_IMAGE##*@}"
+            printf 'Health and readiness passed. Authenticated app flows and restore acceptance remain separate.\n'
+          } >> "$GITHUB_STEP_SUMMARY"

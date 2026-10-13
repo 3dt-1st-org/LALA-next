@@ -28,3 +28,7 @@ docs
 legacy-lala-reference
 infra/local-postgres
 lala-macbook-usb-local-artifacts-*.zip
+outputs
+tmp
+_workspace
+LALA-next-azure

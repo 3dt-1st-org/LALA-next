@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000
 
 WORKDIR /app
-ENV LALA_RUNTIME_PROFILE=api
+ENV LALA_RUNTIME_PROFILE=api LALA_SECRET_BACKEND=azure
 
 RUN python -m pip install --upgrade pip \
     && python -m pip install uv
@@ -17,6 +17,9 @@ COPY api ./api
 
 RUN uv sync --frozen --no-dev --no-editable
 ENV PATH="/app/.venv/bin:$PATH"
+
+RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin app
+USER 10001
 
 EXPOSE 8000
 
